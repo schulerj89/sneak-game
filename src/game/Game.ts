@@ -30,6 +30,8 @@ declare global {
       selectLevel: (levelIndex: number) => void;
       levelCount: () => number;
       performance: () => DebugSample | null;
+      levelId: () => string;
+      goalVisible: () => boolean;
     };
   }
 }
@@ -47,6 +49,7 @@ export class Game {
   private settings: GameSettings = loadSettings();
   private phase: GamePhase = 'menu';
   private settingsReturnPhase: GamePhase = 'menu';
+  private levelSelectReturnPhase: GamePhase = 'menu';
   private levelIndex = 0;
   private playerPosition: Vec2 = { ...levels[0].start };
   private readonly playerMesh = new THREE.Mesh(
@@ -67,7 +70,8 @@ export class Game {
       onResume: () => this.setPhase(this.settingsReturnPhase),
       onSettings: () => this.openSettings(),
       onMenu: () => this.setPhase('menu'),
-      onLevelSelect: () => this.setPhase('level-select'),
+      onLevelSelect: () => this.openLevelSelect(),
+      onLevelSelectBack: () => this.setPhase(this.levelSelectReturnPhase),
       onSelectLevel: (levelIndex) => this.selectLevel(levelIndex),
       onRestart: () => this.retryLevel(),
       onNextLevel: () => this.nextLevel(),
@@ -116,6 +120,11 @@ export class Game {
   private openSettings(): void {
     this.settingsReturnPhase = this.phase === 'settings' ? this.settingsReturnPhase : this.phase;
     this.setPhase('settings');
+  }
+
+  private openLevelSelect(): void {
+    this.levelSelectReturnPhase = this.phase === 'level-select' ? this.levelSelectReturnPhase : this.phase;
+    this.setPhase('level-select');
   }
 
   private async applySettings(settings: GameSettings): Promise<void> {
@@ -236,6 +245,19 @@ export class Game {
     this.goalMesh.position.set(level.goal.x, 0.08, level.goal.z);
     this.goalMesh.name = 'goal';
     this.scene.add(this.goalMesh);
+    const goalBeacon = new THREE.Mesh(
+      new THREE.CylinderGeometry(level.goalRadius * 0.58, level.goalRadius * 0.58, 0.95, 32, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: '#8eff81',
+        transparent: true,
+        opacity: 0.28,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    goalBeacon.position.set(level.goal.x, 0.52, level.goal.z);
+    goalBeacon.name = 'goal-beacon';
+    this.scene.add(goalBeacon);
 
     this.playerMesh.castShadow = true;
     this.playerMesh.name = 'player';
@@ -508,7 +530,16 @@ export class Game {
       selectLevel: (levelIndex: number) => this.selectLevel(levelIndex),
       levelCount: () => levels.length,
       performance: () => this.latestDebugSample,
+      levelId: () => this.level.id,
+      goalVisible: () => this.isGoalVisibleInCamera(),
     };
+  }
+
+  private isGoalVisibleInCamera(): boolean {
+    this.camera.updateMatrixWorld();
+    this.goalMesh.updateMatrixWorld();
+    const position = this.goalMesh.getWorldPosition(new THREE.Vector3()).project(this.camera);
+    return position.x >= -1 && position.x <= 1 && position.y >= -1 && position.y <= 1 && position.z >= -1 && position.z <= 1;
   }
 
   private enforceMemoryCap(usedMemoryMb: number | null): void {

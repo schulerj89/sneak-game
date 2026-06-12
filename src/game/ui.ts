@@ -8,6 +8,7 @@ type UiCallbacks = {
   onSettings: () => void;
   onMenu: () => void;
   onLevelSelect: () => void;
+  onLevelSelectBack: () => void;
   onSelectLevel: (levelIndex: number) => void;
   onRestart: () => void;
   onNextLevel: () => void;
@@ -88,7 +89,7 @@ export class GameUi {
             `).join('')}
           </div>
           <div class="panel-actions">
-            <button type="button" data-action="menu">Back</button>
+            <button type="button" data-action="level-select-back">Back</button>
           </div>
         </div>
       `;
@@ -165,6 +166,7 @@ export class GameUi {
     this.overlay.querySelectorAll('[data-action="level-select"]').forEach((button) =>
       button.addEventListener('click', this.callbacks.onLevelSelect),
     );
+    this.overlay.querySelector('[data-action="level-select-back"]')?.addEventListener('click', this.callbacks.onLevelSelectBack);
     this.overlay.querySelectorAll('[data-level-index]').forEach((button) => {
       button.addEventListener('click', () => {
         this.callbacks.onSelectLevel(Number((button as HTMLElement).dataset.levelIndex));

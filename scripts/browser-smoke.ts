@@ -73,6 +73,36 @@ try {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
   await page.waitForTimeout(800);
+  await assertPlayingPhase('after start run');
+
+  await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Settings' }).click();
+  await expectVisible('text=Render quality');
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
+  await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 8000 });
+  await assertPlayingPhase('after returning from in-game settings');
+
+  await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Levels' }).click();
+  await expectVisible('text=Level Select');
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
+  await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 8000 });
+  await assertPlayingPhase('after returning from in-game level select');
+
+  const levelState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        levelId: () => string;
+        goalVisible: () => boolean;
+      };
+    };
+    return {
+      levelId: debugWindow.__shadowCircuitDebug?.levelId(),
+      goalVisible: debugWindow.__shadowCircuitDebug?.goalVisible(),
+    };
+  });
+  if (levelState.levelId !== 'signal-vault' || !levelState.goalVisible) {
+    throw new Error(`Expected visible Signal Vault goal, got ${JSON.stringify(levelState)}`);
+  }
+
   const playingScreenshot = await page.screenshot({ path: `${screenshotDir}/shadow-circuit-playing.png`, fullPage: true });
 
   const visiblePixels = countVisiblePixels(playingScreenshot);
@@ -133,6 +163,16 @@ try {
 
 async function expectVisible(selector: string): Promise<void> {
   await page.locator(selector).waitFor({ state: 'visible', timeout: 8000 });
+}
+
+async function assertPlayingPhase(context: string): Promise<void> {
+  const phase = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
+    return debugWindow.__shadowCircuitDebug?.phase();
+  });
+  if (phase !== 'playing') {
+    throw new Error(`Expected playing phase ${context}, got ${phase}`);
+  }
 }
 
 function countVisiblePixels(buffer: Buffer): number {

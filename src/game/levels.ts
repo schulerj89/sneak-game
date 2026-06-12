@@ -227,7 +227,7 @@ export const levels: readonly LevelDefinition[] = [
     briefing: 'Break through a hardened relay room by weaving between server stacks.',
     floorSize: { x: 18, z: 14 },
     start: { x: -8, z: -6 },
-    goal: { x: 8, z: 6 },
+    goal: { x: 5.8, z: 4.2 },
     goalRadius: 0.6,
     obstacles: [
       { id: 'rack-a', center: { x: -5.4, z: -1.7 }, size: { x: 1.0, z: 5.0 }, height: 2.05 },
@@ -242,7 +242,7 @@ export const levels: readonly LevelDefinition[] = [
       { id: 'server-cyan', position: { x: -5.9, z: -4.8 }, height: 3.1, color: '#55e6ff', intensity: 78, radius: 4.8 },
       { id: 'server-green', position: { x: -0.4, z: 4.6 }, height: 3.2, color: '#8eff81', intensity: 62, radius: 4.3 },
       { id: 'server-red', position: { x: 5.7, z: -2.5 }, height: 3.1, color: '#ff6578', intensity: 66, radius: 4.6 },
-      { id: 'vault-exit', position: { x: 7.8, z: 5.8 }, height: 2.8, color: '#a8ffbf', intensity: 54, radius: 3.1 },
+      { id: 'vault-exit', position: { x: 5.8, z: 4.2 }, height: 3.0, color: '#a8ffbf', intensity: 70, radius: 3.6 },
     ],
     enemies: [
       {
@@ -290,7 +290,7 @@ export const levels: readonly LevelDefinition[] = [
       { x: -4.0, z: 6.4 },
       { x: 0.4, z: 6.4 },
       { x: 5.9, z: 6.4 },
-      { x: 8, z: 6 },
+      { x: 5.8, z: 4.2 },
     ],
   },
 ];
