@@ -1,0 +1,161 @@
+import { logoSvg } from './assets';
+import type { GamePhase, GameSettings, LevelDefinition } from './types';
+
+type UiCallbacks = {
+  onStart: () => void;
+  onResume: () => void;
+  onSettings: () => void;
+  onMenu: () => void;
+  onRestart: () => void;
+  onNextLevel: () => void;
+  onSettingsChange: (settings: GameSettings) => void;
+};
+
+export class GameUi {
+  readonly root: HTMLElement;
+  readonly hud: HTMLElement;
+  readonly debug: HTMLElement;
+  readonly overlay: HTMLElement;
+
+  constructor(
+    mount: HTMLElement,
+    private settings: GameSettings,
+    private readonly callbacks: UiCallbacks,
+  ) {
+    mount.innerHTML = `
+      <main class="shell">
+        <div class="viewport" data-testid="game-viewport"></div>
+        <section class="hud" data-testid="hud"></section>
+        <section class="debug" data-testid="debug-panel"></section>
+        <section class="overlay" data-testid="overlay"></section>
+      </main>
+    `;
+    this.root = mount.querySelector('.viewport') ?? mount;
+    this.hud = required(mount, '.hud');
+    this.debug = required(mount, '.debug');
+    this.overlay = required(mount, '.overlay');
+  }
+
+  setSettings(settings: GameSettings): void {
+    this.settings = settings;
+  }
+
+  renderHud(level: LevelDefinition, levelNumber: number, phase: GamePhase): void {
+    this.hud.innerHTML = `
+      <div class="hud-left">
+        <strong>${level.name}</strong>
+        <span>Level ${levelNumber + 1} / 3</span>
+      </div>
+      <div class="hud-right">
+        <button type="button" data-action="settings" title="Settings">Settings</button>
+        <button type="button" data-action="menu" title="Menu">Menu</button>
+      </div>
+      <div class="status-pill">${phase === 'playing' ? 'Stay hidden' : phase}</div>
+    `;
+    this.bindHud();
+  }
+
+  renderOverlay(phase: GamePhase, level: LevelDefinition): void {
+    this.overlay.hidden = phase === 'playing';
+
+    if (phase === 'menu') {
+      this.overlay.innerHTML = `
+        <div class="panel menu-panel">
+          <div class="logo">${logoSvg()}</div>
+          <p>${level.briefing}</p>
+          <div class="panel-actions">
+            <button type="button" data-action="start">Start Run</button>
+            <button type="button" data-action="settings">Settings</button>
+          </div>
+        </div>
+      `;
+    } else if (phase === 'settings') {
+      this.overlay.innerHTML = `
+        <div class="panel settings-panel">
+          <h1>Settings</h1>
+          <label>Render quality
+            <select data-setting="quality">
+              <option value="memory" ${this.settings.quality === 'memory' ? 'selected' : ''}>Memory first</option>
+              <option value="balanced" ${this.settings.quality === 'balanced' ? 'selected' : ''}>Balanced</option>
+              <option value="cinematic" ${this.settings.quality === 'cinematic' ? 'selected' : ''}>Cinematic</option>
+            </select>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" data-setting="music" ${this.settings.musicEnabled ? 'checked' : ''}/>
+            Music
+          </label>
+          <label class="check-row">
+            <input type="checkbox" data-setting="debug" ${this.settings.debugEnabled ? 'checked' : ''}/>
+            Debug tools
+          </label>
+          <label>Volume
+            <input type="range" min="0" max="1" step="0.01" value="${this.settings.masterVolume}" data-setting="volume"/>
+          </label>
+          <div class="panel-actions">
+            <button type="button" data-action="resume">Back</button>
+          </div>
+        </div>
+      `;
+    } else if (phase === 'caught') {
+      this.overlay.innerHTML = `
+        <div class="panel">
+          <h1>Detected</h1>
+          <p>A guard traced your movement. Reset the room and use the shadows.</p>
+          <div class="panel-actions">
+            <button type="button" data-action="restart">Retry Level</button>
+            <button type="button" data-action="settings">Settings</button>
+          </div>
+        </div>
+      `;
+    } else if (phase === 'complete') {
+      this.overlay.innerHTML = `
+        <div class="panel">
+          <h1>Exit Reached</h1>
+          <p>${level.briefing}</p>
+          <div class="panel-actions">
+            <button type="button" data-action="next">Next Level</button>
+            <button type="button" data-action="menu">Menu</button>
+          </div>
+        </div>
+      `;
+    }
+
+    this.bindOverlay();
+  }
+
+  private bindHud(): void {
+    this.hud.querySelector('[data-action="settings"]')?.addEventListener('click', this.callbacks.onSettings);
+    this.hud.querySelector('[data-action="menu"]')?.addEventListener('click', this.callbacks.onMenu);
+  }
+
+  private bindOverlay(): void {
+    this.overlay.querySelector('[data-action="start"]')?.addEventListener('click', this.callbacks.onStart);
+    this.overlay.querySelector('[data-action="resume"]')?.addEventListener('click', this.callbacks.onResume);
+    this.overlay.querySelectorAll('[data-action="settings"]').forEach((button) =>
+      button.addEventListener('click', this.callbacks.onSettings),
+    );
+    this.overlay.querySelector('[data-action="menu"]')?.addEventListener('click', this.callbacks.onMenu);
+    this.overlay.querySelector('[data-action="restart"]')?.addEventListener('click', this.callbacks.onRestart);
+    this.overlay.querySelector('[data-action="next"]')?.addEventListener('click', this.callbacks.onNextLevel);
+    this.overlay.querySelector('[data-setting="quality"]')?.addEventListener('change', (event) => {
+      this.callbacks.onSettingsChange({ ...this.settings, quality: (event.target as HTMLSelectElement).value as GameSettings['quality'] });
+    });
+    this.overlay.querySelector('[data-setting="music"]')?.addEventListener('change', (event) => {
+      this.callbacks.onSettingsChange({ ...this.settings, musicEnabled: (event.target as HTMLInputElement).checked });
+    });
+    this.overlay.querySelector('[data-setting="debug"]')?.addEventListener('change', (event) => {
+      this.callbacks.onSettingsChange({ ...this.settings, debugEnabled: (event.target as HTMLInputElement).checked });
+    });
+    this.overlay.querySelector('[data-setting="volume"]')?.addEventListener('input', (event) => {
+      this.callbacks.onSettingsChange({ ...this.settings, masterVolume: Number((event.target as HTMLInputElement).value) });
+    });
+  }
+}
+
+function required(root: ParentNode, selector: string): HTMLElement {
+  const element = root.querySelector(selector);
+  if (!(element instanceof HTMLElement)) {
+    throw new Error(`Missing UI element ${selector}`);
+  }
+  return element;
+}

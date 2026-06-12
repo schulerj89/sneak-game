@@ -1,0 +1,27 @@
+# Shadow Circuit Levels
+
+Levels live in `src/game/levels.ts` and are plain strict TypeScript data.
+
+Each level defines:
+
+- Room size.
+- Player start.
+- Goal location and radius.
+- Rectangular blockers.
+- Colored lights.
+- Guard specs.
+- A validation route for automated smoke checks.
+
+## Validation Script
+
+```powershell
+npm run test:levels
+```
+
+The script samples each validation route and checks:
+
+- Route points stay inside the room.
+- Route points do not intersect cover.
+- Route points are not immediately inside dangerous close-range guard sight.
+
+These routes are not full AI solutions. They are maintenance rails that catch broken level geometry or impossible starts.
