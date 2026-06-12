@@ -8,30 +8,33 @@ const channels = 1;
 const bitsPerSample = 16;
 const data = new Int16Array(samples);
 
-const bassNotes = [55, 55, 65.41, 49, 73.42, 65.41, 55, 82.41];
+const tempo = 2.12;
+const bassNotes = [55, 41.2, 65.41, 49, 73.42, 49, 55, 82.41];
 const arpNotes = [220, 246.94, 329.63, 392, 329.63, 246.94, 196, 246.94];
 
 let noiseSeed = 12_345;
 
 for (let index = 0; index < samples; index += 1) {
   const time = index / sampleRate;
-  const beat = time * 1.55;
+  const beat = time * tempo;
   const bass = noteAt(bassNotes, beat / 2);
   const arp = noteAt(arpNotes, beat * 2);
-  const bassEnv = pulseEnvelope(beat, 0.72, 2.4);
-  const arpEnv = pulseEnvelope(beat * 2, 0.36, 6.5);
-  const kickEnv = pulseEnvelope(beat, 0.16, 14);
+  const bassEnv = pulseEnvelope(beat, 0.78, 2.0);
+  const subEnv = pulseEnvelope(beat, 0.88, 1.5);
+  const arpEnv = pulseEnvelope(beat * 2, 0.32, 7.2);
+  const kickEnv = pulseEnvelope(beat, 0.2, 13);
   const hatEnv = pulseEnvelope(beat * 4 + 0.5, 0.08, 24);
 
   const shimmer = Math.sin(TAU * (arp * 2.01) * time) * 0.04 * arpEnv;
-  const bassTone = softSine(bass, time) * 0.42 * bassEnv;
-  const arpTone = triangle(arp, time) * 0.18 * arpEnv;
-  const kick = Math.sin(TAU * (48 - kickEnv * 18) * time) * 0.25 * kickEnv;
+  const bassTone = softSine(bass, time) * 0.48 * bassEnv;
+  const subBass = Math.sin(TAU * (bass / 2) * time) * 0.28 * subEnv;
+  const arpTone = triangle(arp, time) * 0.15 * arpEnv;
+  const kick = Math.sin(TAU * (54 - kickEnv * 24) * time) * 0.34 * kickEnv;
   const hat = noise() * 0.07 * hatEnv;
   const roomBreath = Math.sin(TAU * 0.07 * time) * 0.05;
   const fade = edgeFade(time, seconds, 1.4);
 
-  data[index] = clamp16((bassTone + arpTone + shimmer + kick + hat + roomBreath) * fade * 26_000);
+  data[index] = clamp16((bassTone + subBass + arpTone + shimmer + kick + hat + roomBreath) * fade * 23_500);
 }
 
 await mkdir('src/assets', { recursive: true });
