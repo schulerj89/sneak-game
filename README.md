@@ -8,10 +8,12 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Menu, settings, retry, and level-complete flows.
 - Level select menu with generated level preview images.
 - Guard patrols with visible cones and raycast line-of-sight detection.
+- Suspicion meter with alert recovery and detection leniency settings.
 - Guard collision: touching a guard now triggers detection.
+- Objective-gated exits with a keycard and terminal prototype in Dock Blackout.
 - Dark-room lighting, emissive goals, shadows by quality setting, and simple custom assets.
 - Shader-based floor detail, goal beacons, and contact shadows.
-- Custom generated soundtrack with three selectable tracks.
+- Custom generated soundtrack with four selectable tracks, including a compressed higher-tempo replacement candidate.
 - Balanced default rendering with a 75 MB browser heap cap and Memory first fallback.
 - On-screen debug panel with FPS, memory, draw calls, player position, and detection state.
 - Console logs for game phase, level loads, settings, audio, and detection events.
@@ -46,7 +48,7 @@ npm run test:levels  # Validate authored level routes
 npm run test:browser # Run Playwright smoke test against the local dev server
 npm run screenshots   # Capture README screenshots into docs/images
 npm run verify       # Run unit tests, level validation, and production build
-npm run assets:audio # Regenerate the custom WAV soundtrack
+npm run assets:audio # Regenerate the custom soundtrack; ffmpeg also rebuilds the compressed MP3 candidate
 ```
 
 `npm run test:browser` expects the dev server to be running at `http://127.0.0.1:5173/`. It runs headed by default for realistic frame pacing; set `SMOKE_HEADLESS=true` if a headless smoke pass is needed.

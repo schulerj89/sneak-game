@@ -1,6 +1,7 @@
 import { getDetectionState } from '../src/game/detection';
 import { levels } from '../src/game/levels';
 import { distance, lerp, normalize, pointInRect, subtract } from '../src/game/math';
+import { collectNearbyObjectives, getObjectiveProgress } from '../src/game/objectives';
 import type { EnemySpec, Vec2 } from '../src/game/types';
 
 const stepSize = 0.18;
@@ -21,6 +22,7 @@ for (const level of levels) {
     position: enemy.start,
     facing: normalize(subtract(enemy.patrol[1] ?? enemy.start, enemy.start)),
   }));
+  let collectedObjectives = new Set<string>();
 
   for (let routeIndex = 1; routeIndex < route.length; routeIndex += 1) {
     const from = route[routeIndex - 1];
@@ -32,7 +34,13 @@ for (const level of levels) {
       assertInBounds(level.id, point, level.floorSize);
       assertNoObstacle(level.id, point, level.obstacles);
       assertHasClearPatrolWindow(level.id, point, level, guards);
+      collectedObjectives = collectNearbyObjectives(level, point, collectedObjectives);
     }
+  }
+
+  const progress = getObjectiveProgress(level, collectedObjectives);
+  if (!progress.exitUnlocked) {
+    fail(`${level.id}: route reaches exit with objectives ${progress.collectedRequired}/${progress.totalRequired}`);
   }
 }
 

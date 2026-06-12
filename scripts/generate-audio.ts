@@ -1,7 +1,10 @@
+import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 
 type TrackSpec = {
   file: string;
+  compressedFile?: string;
   tempo: number;
   seconds: number;
   bassNotes: readonly number[];
@@ -16,6 +19,7 @@ const TAU = Math.PI * 2;
 const sampleRate = 22_050;
 const channels = 1;
 const bitsPerSample = 16;
+const execFileAsync = promisify(execFile);
 
 const tracks: readonly TrackSpec[] = [
   {
@@ -51,12 +55,48 @@ const tracks: readonly TrackSpec[] = [
     subWeight: 0.36,
     seed: 32_019,
   },
+  {
+    file: 'metro-escape.wav',
+    compressedFile: 'metro-escape.mp3',
+    tempo: 2.8,
+    seconds: 24,
+    bassNotes: [73.42, 55, 73.42, 98, 82.41, 65.41, 55, 65.41],
+    arpNotes: [293.66, 369.99, 440, 554.37, 440, 369.99, 277.18, 369.99],
+    kickWeight: 0.46,
+    bassWeight: 0.64,
+    subWeight: 0.42,
+    seed: 91_337,
+  },
 ];
 
 await mkdir('src/assets', { recursive: true });
 for (const track of tracks) {
   await writeFile(`src/assets/${track.file}`, wav(renderTrack(track)));
   console.info(`[assets] wrote src/assets/${track.file}`);
+  if (track.compressedFile) {
+    await writeCompressedTrack(track.file, track.compressedFile);
+  }
+}
+
+async function writeCompressedTrack(sourceFile: string, outputFile: string): Promise<void> {
+  try {
+    await execFileAsync('ffmpeg', [
+      '-y',
+      '-i',
+      `src/assets/${sourceFile}`,
+      '-codec:a',
+      'libmp3lame',
+      '-b:a',
+      '96k',
+      `src/assets/${outputFile}`,
+    ]);
+    console.info(`[assets] wrote src/assets/${outputFile}`);
+  } catch (error) {
+    console.warn(`[assets] skipped ${outputFile}; install ffmpeg to regenerate compressed audio`);
+    if (error instanceof Error) {
+      console.warn(`[assets] ${error.message}`);
+    }
+  }
 }
 
 function renderTrack(track: TrackSpec): Int16Array {

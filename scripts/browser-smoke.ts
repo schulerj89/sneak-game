@@ -69,11 +69,26 @@ try {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
   await expectVisible('text=Render quality');
   await page.selectOption('[data-setting="quality"]', 'cinematic');
-  await page.selectOption('[data-setting="soundtrack"]', 'pulse-runner');
+  await page.selectOption('[data-setting="soundtrack"]', 'metro-escape');
+  await page.selectOption('[data-setting="detection-leniency"]', 'standard');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
   await page.waitForTimeout(800);
   await assertPlayingPhase('after start run');
+  const beforeKeyboardMove = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { playerPosition: () => { x: number; z: number } } };
+    return debugWindow.__shadowCircuitDebug?.playerPosition();
+  });
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(360);
+  await page.keyboard.up('ArrowRight');
+  const afterKeyboardMove = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { playerPosition: () => { x: number; z: number } } };
+    return debugWindow.__shadowCircuitDebug?.playerPosition();
+  });
+  if (!beforeKeyboardMove || !afterKeyboardMove || afterKeyboardMove.x <= beforeKeyboardMove.x + 0.15) {
+    throw new Error(`Expected keyboard movement to increase x: before=${JSON.stringify(beforeKeyboardMove)} after=${JSON.stringify(afterKeyboardMove)}`);
+  }
 
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Settings' }).click();
   await expectVisible('text=Render quality');
@@ -137,8 +152,89 @@ try {
     throw new Error(`Expected initialization console log. Logs: ${logs.join('\n')}`);
   }
 
-  if (!logs.some((line) => line.includes('[audio] soundtrack playing Pulse Runner'))) {
+  if (!logs.some((line) => line.includes('[audio] soundtrack playing Metro Escape'))) {
     throw new Error(`Expected selected soundtrack console log. Logs: ${logs.join('\n')}`);
+  }
+  const activeTrackId = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
+    return debugWindow.__shadowCircuitDebug?.activeTrackId();
+  });
+  if (activeTrackId !== 'metro-escape') {
+    throw new Error(`Expected active Metro Escape track, got ${activeTrackId}`);
+  }
+
+  await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        selectLevel: (levelIndex: number) => void;
+        movePlayerTo: (point: { x: number; z: number }) => void;
+      };
+    };
+    debugWindow.__shadowCircuitDebug?.selectLevel(0);
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 1.6, z: -2.5 });
+  });
+  await page.waitForTimeout(320);
+  const suspicious = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { suspicion: () => { status: string; value: number } } };
+    return debugWindow.__shadowCircuitDebug?.suspicion();
+  });
+  if (!suspicious || suspicious.status !== 'suspicious' || suspicious.value <= 0) {
+    throw new Error(`Expected suspicious buildup, got ${JSON.stringify(suspicious)}`);
+  }
+  await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { movePlayerTo: (point: { x: number; z: number }) => void } };
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -5, z: 3.4 });
+  });
+  await page.waitForTimeout(900);
+  const recovered = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { suspicion: () => { status: string; value: number } } };
+    return debugWindow.__shadowCircuitDebug?.suspicion();
+  });
+  if (!recovered || recovered.status !== 'hidden') {
+    throw new Error(`Expected suspicion recovery, got ${JSON.stringify(recovered)}`);
+  }
+
+  await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { movePlayerTo: (point: { x: number; z: number }) => void } };
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5, z: -3.2 });
+  });
+  await page.waitForTimeout(300);
+  const lockedExitState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        phase: () => string;
+        objectives: () => { collectedRequired: number; totalRequired: number; exitUnlocked: boolean };
+      };
+    };
+    return {
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+      objectives: debugWindow.__shadowCircuitDebug?.objectives(),
+    };
+  });
+  if (lockedExitState.phase !== 'playing' || lockedExitState.objectives?.exitUnlocked) {
+    throw new Error(`Expected locked exit before objectives, got ${JSON.stringify(lockedExitState)}`);
+  }
+  await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { movePlayerTo: (point: { x: number; z: number }) => void } };
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -1.0, z: -1.2 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 2.4, z: -3.4 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5, z: -3.2 });
+  });
+  await expectVisible('text=Exit Reached');
+  const objectiveCompleteState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        phase: () => string;
+        objectives: () => { collectedRequired: number; totalRequired: number; exitUnlocked: boolean };
+      };
+    };
+    return {
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+      objectives: debugWindow.__shadowCircuitDebug?.objectives(),
+    };
+  });
+  if (objectiveCompleteState.phase !== 'complete' || !objectiveCompleteState.objectives?.exitUnlocked) {
+    throw new Error(`Expected objective-gated completion, got ${JSON.stringify(objectiveCompleteState)}`);
   }
 
   await page.evaluate(() => {

@@ -2,13 +2,25 @@ import * as THREE from 'three';
 import { MusicDirector } from './audio';
 import { collidesWithEnemies, collidesWithObstacles, enemyRadius, playerRadius } from './collision';
 import { DebugPanel } from './debug';
-import { getDetectionState, isSightBlocked } from './detection';
+import { advanceSuspicion, emptySuspicion, getDetectionState, isSightBlocked } from './detection';
 import { InputController } from './input';
 import { levels } from './levels';
 import { add, clampToRoom, distance, normalize, scale, subtract } from './math';
+import { collectNearbyObjectives, getObjectiveProgress } from './objectives';
 import { loadSettings, memoryCapMb, qualityProfile, saveSettings } from './settings';
 import { createContactShadowMaterial, createFloorShaderMaterial, createGoalBeaconMaterial, createVisionConeGeometry } from './shaders';
-import type { DebugSample, DetectionState, EnemySpec, GamePhase, GameSettings, LevelDefinition, Vec2 } from './types';
+import type {
+  DebugSample,
+  DetectionState,
+  EnemySpec,
+  GamePhase,
+  GameSettings,
+  LevelDefinition,
+  ObjectiveDefinition,
+  ObjectiveProgress,
+  SuspicionState,
+  Vec2,
+} from './types';
 import { GameUi } from './ui';
 
 type EnemyRuntime = {
@@ -23,6 +35,12 @@ type EnemyRuntime = {
   pauseRemaining: number;
 };
 
+type ObjectiveRuntime = {
+  spec: ObjectiveDefinition;
+  mesh: THREE.Mesh;
+  glow: THREE.PointLight;
+};
+
 declare global {
   interface Window {
     __shadowCircuitDebug?: {
@@ -34,6 +52,11 @@ declare global {
       levelId: () => string;
       goalVisible: () => boolean;
       forceEnemyCollision: () => void;
+      suspicion: () => SuspicionState;
+      objectives: () => ObjectiveProgress;
+      movePlayerTo: (point: Vec2) => void;
+      playerPosition: () => Vec2;
+      activeTrackId: () => GameSettings['soundtrackId'] | null;
     };
   }
 }
@@ -62,8 +85,11 @@ export class Game {
   private goalMesh = new THREE.Mesh();
   private enemies: EnemyRuntime[] = [];
   private blockers: THREE.Mesh[] = [];
+  private objectives: ObjectiveRuntime[] = [];
+  private collectedObjectiveIds = new Set<string>();
   private debugRays = new THREE.Group();
   private currentDetection: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
+  private currentSuspicion: SuspicionState = emptySuspicion();
   private latestDebugSample: DebugSample | null = null;
   private qualityMemoryReserve: Float32Array | null = null;
   private reservedMemoryMb = 0;
@@ -156,6 +182,9 @@ export class Game {
       this.placeEnemy(enemy);
     });
     this.currentDetection = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
+    this.currentSuspicion = emptySuspicion();
+    this.collectedObjectiveIds.clear();
+    this.updateObjectiveMeshes();
     console.info(`[level] restarted ${this.level.id}`);
   }
 
@@ -243,6 +272,11 @@ export class Game {
       lamp.name = 'level-object';
       this.scene.add(lamp);
     }
+
+    this.objectives = (level.objectives ?? []).map((objective) => this.createObjective(objective));
+    this.objectives.forEach((objective) => {
+      this.scene.add(objective.mesh, objective.glow);
+    });
 
     this.goalMesh = new THREE.Mesh(
       new THREE.CylinderGeometry(level.goalRadius, level.goalRadius, 0.16, 32),
@@ -389,6 +423,29 @@ export class Game {
     };
   }
 
+  private createObjective(spec: ObjectiveDefinition): ObjectiveRuntime {
+    const isKeycard = spec.type === 'keycard';
+    const mesh = new THREE.Mesh(
+      isKeycard ? new THREE.BoxGeometry(0.52, 0.08, 0.32) : new THREE.CylinderGeometry(0.28, 0.28, 0.12, 6),
+      new THREE.MeshStandardMaterial({
+        color: isKeycard ? '#ffd45a' : '#5ad7ff',
+        emissive: isKeycard ? '#6d4c08' : '#063f58',
+        emissiveIntensity: 0.9,
+        roughness: 0.38,
+        metalness: 0.18,
+      }),
+    );
+    mesh.position.set(spec.position.x, 0.16, spec.position.z);
+    mesh.rotation.y = isKeycard ? -0.35 : Math.PI / 6;
+    mesh.name = `objective:${spec.id}`;
+
+    const glow = new THREE.PointLight(isKeycard ? '#ffd45a' : '#5ad7ff', 18, 2.1);
+    glow.position.set(spec.position.x, 0.68, spec.position.z);
+    glow.name = `objective-glow:${spec.id}`;
+
+    return { spec, mesh, glow };
+  }
+
   private updatePlayer(delta: number): void {
     if (this.phase !== 'playing') return;
 
@@ -409,7 +466,9 @@ export class Game {
       this.playerContactShadow.position.set(clamped.x, 0.016, clamped.z);
     }
 
-    if (distance(this.playerPosition, this.level.goal) <= this.level.goalRadius + playerRadius) {
+    this.collectObjectives();
+
+    if (distance(this.playerPosition, this.level.goal) <= this.level.goalRadius + playerRadius && this.objectiveProgress().exitUnlocked) {
       this.setPhase('complete');
     }
   }
@@ -444,7 +503,7 @@ export class Game {
     }
   }
 
-  private updateDetection(): void {
+  private updateDetection(delta: number): void {
     let nearest: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
 
     for (const enemy of this.enemies) {
@@ -460,16 +519,41 @@ export class Game {
     }
 
     this.currentDetection = nearest;
-    if (nearest.spotted && this.phase === 'playing') {
+    this.currentSuspicion = advanceSuspicion(this.currentSuspicion, nearest, delta, this.settings.detectionLeniency);
+    if (this.currentSuspicion.status === 'detected' && this.phase === 'playing') {
       this.setPhase('caught');
-      console.warn(`[detection] player spotted by ${nearest.enemyId}`);
+      console.warn(`[detection] player detected by ${this.currentSuspicion.enemyId}`);
     }
 
     const collision = collidesWithEnemies(this.playerPosition, this.enemyBodies(), playerRadius);
     if (collision && this.phase === 'playing') {
       this.currentDetection = { spotted: true, enemyId: collision.id, rayBlocked: false, distance: 0 };
+      this.currentSuspicion = { value: 1, status: 'detected', enemyId: collision.id };
       this.setPhase('caught');
       console.warn(`[collision] player collided with ${collision.id}`);
+    }
+  }
+
+  private collectObjectives(): void {
+    const next = collectNearbyObjectives(this.level, this.playerPosition, this.collectedObjectiveIds);
+    if (next.size === this.collectedObjectiveIds.size) return;
+
+    this.collectedObjectiveIds = next;
+    this.updateObjectiveMeshes();
+    console.info(`[objective] collected=${[...this.collectedObjectiveIds].join(',')}`);
+  }
+
+  private updateObjectiveMeshes(): void {
+    for (const objective of this.objectives) {
+      const collected = this.collectedObjectiveIds.has(objective.spec.id);
+      objective.mesh.visible = !collected;
+      objective.glow.visible = !collected;
+    }
+
+    const unlocked = this.objectiveProgress().exitUnlocked;
+    if (this.goalMesh.material instanceof THREE.MeshStandardMaterial) {
+      this.goalMesh.material.color.set(unlocked ? '#7dff9b' : '#ffcf5a');
+      this.goalMesh.material.emissive.set(unlocked ? '#1a6f34' : '#5f3807');
     }
   }
 
@@ -519,6 +603,7 @@ export class Game {
     }
     this.blockers = [];
     this.enemies = [];
+    this.objectives = [];
   }
 
   private readonly tick = (): void => {
@@ -527,7 +612,7 @@ export class Game {
 
     this.updatePlayer(delta);
     this.updateEnemies(delta);
-    this.updateDetection();
+    this.updateDetection(delta);
     this.updateDebugRays();
     this.goalMesh.rotation.y += delta * 0.9;
     this.renderer.render(this.scene, this.camera);
@@ -535,7 +620,7 @@ export class Game {
     const sample = this.debugPanel.sample(now, this.renderer.info.render.calls, this.renderer.info.render.triangles, this.reservedMemoryMb);
     this.latestDebugSample = sample;
     this.enforceMemoryCap(sample.usedMemoryMb);
-    this.debugPanel.render(this.settings, this.level, this.playerPosition, this.currentDetection, sample);
+    this.debugPanel.render(this.settings, this.level, this.playerPosition, this.currentDetection, this.currentSuspicion, this.objectiveProgress(), sample);
     this.renderer.info.reset();
 
     this.animationId = requestAnimationFrame(this.tick);
@@ -572,6 +657,11 @@ export class Game {
       levelId: () => this.level.id,
       goalVisible: () => this.isGoalVisibleInCamera(),
       forceEnemyCollision: () => this.forceEnemyCollision(),
+      suspicion: () => this.currentSuspicion,
+      objectives: () => this.objectiveProgress(),
+      movePlayerTo: (point: Vec2) => this.movePlayerTo(point),
+      playerPosition: () => this.playerPosition,
+      activeTrackId: () => this.music.currentTrack(),
     };
   }
 
@@ -584,6 +674,15 @@ export class Game {
     this.playerContactShadow.position.set(this.playerPosition.x, 0.016, this.playerPosition.z);
     this.currentDetection = { spotted: true, enemyId: enemy.spec.id, rayBlocked: false, distance: 0 };
     this.setPhase('caught');
+  }
+
+  private movePlayerTo(point: Vec2): void {
+    const clamped = clampToRoom(point, this.level.floorSize, playerRadius);
+    if (collidesWithObstacles(clamped, this.level.obstacles, playerRadius)) return;
+    this.playerPosition = clamped;
+    this.playerMesh.position.set(clamped.x, 0.48, clamped.z);
+    this.playerContactShadow.position.set(clamped.x, 0.016, clamped.z);
+    this.collectObjectives();
   }
 
   private isGoalVisibleInCamera(): boolean {
@@ -601,7 +700,7 @@ export class Game {
   }
 
   private renderUi(): void {
-    this.ui.renderHud(this.level, this.levelIndex, this.phase, levels.length);
+    this.ui.renderHud(this.level, this.levelIndex, this.phase, levels.length, this.currentSuspicion, this.objectiveProgress());
     this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex);
   }
 
@@ -611,6 +710,10 @@ export class Game {
 
   private get level(): LevelDefinition {
     return levels[this.levelIndex];
+  }
+
+  private objectiveProgress(): ObjectiveProgress {
+    return getObjectiveProgress(this.level, this.collectedObjectiveIds);
   }
 }
 

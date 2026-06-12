@@ -16,7 +16,7 @@ describe('level definitions', () => {
 
   it('keeps starts, goals, and validation routes out of hard cover', () => {
     for (const level of levels) {
-      const points = [level.start, level.goal, ...level.validationRoute];
+      const points = [level.start, level.goal, ...level.validationRoute, ...(level.objectives ?? []).map((objective) => objective.position)];
       for (const point of points) {
         expect.soft(Math.abs(point.x)).toBeLessThanOrEqual(level.floorSize.x / 2);
         expect.soft(Math.abs(point.z)).toBeLessThanOrEqual(level.floorSize.z / 2);
@@ -33,6 +33,22 @@ describe('level definitions', () => {
         const blocked = level.obstacles.some((obstacle) => segmentIntersectsRect(previous, current, obstacle, 0.18));
         expect.soft(blocked, `${level.id} route segment ${index}`).toBe(false);
       }
+    }
+  });
+
+  it('defines valid required objective gates', () => {
+    const objectiveLevels = levels.filter((level) => (level.objectives ?? []).length > 0);
+    expect(objectiveLevels.map((level) => level.id)).toContain('dock-blackout');
+
+    for (const level of objectiveLevels) {
+      const ids = new Set<string>();
+      for (const objective of level.objectives ?? []) {
+        expect.soft(ids.has(objective.id), `${level.id} duplicate ${objective.id}`).toBe(false);
+        ids.add(objective.id);
+        expect.soft(objective.radius, `${level.id} ${objective.id} radius`).toBeGreaterThan(0.2);
+        expect.soft(['keycard', 'terminal']).toContain(objective.type);
+      }
+      expect.soft((level.objectives ?? []).some((objective) => objective.required), `${level.id} requires objective`).toBe(true);
     }
   });
 });

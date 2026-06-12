@@ -1,4 +1,4 @@
-import type { DebugSample, DetectionState, GameSettings, LevelDefinition, Vec2 } from './types';
+import type { DebugSample, DetectionState, GameSettings, LevelDefinition, ObjectiveProgress, SuspicionState, Vec2 } from './types';
 import { memoryCapMb, targetFps } from './settings';
 
 type MemoryPerformance = Performance & {
@@ -37,6 +37,8 @@ export class DebugPanel {
     level: LevelDefinition,
     playerPosition: Vec2,
     detection: DetectionState,
+    suspicion: SuspicionState,
+    objectives: ObjectiveProgress,
     sample: DebugSample,
   ): void {
     this.element.hidden = !settings.debugEnabled;
@@ -47,7 +49,9 @@ export class DebugPanel {
       <div>Level: ${level.name}</div>
       <div>Player: ${playerPosition.x.toFixed(2)}, ${playerPosition.z.toFixed(2)}</div>
       <div>Detection: ${detection.spotted ? `SPOTTED by ${detection.enemyId}` : 'clear'}</div>
+      <div>Suspicion: ${suspicion.status} ${(suspicion.value * 100).toFixed(0)}%</div>
       <div>Ray blocked: ${detection.rayBlocked ? 'yes' : 'no'}</div>
+      <div>Objectives: ${objectives.collectedRequired}/${objectives.totalRequired} ${objectives.exitUnlocked ? 'unlocked' : 'locked'}</div>
       <div>FPS: ${sample.fps.toFixed(0)} (${sample.frameMs.toFixed(1)}ms)</div>
       <div>Target FPS: ${targetFps}</div>
       <div>Memory: ${sample.usedMemoryMb === null ? 'n/a' : `${sample.usedMemoryMb.toFixed(1)} MB`} / ${sample.memoryCapMb} MB</div>

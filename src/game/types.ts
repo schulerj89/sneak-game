@@ -29,6 +29,17 @@ export type EnemySpec = Readonly<{
   pauseSeconds: number;
 }>;
 
+export type ObjectiveType = 'keycard' | 'terminal';
+
+export type ObjectiveDefinition = Readonly<{
+  id: string;
+  type: ObjectiveType;
+  label: string;
+  position: Vec2;
+  radius: number;
+  required: boolean;
+}>;
+
 export type LevelDefinition = Readonly<{
   id: string;
   name: string;
@@ -40,12 +51,15 @@ export type LevelDefinition = Readonly<{
   obstacles: readonly RectObstacle[];
   lights: readonly LightSpec[];
   enemies: readonly EnemySpec[];
+  objectives?: readonly ObjectiveDefinition[];
   validationRoute: readonly Vec2[];
 }>;
 
 export type RenderQuality = 'memory' | 'balanced' | 'cinematic';
 
-export type SoundtrackId = 'shadow-circuit' | 'pulse-runner' | 'deep-cover';
+export type DetectionLeniency = 'forgiving' | 'standard' | 'sharp';
+
+export type SoundtrackId = 'shadow-circuit' | 'pulse-runner' | 'deep-cover' | 'metro-escape';
 
 export type GameSettings = {
   quality: RenderQuality;
@@ -53,6 +67,7 @@ export type GameSettings = {
   debugEnabled: boolean;
   masterVolume: number;
   soundtrackId: SoundtrackId;
+  detectionLeniency: DetectionLeniency;
 };
 
 export type GamePhase = 'menu' | 'playing' | 'paused' | 'caught' | 'complete' | 'settings' | 'level-select';
@@ -62,6 +77,21 @@ export type DetectionState = Readonly<{
   enemyId: string | null;
   rayBlocked: boolean;
   distance: number;
+}>;
+
+export type SuspicionStatus = 'hidden' | 'suspicious' | 'detected';
+
+export type SuspicionState = Readonly<{
+  value: number;
+  status: SuspicionStatus;
+  enemyId: string | null;
+}>;
+
+export type ObjectiveProgress = Readonly<{
+  totalRequired: number;
+  collectedRequired: number;
+  exitUnlocked: boolean;
+  collectedIds: readonly string[];
 }>;
 
 export type DebugSample = Readonly<{

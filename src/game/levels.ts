@@ -36,6 +36,24 @@ export const levels: readonly LevelDefinition[] = [
         pauseSeconds: 0.3,
       },
     ],
+    objectives: [
+      {
+        id: 'dock-keycard',
+        type: 'keycard',
+        label: 'Gate Keycard',
+        position: { x: -1.0, z: -1.2 },
+        radius: 0.62,
+        required: true,
+      },
+      {
+        id: 'dock-terminal',
+        type: 'terminal',
+        label: 'Exit Terminal',
+        position: { x: 2.4, z: -3.4 },
+        radius: 0.68,
+        required: true,
+      },
+    ],
     validationRoute: [
       { x: -5, z: 3.4 },
       { x: -4.8, z: -3.8 },

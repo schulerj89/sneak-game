@@ -1,6 +1,6 @@
 import { soundtrackOptions } from './audio';
 import { levelThumbnailSvg, logoSvg } from './assets';
-import type { GamePhase, GameSettings, LevelDefinition } from './types';
+import type { GamePhase, GameSettings, LevelDefinition, ObjectiveProgress, SuspicionState } from './types';
 
 type UiCallbacks = {
   onStart: () => void;
@@ -44,18 +44,32 @@ export class GameUi {
     this.settings = settings;
   }
 
-  renderHud(level: LevelDefinition, levelNumber: number, phase: GamePhase, totalLevels: number): void {
+  renderHud(
+    level: LevelDefinition,
+    levelNumber: number,
+    phase: GamePhase,
+    totalLevels: number,
+    suspicion: SuspicionState,
+    objectives: ObjectiveProgress,
+  ): void {
+    const statusText = statusLabel(phase, suspicion, objectives);
     this.hud.innerHTML = `
       <div class="hud-left">
         <strong>${level.name}</strong>
         <span>Level ${levelNumber + 1} / ${totalLevels}</span>
+        ${objectives.totalRequired > 0 ? `
+          <span>Objectives ${objectives.collectedRequired} / ${objectives.totalRequired}</span>
+        ` : ''}
       </div>
       <div class="hud-right">
         <button type="button" data-action="level-select" title="Level Select">Levels</button>
         <button type="button" data-action="settings" title="Settings">Settings</button>
         <button type="button" data-action="menu" title="Menu">Menu</button>
       </div>
-      <div class="status-pill">${phase === 'playing' ? 'Stay hidden' : phase}</div>
+      <div class="status-pill status-${suspicion.status}">
+        <span>${statusText}</span>
+        <span class="suspicion-meter"><span style="width: ${Math.round(suspicion.value * 100)}%"></span></span>
+      </div>
     `;
     this.bindHud();
   }
@@ -113,6 +127,14 @@ export class GameUi {
               ${soundtrackOptions.map((track) => `
                 <option value="${track.id}" ${this.settings.soundtrackId === track.id ? 'selected' : ''}>${track.name}</option>
               `).join('')}
+            </select>
+          </label>
+          <p class="settings-note">${selectedTrack(this.settings.soundtrackId).source.attribution}</p>
+          <label>Detection leniency
+            <select data-setting="detection-leniency">
+              <option value="forgiving" ${this.settings.detectionLeniency === 'forgiving' ? 'selected' : ''}>Forgiving</option>
+              <option value="standard" ${this.settings.detectionLeniency === 'standard' ? 'selected' : ''}>Standard</option>
+              <option value="sharp" ${this.settings.detectionLeniency === 'sharp' ? 'selected' : ''}>Sharp</option>
             </select>
           </label>
           <label class="check-row">
@@ -187,6 +209,12 @@ export class GameUi {
     this.overlay.querySelector('[data-setting="soundtrack"]')?.addEventListener('change', (event) => {
       this.callbacks.onSettingsChange({ ...this.settings, soundtrackId: (event.target as HTMLSelectElement).value as GameSettings['soundtrackId'] });
     });
+    this.overlay.querySelector('[data-setting="detection-leniency"]')?.addEventListener('change', (event) => {
+      this.callbacks.onSettingsChange({
+        ...this.settings,
+        detectionLeniency: (event.target as HTMLSelectElement).value as GameSettings['detectionLeniency'],
+      });
+    });
     this.overlay.querySelector('[data-setting="debug"]')?.addEventListener('change', (event) => {
       this.callbacks.onSettingsChange({ ...this.settings, debugEnabled: (event.target as HTMLInputElement).checked });
     });
@@ -194,6 +222,18 @@ export class GameUi {
       this.callbacks.onSettingsChange({ ...this.settings, masterVolume: Number((event.target as HTMLInputElement).value) });
     });
   }
+}
+
+function statusLabel(phase: GamePhase, suspicion: SuspicionState, objectives: ObjectiveProgress): string {
+  if (phase !== 'playing') return phase;
+  if (suspicion.status === 'detected') return 'Detected';
+  if (suspicion.status === 'suspicious') return 'Suspicious';
+  if (!objectives.exitUnlocked) return 'Exit locked';
+  return 'Stay hidden';
+}
+
+function selectedTrack(soundtrackId: GameSettings['soundtrackId']): (typeof soundtrackOptions)[number] {
+  return soundtrackOptions.find((track) => track.id === soundtrackId) ?? soundtrackOptions[0];
 }
 
 function required(root: ParentNode, selector: string): HTMLElement {

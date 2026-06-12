@@ -112,6 +112,37 @@ button:hover {
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
+  display: grid;
+  gap: 5px;
+  min-width: 138px;
+  text-align: center;
+}
+
+.status-suspicious {
+  color: #ffcf5a;
+  border-color: rgba(255, 207, 90, 0.55);
+}
+
+.status-detected {
+  color: #ff5964;
+  border-color: rgba(255, 89, 100, 0.65);
+}
+
+.suspicion-meter {
+  display: block;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(127, 160, 190, 0.22);
+}
+
+.suspicion-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 120ms linear;
 }
 
 .debug {
@@ -186,6 +217,13 @@ button:hover {
 .settings-panel {
   display: grid;
   gap: 16px;
+}
+
+.settings-note {
+  margin: -6px 0 0;
+  color: #9fb2c2;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .level-select-panel {

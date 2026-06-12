@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDetectionState, isInsideVisionCone, isSightBlocked } from './detection';
+import { advanceSuspicion, emptySuspicion, getDetectionState, isInsideVisionCone, isSightBlocked } from './detection';
 import { levels } from './levels';
 
 describe('guard detection', () => {
@@ -36,5 +36,26 @@ describe('guard detection', () => {
     const state = getDetectionState(level, enemy, { x: -4.4, z: -0.7 }, { x: 1, z: 0 }, { x: -2.2, z: -0.7 });
     expect(state.spotted).toBe(false);
     expect(state.rayBlocked).toBe(true);
+  });
+
+  it('builds suspicion before detection and keeps the active enemy', () => {
+    const spotted = { spotted: true, enemyId: 'guard-a', rayBlocked: false, distance: 1.2 };
+    const first = advanceSuspicion(emptySuspicion(), spotted, 0.45, 'standard');
+    const second = advanceSuspicion(first, spotted, 0.55, 'standard');
+
+    expect(first.status).toBe('suspicious');
+    expect(first.enemyId).toBe('guard-a');
+    expect(second.status).toBe('detected');
+    expect(second.value).toBe(1);
+  });
+
+  it('decays suspicion during recovery', () => {
+    const suspicious = { value: 0.5, status: 'suspicious' as const, enemyId: 'guard-a' };
+    const clear = { spotted: false, enemyId: null, rayBlocked: false, distance: 4 };
+    const recovered = advanceSuspicion(suspicious, clear, 1, 'standard');
+
+    expect(recovered.value).toBeLessThan(suspicious.value);
+    expect(recovered.status).toBe('hidden');
+    expect(recovered.enemyId).toBe(null);
   });
 });

@@ -1,4 +1,4 @@
-import type { GameSettings, RenderQuality, SoundtrackId } from './types';
+import type { DetectionLeniency, GameSettings, RenderQuality, SoundtrackId } from './types';
 
 const storageKey = 'shadow-circuit-settings-v1';
 export const memoryCapMb = 75;
@@ -10,6 +10,7 @@ export const defaultSettings: GameSettings = {
   debugEnabled: true,
   masterVolume: 0.36,
   soundtrackId: 'shadow-circuit',
+  detectionLeniency: 'standard',
 };
 
 export function loadSettings(): GameSettings {
@@ -24,6 +25,9 @@ export function loadSettings(): GameSettings {
       masterVolume:
         typeof parsed.masterVolume === 'number' ? Math.min(1, Math.max(0, parsed.masterVolume)) : defaultSettings.masterVolume,
       soundtrackId: isSoundtrackId(parsed.soundtrackId) ? parsed.soundtrackId : defaultSettings.soundtrackId,
+      detectionLeniency: isDetectionLeniency(parsed.detectionLeniency)
+        ? parsed.detectionLeniency
+        : defaultSettings.detectionLeniency,
     };
   } catch {
     return { ...defaultSettings };
@@ -58,5 +62,9 @@ function isQuality(value: unknown): value is RenderQuality {
 }
 
 function isSoundtrackId(value: unknown): value is SoundtrackId {
-  return value === 'shadow-circuit' || value === 'pulse-runner' || value === 'deep-cover';
+  return value === 'shadow-circuit' || value === 'pulse-runner' || value === 'deep-cover' || value === 'metro-escape';
+}
+
+function isDetectionLeniency(value: unknown): value is DetectionLeniency {
+  return value === 'forgiving' || value === 'standard' || value === 'sharp';
 }
