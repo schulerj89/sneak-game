@@ -38,7 +38,7 @@ describe('level definitions', () => {
 
   it('defines valid required objective gates', () => {
     const objectiveLevels = levels.filter((level) => (level.objectives ?? []).length > 0);
-    expect(objectiveLevels.map((level) => level.id)).toContain('dock-blackout');
+    expect(objectiveLevels).toHaveLength(levels.length);
 
     for (const level of objectiveLevels) {
       const ids = new Set<string>();

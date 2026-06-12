@@ -28,8 +28,13 @@ try {
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-menu.png`, fullPage: true });
 
   await expectVisible('[data-testid="overlay"]');
+  await expectVisible('text=Collect yellow keycards and blue terminals');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Level Select' }).click();
   await expectVisible('text=Signal Vault');
+  const objectiveHintCount = await page.locator('.level-card-objectives').count();
+  if (objectiveHintCount !== 5) {
+    throw new Error(`Expected objective hints on all 5 level cards, found ${objectiveHintCount}`);
+  }
   const levelCardCount = await page.locator('[data-level-index]').count();
   if (levelCardCount !== 5) {
     throw new Error(`Expected 5 level cards, found ${levelCardCount}`);
@@ -217,7 +222,15 @@ try {
   await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { movePlayerTo: (point: { x: number; z: number }) => void } };
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -1.0, z: -1.2 });
+  });
+  await expectVisible('text=Collected Gate Keycard');
+  await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { movePlayerTo: (point: { x: number; z: number }) => void } };
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 2.4, z: -3.4 });
+  });
+  await expectVisible('text=exit unlocked');
+  await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { movePlayerTo: (point: { x: number; z: number }) => void } };
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5, z: -3.2 });
   });
   await expectVisible('text=Exit Reached');

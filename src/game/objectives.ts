@@ -24,5 +24,12 @@ export function getObjectiveProgress(level: LevelDefinition, collectedIds: Reado
     collectedRequired,
     exitUnlocked: collectedRequired === required.length,
     collectedIds: [...collectedIds],
+    items: (level.objectives ?? []).map((objective) => ({
+      id: objective.id,
+      type: objective.type,
+      label: objective.label,
+      required: objective.required,
+      collected: collectedIds.has(objective.id),
+    })),
   };
 }

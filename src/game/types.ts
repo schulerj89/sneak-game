@@ -92,6 +92,13 @@ export type ObjectiveProgress = Readonly<{
   collectedRequired: number;
   exitUnlocked: boolean;
   collectedIds: readonly string[];
+  items: readonly Readonly<{
+    id: string;
+    type: ObjectiveType;
+    label: string;
+    required: boolean;
+    collected: boolean;
+  }>[];
 }>;
 
 export type DebugSample = Readonly<{

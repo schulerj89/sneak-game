@@ -51,6 +51,7 @@ export class GameUi {
     totalLevels: number,
     suspicion: SuspicionState,
     objectives: ObjectiveProgress,
+    objectiveNotice: string,
   ): void {
     const statusText = statusLabel(phase, suspicion, objectives);
     this.hud.innerHTML = `
@@ -59,6 +60,14 @@ export class GameUi {
         <span>Level ${levelNumber + 1} / ${totalLevels}</span>
         ${objectives.totalRequired > 0 ? `
           <span>Objectives ${objectives.collectedRequired} / ${objectives.totalRequired}</span>
+          <div class="objective-strip" aria-label="Objectives">
+            ${objectives.items.map((objective) => `
+              <span class="objective-chip ${objective.collected ? 'is-collected' : ''} objective-${objective.type}">
+                <span class="objective-icon">${objective.type === 'keycard' ? 'KEY' : 'TERM'}</span>
+                <span>${objective.label}</span>
+              </span>
+            `).join('')}
+          </div>
         ` : ''}
       </div>
       <div class="hud-right">
@@ -70,6 +79,7 @@ export class GameUi {
         <span>${statusText}</span>
         <span class="suspicion-meter"><span style="width: ${Math.round(suspicion.value * 100)}%"></span></span>
       </div>
+      ${objectiveNotice ? `<div class="objective-notice" role="status">${objectiveNotice}</div>` : ''}
     `;
     this.bindHud();
   }
@@ -82,6 +92,12 @@ export class GameUi {
         <div class="panel menu-panel">
           <div class="logo">${logoSvg()}</div>
           <p>${level.briefing}</p>
+          ${level.objectives?.length ? `
+            <div class="objective-brief">
+              <strong>Objectives</strong>
+              <span>Collect yellow keycards and blue terminals to unlock the green exit.</span>
+            </div>
+          ` : ''}
           <div class="panel-actions">
             <button type="button" data-action="start">Start Run</button>
             <button type="button" data-action="level-select">Level Select</button>
@@ -99,6 +115,9 @@ export class GameUi {
                 <span class="level-thumb">${levelThumbnailSvg(candidate, index + 1)}</span>
                 <span class="level-card-title">${candidate.name}</span>
                 <span class="level-card-copy">${candidate.briefing}</span>
+                ${candidate.objectives?.length ? `
+                  <span class="level-card-objectives">${candidate.objectives.length} objectives unlock the exit</span>
+                ` : ''}
               </button>
             `).join('')}
           </div>

@@ -87,6 +87,8 @@ export class Game {
   private blockers: THREE.Mesh[] = [];
   private objectives: ObjectiveRuntime[] = [];
   private collectedObjectiveIds = new Set<string>();
+  private objectiveNotice = '';
+  private objectiveNoticeUntil = 0;
   private debugRays = new THREE.Group();
   private currentDetection: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
   private currentSuspicion: SuspicionState = emptySuspicion();
@@ -184,6 +186,8 @@ export class Game {
     this.currentDetection = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
     this.currentSuspicion = emptySuspicion();
     this.collectedObjectiveIds.clear();
+    this.objectiveNotice = '';
+    this.objectiveNoticeUntil = 0;
     this.updateObjectiveMeshes();
     console.info(`[level] restarted ${this.level.id}`);
   }
@@ -538,8 +542,16 @@ export class Game {
     const next = collectNearbyObjectives(this.level, this.playerPosition, this.collectedObjectiveIds);
     if (next.size === this.collectedObjectiveIds.size) return;
 
+    const collectedNow = [...next].filter((id) => !this.collectedObjectiveIds.has(id));
     this.collectedObjectiveIds = next;
     this.updateObjectiveMeshes();
+    const objective = (this.level.objectives ?? []).find((candidate) => collectedNow.includes(candidate.id));
+    const progress = this.objectiveProgress();
+    this.objectiveNotice = progress.exitUnlocked
+      ? `Collected ${objective?.label ?? 'objective'} - exit unlocked`
+      : `Collected ${objective?.label ?? 'objective'}`;
+    this.objectiveNoticeUntil = performance.now() + 2600;
+    this.renderUi();
     console.info(`[objective] collected=${[...this.collectedObjectiveIds].join(',')}`);
   }
 
@@ -614,6 +626,10 @@ export class Game {
     this.updateEnemies(delta);
     this.updateDetection(delta);
     this.updateDebugRays();
+    if (this.objectiveNotice && now > this.objectiveNoticeUntil) {
+      this.objectiveNotice = '';
+      this.renderUi();
+    }
     this.goalMesh.rotation.y += delta * 0.9;
     this.renderer.render(this.scene, this.camera);
 
@@ -700,7 +716,15 @@ export class Game {
   }
 
   private renderUi(): void {
-    this.ui.renderHud(this.level, this.levelIndex, this.phase, levels.length, this.currentSuspicion, this.objectiveProgress());
+    this.ui.renderHud(
+      this.level,
+      this.levelIndex,
+      this.phase,
+      levels.length,
+      this.currentSuspicion,
+      this.objectiveProgress(),
+      this.objectiveNotice,
+    );
     this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex);
   }
 

@@ -10,7 +10,7 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Guard patrols with visible cones and raycast line-of-sight detection.
 - Suspicion meter with alert recovery and detection leniency settings.
 - Guard collision: touching a guard now triggers detection.
-- Objective-gated exits with a keycard and terminal prototype in Dock Blackout.
+- Objective-gated exits across all levels with keycards, terminals, HUD chips, and collection notices.
 - Dark-room lighting, emissive goals, shadows by quality setting, and simple custom assets.
 - Shader-based floor detail, goal beacons, and contact shadows.
 - Custom generated soundtrack with four selectable tracks, including a compressed higher-tempo replacement candidate.

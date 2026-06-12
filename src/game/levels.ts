@@ -108,6 +108,24 @@ export const levels: readonly LevelDefinition[] = [
         pauseSeconds: 0.25,
       },
     ],
+    objectives: [
+      {
+        id: 'archive-keycard',
+        type: 'keycard',
+        label: 'Archive Keycard',
+        position: { x: -2.1, z: -4.1 },
+        radius: 0.62,
+        required: true,
+      },
+      {
+        id: 'archive-terminal',
+        type: 'terminal',
+        label: 'Records Terminal',
+        position: { x: 2.6, z: -4.6 },
+        radius: 0.68,
+        required: true,
+      },
+    ],
     validationRoute: [
       { x: -6, z: 4 },
       { x: -6.5, z: 4.7 },
@@ -166,6 +184,24 @@ export const levels: readonly LevelDefinition[] = [
         visionRange: 3.6,
         visionAngleDegrees: 62,
         pauseSeconds: 0.2,
+      },
+    ],
+    objectives: [
+      {
+        id: 'reactor-terminal',
+        type: 'terminal',
+        label: 'Core Terminal',
+        position: { x: -2.5, z: 1.6 },
+        radius: 0.68,
+        required: true,
+      },
+      {
+        id: 'reactor-keycard',
+        type: 'keycard',
+        label: 'Reactor Keycard',
+        position: { x: 6.7, z: 4.2 },
+        radius: 0.62,
+        required: true,
       },
     ],
     validationRoute: [
@@ -229,6 +265,24 @@ export const levels: readonly LevelDefinition[] = [
         visionRange: 3.4,
         visionAngleDegrees: 56,
         pauseSeconds: 0.25,
+      },
+    ],
+    objectives: [
+      {
+        id: 'atrium-keycard',
+        type: 'keycard',
+        label: 'Atrium Keycard',
+        position: { x: -3.8, z: -5.2 },
+        radius: 0.62,
+        required: true,
+      },
+      {
+        id: 'atrium-terminal',
+        type: 'terminal',
+        label: 'Lobby Terminal',
+        position: { x: 3.8, z: -5.2 },
+        radius: 0.68,
+        required: true,
       },
     ],
     validationRoute: [
@@ -300,6 +354,24 @@ export const levels: readonly LevelDefinition[] = [
         visionRange: 3.0,
         visionAngleDegrees: 54,
         pauseSeconds: 0.18,
+      },
+    ],
+    objectives: [
+      {
+        id: 'vault-keycard',
+        type: 'keycard',
+        label: 'Vault Keycard',
+        position: { x: 0.4, z: 6.4 },
+        radius: 0.62,
+        required: true,
+      },
+      {
+        id: 'vault-terminal',
+        type: 'terminal',
+        label: 'Relay Terminal',
+        position: { x: 5.9, z: 6.4 },
+        radius: 0.68,
+        required: true,
       },
     ],
     validationRoute: [

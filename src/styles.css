@@ -78,7 +78,7 @@ button:hover {
 
 .hud-left {
   width: max-content;
-  max-width: min(420px, 42vw);
+  max-width: min(520px, 42vw);
   border-radius: 7px;
   padding: 10px 12px;
 }
@@ -92,6 +92,52 @@ button:hover {
   margin-top: 2px;
   color: #9fb2c2;
   font-size: 13px;
+}
+
+.objective-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.objective-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  min-height: 24px;
+  border: 1px solid rgba(127, 160, 190, 0.32);
+  border-radius: 999px;
+  padding: 3px 8px 3px 5px;
+  color: #d9e7f1;
+  background: rgba(8, 15, 24, 0.76);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.objective-chip.is-collected {
+  border-color: rgba(125, 252, 198, 0.5);
+  color: #7dfcc6;
+}
+
+.objective-icon {
+  display: inline-grid;
+  place-items: center;
+  min-width: 36px;
+  min-height: 18px;
+  border-radius: 999px;
+  color: #051019;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.objective-keycard .objective-icon {
+  background: #ffd45a;
+}
+
+.objective-terminal .objective-icon {
+  background: #5ad7ff;
 }
 
 .hud-right {
@@ -143,6 +189,19 @@ button:hover {
   border-radius: inherit;
   background: currentColor;
   transition: width 120ms linear;
+}
+
+.objective-notice {
+  grid-column: 1 / -1;
+  justify-self: center;
+  border: 1px solid rgba(125, 252, 198, 0.45);
+  border-radius: 999px;
+  padding: 8px 13px;
+  color: #7dfcc6;
+  background: rgba(5, 8, 13, 0.82);
+  font-size: 13px;
+  font-weight: 800;
+  pointer-events: none;
 }
 
 .debug {
@@ -206,6 +265,21 @@ button:hover {
   margin: 12px 0 20px;
   color: #bdcbd6;
   line-height: 1.55;
+}
+
+.objective-brief {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 18px;
+  border-left: 3px solid #7dfcc6;
+  padding: 9px 12px;
+  color: #bdcbd6;
+  background: rgba(125, 252, 198, 0.08);
+  line-height: 1.45;
+}
+
+.objective-brief strong {
+  color: #eff8ff;
 }
 
 .panel-actions {
@@ -277,6 +351,13 @@ button:hover {
   -webkit-line-clamp: 3;
 }
 
+.level-card-objectives {
+  align-self: end;
+  color: #7dfcc6;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .settings-panel label {
   display: grid;
   gap: 7px;
@@ -313,6 +394,10 @@ button:hover {
 
   .hud-left {
     max-width: calc(100vw - 32px);
+  }
+
+  .objective-chip {
+    max-width: calc(100vw - 64px);
   }
 
   .hud-right {
