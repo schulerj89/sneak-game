@@ -68,7 +68,7 @@ try {
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Menu' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
   await expectVisible('text=Render quality');
-  await page.selectOption('[data-setting="quality"]', 'balanced');
+  await page.selectOption('[data-setting="quality"]', 'cinematic');
   await page.selectOption('[data-setting="soundtrack"]', 'pulse-runner');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
@@ -118,13 +118,16 @@ try {
   const performanceSample = await page.evaluate(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
-        performance: () => null | { fps: number; usedMemoryMb: number | null; memoryCapMb: number };
+        performance: () => null | { fps: number; usedMemoryMb: number | null; memoryCapMb: number; reservedMemoryMb: number };
       };
     };
     return debugWindow.__shadowCircuitDebug?.performance();
   });
   if (!performanceSample || performanceSample.fps < 55) {
     throw new Error(`Expected near-60 FPS sample, got ${JSON.stringify(performanceSample)}`);
+  }
+  if (performanceSample.reservedMemoryMb < 40) {
+    throw new Error(`Expected cinematic memory reserve, got ${JSON.stringify(performanceSample)}`);
   }
   if (performanceSample.usedMemoryMb !== null && performanceSample.usedMemoryMb > performanceSample.memoryCapMb) {
     throw new Error(`Memory cap exceeded in browser smoke: ${JSON.stringify(performanceSample)}`);
@@ -152,6 +155,12 @@ try {
   if (phase !== 'playing') {
     throw new Error(`Retry Level did not return to playing phase: ${phase}`);
   }
+
+  await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { forceEnemyCollision: () => void } };
+    debugWindow.__shadowCircuitDebug?.forceEnemyCollision();
+  });
+  await expectVisible('text=Retry Level');
 
   console.info(`[browser-smoke] ok url=${baseUrl}`);
   console.info(`[browser-smoke] screenshots=${screenshotDir}/shadow-circuit-menu.png, ${screenshotDir}/shadow-circuit-playing.png`);

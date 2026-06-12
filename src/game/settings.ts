@@ -39,16 +39,18 @@ export function qualityProfile(quality: RenderQuality): {
   antialias: boolean;
   shadows: boolean;
   debugRayCount: number;
+  shadowMapSize: number;
+  memoryReserveMb: number;
 } {
   if (quality === 'cinematic') {
-    return { pixelRatio: Math.min(window.devicePixelRatio, 1.65), antialias: true, shadows: true, debugRayCount: 18 };
+    return { pixelRatio: Math.min(window.devicePixelRatio, 1.9), antialias: true, shadows: true, debugRayCount: 18, shadowMapSize: 2048, memoryReserveMb: 42 };
   }
 
   if (quality === 'balanced') {
-    return { pixelRatio: Math.min(window.devicePixelRatio, 1.35), antialias: true, shadows: true, debugRayCount: 10 };
+    return { pixelRatio: Math.min(window.devicePixelRatio, 1.35), antialias: true, shadows: true, debugRayCount: 10, shadowMapSize: 1024, memoryReserveMb: 0 };
   }
 
-  return { pixelRatio: 1, antialias: false, shadows: false, debugRayCount: 6 };
+  return { pixelRatio: 1, antialias: false, shadows: false, debugRayCount: 6, shadowMapSize: 512, memoryReserveMb: 0 };
 }
 
 function isQuality(value: unknown): value is RenderQuality {

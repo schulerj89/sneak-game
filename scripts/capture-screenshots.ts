@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 
 const baseUrl = process.env.SCREENSHOT_URL ?? 'http://127.0.0.1:5173/';
 const outputDir = 'docs/images';
-const headless = process.env.SCREENSHOT_HEADLESS !== 'false';
+const headless = process.env.SCREENSHOT_HEADLESS === 'true';
 
 const levelShots = [
   { index: 0, file: 'shadow-circuit-level-1-dock-blackout.png' },

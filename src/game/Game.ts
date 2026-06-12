@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { MusicDirector } from './audio';
+import { collidesWithEnemies, collidesWithObstacles, enemyRadius, playerRadius } from './collision';
 import { DebugPanel } from './debug';
 import { getDetectionState, isSightBlocked } from './detection';
 import { InputController } from './input';
 import { levels } from './levels';
-import { add, clampToRoom, distance, normalize, pointInRect, scale, subtract } from './math';
+import { add, clampToRoom, distance, normalize, scale, subtract } from './math';
 import { loadSettings, memoryCapMb, qualityProfile, saveSettings } from './settings';
+import { createContactShadowMaterial, createFloorShaderMaterial, createGoalBeaconMaterial, createVisionConeGeometry } from './shaders';
 import type { DebugSample, DetectionState, EnemySpec, GamePhase, GameSettings, LevelDefinition, Vec2 } from './types';
 import { GameUi } from './ui';
 
@@ -14,13 +16,12 @@ type EnemyRuntime = {
   mesh: THREE.Mesh;
   cone: THREE.Mesh;
   light: THREE.SpotLight;
+  contactShadow: THREE.Mesh;
   position: Vec2;
   facing: Vec2;
   patrolIndex: number;
   pauseRemaining: number;
 };
-
-const playerRadius = 0.28;
 
 declare global {
   interface Window {
@@ -32,6 +33,7 @@ declare global {
       performance: () => DebugSample | null;
       levelId: () => string;
       goalVisible: () => boolean;
+      forceEnemyCollision: () => void;
     };
   }
 }
@@ -56,12 +58,15 @@ export class Game {
     new THREE.CapsuleGeometry(0.22, 0.32, 4, 8),
     new THREE.MeshStandardMaterial({ color: '#7dfcc6', emissive: '#12382f', roughness: 0.55 }),
   );
+  private readonly playerContactShadow = createContactShadow(0.8, 0.52, 0.28);
   private goalMesh = new THREE.Mesh();
   private enemies: EnemyRuntime[] = [];
   private blockers: THREE.Mesh[] = [];
   private debugRays = new THREE.Group();
   private currentDetection: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
   private latestDebugSample: DebugSample | null = null;
+  private qualityMemoryReserve: Float32Array | null = null;
+  private reservedMemoryMb = 0;
   private animationId = 0;
 
   constructor(mount: HTMLElement) {
@@ -80,6 +85,7 @@ export class Game {
     this.debugPanel = new DebugPanel(this.ui.debug);
     this.renderer = this.createRenderer();
     this.ui.root.appendChild(this.renderer.domElement);
+    this.applyRendererQuality();
 
     this.setupScene();
     this.loadLevel(0);
@@ -102,6 +108,7 @@ export class Game {
     this.input.dispose();
     this.music.stop();
     this.renderer.dispose();
+    this.qualityMemoryReserve = null;
     delete window.__shadowCircuitDebug;
   }
 
@@ -140,6 +147,7 @@ export class Game {
   private restartLevel(): void {
     this.playerPosition = { ...this.level.start };
     this.playerMesh.position.set(this.playerPosition.x, 0.48, this.playerPosition.z);
+    this.playerContactShadow.position.set(this.playerPosition.x, 0.016, this.playerPosition.z);
     this.enemies.forEach((enemy) => {
       enemy.position = { ...enemy.spec.start };
       enemy.facing = normalize(subtract(enemy.spec.patrol[1] ?? enemy.spec.start, enemy.spec.start));
@@ -172,10 +180,7 @@ export class Game {
     const level = this.level;
     this.playerPosition = { ...level.start };
 
-    const floor = new THREE.Mesh(
-      new THREE.BoxGeometry(level.floorSize.x, 0.12, level.floorSize.z),
-      new THREE.MeshStandardMaterial({ color: '#10141c', roughness: 0.86, metalness: 0.08 }),
-    );
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(level.floorSize.x, 0.12, level.floorSize.z), createFloorShaderMaterial());
     floor.position.y = -0.08;
     floor.receiveShadow = true;
     floor.name = 'floor';
@@ -226,6 +231,7 @@ export class Game {
       const point = new THREE.PointLight(light.color, light.intensity, light.radius);
       point.position.set(light.position.x, light.height, light.position.z);
       point.castShadow = this.settings.quality !== 'memory';
+      point.shadow.mapSize.setScalar(qualityProfile(this.settings.quality).shadowMapSize);
       point.name = `light:${light.id}`;
       this.scene.add(point);
 
@@ -247,13 +253,7 @@ export class Game {
     this.scene.add(this.goalMesh);
     const goalBeacon = new THREE.Mesh(
       new THREE.CylinderGeometry(level.goalRadius * 0.58, level.goalRadius * 0.58, 0.95, 32, 1, true),
-      new THREE.MeshBasicMaterial({
-        color: '#8eff81',
-        transparent: true,
-        opacity: 0.28,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      }),
+      createGoalBeaconMaterial(),
     );
     goalBeacon.position.set(level.goal.x, 0.52, level.goal.z);
     goalBeacon.name = 'goal-beacon';
@@ -261,11 +261,11 @@ export class Game {
 
     this.playerMesh.castShadow = true;
     this.playerMesh.name = 'player';
-    this.scene.add(this.playerMesh);
+    this.scene.add(this.playerMesh, this.playerContactShadow);
 
     this.enemies = level.enemies.map((enemy) => this.createEnemy(enemy));
     this.enemies.forEach((enemy) => {
-      this.scene.add(enemy.mesh, enemy.cone, enemy.light);
+      this.scene.add(enemy.mesh, enemy.cone, enemy.light, enemy.contactShadow);
       this.placeEnemy(enemy);
     });
 
@@ -327,10 +327,24 @@ export class Game {
     const profile = qualityProfile(this.settings.quality);
     this.renderer.setPixelRatio(profile.pixelRatio);
     this.renderer.shadowMap.enabled = profile.shadows;
+    this.allocateQualityMemory(profile.memoryReserveMb);
     for (const light of this.scene.children) {
       if (light instanceof THREE.PointLight || light instanceof THREE.SpotLight) {
         light.castShadow = profile.shadows;
+        light.shadow.mapSize.setScalar(profile.shadowMapSize);
       }
+    }
+  }
+
+  private allocateQualityMemory(targetMb: number): void {
+    if (targetMb === this.reservedMemoryMb) return;
+
+    this.qualityMemoryReserve = targetMb > 0 ? new Float32Array((targetMb * 1024 * 1024) / 4) : null;
+    this.reservedMemoryMb = targetMb;
+    if (!this.qualityMemoryReserve) return;
+
+    for (let index = 0; index < this.qualityMemoryReserve.length; index += 1024) {
+      this.qualityMemoryReserve[index] = (index % 2048) / 2048;
     }
   }
 
@@ -358,13 +372,16 @@ export class Game {
 
     const light = new THREE.SpotLight('#ffcf5a', 24, spec.visionRange, (spec.visionAngleDegrees * Math.PI) / 360, 0.55, 1.8);
     light.castShadow = this.settings.quality !== 'memory';
+    light.shadow.mapSize.setScalar(qualityProfile(this.settings.quality).shadowMapSize);
     light.name = `vision-light:${spec.id}`;
+    const contactShadow = createContactShadow(0.82, 0.62, 0.25);
 
     return {
       spec,
       mesh,
       cone,
       light,
+      contactShadow,
       position: { ...spec.start },
       facing: normalize(subtract(spec.patrol[1] ?? spec.start, spec.start)),
       patrolIndex: 1,
@@ -378,10 +395,18 @@ export class Game {
     const movement = this.input.movement();
     const next = add(this.playerPosition, scale(movement, delta * 2.4));
     const clamped = clampToRoom(next, this.level.floorSize, playerRadius);
-    const collides = this.level.obstacles.some((obstacle) => pointInRect(clamped, obstacle, playerRadius));
-    if (!collides) {
+    const enemyHit = collidesWithEnemies(clamped, this.enemyBodies(), playerRadius);
+    if (enemyHit) {
+      this.currentDetection = { spotted: true, enemyId: enemyHit.id, rayBlocked: false, distance: 0 };
+      this.setPhase('caught');
+      console.warn(`[collision] player collided with ${enemyHit.id}`);
+      return;
+    }
+
+    if (!collidesWithObstacles(clamped, this.level.obstacles, playerRadius)) {
       this.playerPosition = clamped;
       this.playerMesh.position.set(clamped.x, 0.48, clamped.z);
+      this.playerContactShadow.position.set(clamped.x, 0.016, clamped.z);
     }
 
     if (distance(this.playerPosition, this.level.goal) <= this.level.goalRadius + playerRadius) {
@@ -407,7 +432,13 @@ export class Game {
         enemy.pauseRemaining = enemy.spec.pauseSeconds;
       } else {
         enemy.facing = normalize(toTarget);
-        enemy.position = add(enemy.position, scale(enemy.facing, Math.min(remaining, enemy.spec.speed * delta)));
+        const proposed = add(enemy.position, scale(enemy.facing, Math.min(remaining, enemy.spec.speed * delta)));
+        if (collidesWithObstacles(proposed, this.level.obstacles, enemyRadius)) {
+          enemy.patrolIndex = (enemy.patrolIndex + 1) % enemy.spec.patrol.length;
+          enemy.pauseRemaining = enemy.spec.pauseSeconds;
+        } else {
+          enemy.position = proposed;
+        }
       }
       this.placeEnemy(enemy);
     }
@@ -432,6 +463,13 @@ export class Game {
     if (nearest.spotted && this.phase === 'playing') {
       this.setPhase('caught');
       console.warn(`[detection] player spotted by ${nearest.enemyId}`);
+    }
+
+    const collision = collidesWithEnemies(this.playerPosition, this.enemyBodies(), playerRadius);
+    if (collision && this.phase === 'playing') {
+      this.currentDetection = { spotted: true, enemyId: collision.id, rayBlocked: false, distance: 0 };
+      this.setPhase('caught');
+      console.warn(`[collision] player collided with ${collision.id}`);
     }
   }
 
@@ -467,6 +505,7 @@ export class Game {
     enemy.mesh.rotation.y = Math.atan2(enemy.facing.x, enemy.facing.z);
     enemy.cone.position.set(enemy.position.x, 0.035, enemy.position.z);
     enemy.cone.rotation.y = Math.atan2(enemy.facing.x, enemy.facing.z);
+    enemy.contactShadow.position.set(enemy.position.x, 0.018, enemy.position.z);
     enemy.light.position.set(enemy.position.x, 1.1, enemy.position.z);
     enemy.light.target.position.set(enemy.position.x + enemy.facing.x, 0.25, enemy.position.z + enemy.facing.z);
     this.scene.add(enemy.light.target);
@@ -493,7 +532,7 @@ export class Game {
     this.goalMesh.rotation.y += delta * 0.9;
     this.renderer.render(this.scene, this.camera);
 
-    const sample = this.debugPanel.sample(now, this.renderer.info.render.calls, this.renderer.info.render.triangles);
+    const sample = this.debugPanel.sample(now, this.renderer.info.render.calls, this.renderer.info.render.triangles, this.reservedMemoryMb);
     this.latestDebugSample = sample;
     this.enforceMemoryCap(sample.usedMemoryMb);
     this.debugPanel.render(this.settings, this.level, this.playerPosition, this.currentDetection, sample);
@@ -532,7 +571,19 @@ export class Game {
       performance: () => this.latestDebugSample,
       levelId: () => this.level.id,
       goalVisible: () => this.isGoalVisibleInCamera(),
+      forceEnemyCollision: () => this.forceEnemyCollision(),
     };
+  }
+
+  private forceEnemyCollision(): void {
+    const enemy = this.enemies[0];
+    if (!enemy) return;
+
+    this.playerPosition = { ...enemy.position };
+    this.playerMesh.position.set(this.playerPosition.x, 0.48, this.playerPosition.z);
+    this.playerContactShadow.position.set(this.playerPosition.x, 0.016, this.playerPosition.z);
+    this.currentDetection = { spotted: true, enemyId: enemy.spec.id, rayBlocked: false, distance: 0 };
+    this.setPhase('caught');
   }
 
   private isGoalVisibleInCamera(): boolean {
@@ -554,28 +605,21 @@ export class Game {
     this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex);
   }
 
+  private enemyBodies(): { id: string; position: Vec2; radius: number }[] {
+    return this.enemies.map((enemy) => ({ id: enemy.spec.id, position: enemy.position, radius: enemyRadius }));
+  }
+
   private get level(): LevelDefinition {
     return levels[this.levelIndex];
   }
 }
 
-function createVisionConeGeometry(range: number, angleDegrees: number): THREE.BufferGeometry {
-  const segments = 24;
-  const half = (angleDegrees * Math.PI) / 360;
-  const vertices: number[] = [0, 0, 0];
-  const indices: number[] = [];
-
-  for (let index = 0; index <= segments; index += 1) {
-    const angle = -half + (index / segments) * half * 2;
-    vertices.push(Math.sin(angle) * range, 0, Math.cos(angle) * range);
-    if (index > 0) {
-      indices.push(0, index, index + 1);
-    }
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
+function createContactShadow(width: number, depth: number, opacity: number): THREE.Mesh {
+  const material = createContactShadowMaterial();
+  material.opacity = opacity;
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.5, 32), material);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.scale.set(width, depth, 1);
+  shadow.name = 'contact-shadow';
+  return shadow;
 }

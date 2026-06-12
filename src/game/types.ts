@@ -69,6 +69,7 @@ export type DebugSample = Readonly<{
   frameMs: number;
   usedMemoryMb: number | null;
   memoryCapMb: number;
+  reservedMemoryMb: number;
   memoryPressure: 'unknown' | 'ok' | 'over-cap';
   drawCalls: number;
   triangles: number;

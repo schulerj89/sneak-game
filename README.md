@@ -8,7 +8,9 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Menu, settings, retry, and level-complete flows.
 - Level select menu with generated level preview images.
 - Guard patrols with visible cones and raycast line-of-sight detection.
+- Guard collision: touching a guard now triggers detection.
 - Dark-room lighting, emissive goals, shadows by quality setting, and simple custom assets.
+- Shader-based floor detail, goal beacons, and contact shadows.
 - Custom generated soundtrack with three selectable tracks.
 - Balanced default rendering with a 75 MB browser heap cap and Memory first fallback.
 - On-screen debug panel with FPS, memory, draw calls, player position, and detection state.
@@ -99,3 +101,4 @@ Then commit and push the checkpoint.
 - `docs/shadow-circuit-level-select.md`
 - `docs/shadow-circuit-soundtrack.md`
 - `docs/shadow-circuit-memory-budget.md`
+- `docs/shadow-circuit-shaders.md`

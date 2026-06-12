@@ -13,7 +13,7 @@ export class DebugPanel {
 
   constructor(private readonly element: HTMLElement) {}
 
-  sample(now: number, drawCalls: number, triangles: number): DebugSample {
+  sample(now: number, drawCalls: number, triangles: number, reservedMemoryMb: number): DebugSample {
     const frameMs = Math.max(0.01, now - this.lastTime);
     this.lastTime = now;
     const fps = 1000 / frameMs;
@@ -25,6 +25,7 @@ export class DebugPanel {
       frameMs,
       usedMemoryMb: memory ? memory.usedJSHeapSize / 1024 / 1024 : null,
       memoryCapMb,
+      reservedMemoryMb,
       memoryPressure: memory ? (memory.usedJSHeapSize / 1024 / 1024 > memoryCapMb ? 'over-cap' : 'ok') : 'unknown',
       drawCalls,
       triangles,
@@ -50,6 +51,7 @@ export class DebugPanel {
       <div>FPS: ${sample.fps.toFixed(0)} (${sample.frameMs.toFixed(1)}ms)</div>
       <div>Target FPS: ${targetFps}</div>
       <div>Memory: ${sample.usedMemoryMb === null ? 'n/a' : `${sample.usedMemoryMb.toFixed(1)} MB`} / ${sample.memoryCapMb} MB</div>
+      <div>Reserve: ${sample.reservedMemoryMb.toFixed(0)} MB</div>
       <div>Pressure: ${sample.memoryPressure}</div>
       <div>Draws: ${sample.drawCalls} Triangles: ${sample.triangles}</div>
       <div>Quality: ${settings.quality}</div>
