@@ -22,6 +22,15 @@ type EnemyRuntime = {
 
 const playerRadius = 0.28;
 
+declare global {
+  interface Window {
+    __shadowCircuitDebug?: {
+      forceCaught: () => void;
+      phase: () => GamePhase;
+    };
+  }
+}
+
 export class Game {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(52, 1, 0.1, 80);
@@ -54,7 +63,7 @@ export class Game {
       onResume: () => this.setPhase(this.settingsReturnPhase),
       onSettings: () => this.openSettings(),
       onMenu: () => this.setPhase('menu'),
-      onRestart: () => this.restartLevel(),
+      onRestart: () => this.retryLevel(),
       onNextLevel: () => this.nextLevel(),
       onSettingsChange: (settings) => void this.applySettings(settings),
     });
@@ -67,6 +76,7 @@ export class Game {
     this.resize();
     window.addEventListener('resize', this.resize);
     window.addEventListener('keydown', this.handleHotkeys);
+    this.installDebugHooks();
     console.info('[game] Shadow Circuit initialized');
   }
 
@@ -82,6 +92,7 @@ export class Game {
     this.input.dispose();
     this.music.stop();
     this.renderer.dispose();
+    delete window.__shadowCircuitDebug;
   }
 
   private async start(): Promise<void> {
@@ -125,6 +136,11 @@ export class Game {
     });
     this.currentDetection = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
     console.info(`[level] restarted ${this.level.id}`);
+  }
+
+  private retryLevel(): void {
+    this.restartLevel();
+    this.setPhase('playing');
   }
 
   private nextLevel(): void {
@@ -436,6 +452,15 @@ export class Game {
       void this.applySettings({ ...this.settings, debugEnabled: !this.settings.debugEnabled });
     }
   };
+
+  private installDebugHooks(): void {
+    if (!import.meta.env.DEV) return;
+
+    window.__shadowCircuitDebug = {
+      forceCaught: () => this.setPhase('caught'),
+      phase: () => this.phase,
+    };
+  }
 
   private get level(): LevelDefinition {
     return levels[this.levelIndex];

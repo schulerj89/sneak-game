@@ -15,6 +15,7 @@ page.on('console', (message: ConsoleMessage) => {
 
 try {
   await mkdir(screenshotDir, { recursive: true });
+  await page.addInitScript(() => window.localStorage.clear());
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-menu.png`, fullPage: true });
 
@@ -39,6 +40,25 @@ try {
 
   if (!logs.some((line) => line.includes('[game] Shadow Circuit initialized'))) {
     throw new Error(`Expected initialization console log. Logs: ${logs.join('\n')}`);
+  }
+
+  if (!logs.some((line) => line.includes('[audio] Shadow Circuit custom theme playing'))) {
+    throw new Error(`Expected custom theme console log. Logs: ${logs.join('\n')}`);
+  }
+
+  await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { forceCaught: () => void } };
+    debugWindow.__shadowCircuitDebug?.forceCaught();
+  });
+  await expectVisible('text=Retry Level');
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Retry Level' }).click();
+  await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 8000 });
+  const phase = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
+    return debugWindow.__shadowCircuitDebug?.phase();
+  });
+  if (phase !== 'playing') {
+    throw new Error(`Retry Level did not return to playing phase: ${phase}`);
   }
 
   console.info(`[browser-smoke] ok url=${baseUrl}`);
