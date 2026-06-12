@@ -102,3 +102,4 @@ Then commit and push the checkpoint.
 - `docs/shadow-circuit-soundtrack.md`
 - `docs/shadow-circuit-memory-budget.md`
 - `docs/shadow-circuit-shaders.md`
+- `docs/shadow-circuit-06-12-2026-improve-decision.md`
