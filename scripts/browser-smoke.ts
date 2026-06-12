@@ -34,6 +34,28 @@ try {
   if (levelCardCount !== 5) {
     throw new Error(`Expected 5 level cards, found ${levelCardCount}`);
   }
+  const levelSelectLayout = await page.evaluate(() => {
+    const overlay = document.querySelector('[data-testid="overlay"]');
+    const cards = [...document.querySelectorAll('[data-level-index]')];
+    if (!(overlay instanceof HTMLElement)) return null;
+
+    const viewportHeight = window.innerHeight;
+    const allCardsReachable = cards.every((card) => {
+      const rect = card.getBoundingClientRect();
+      return rect.top >= 0 && rect.bottom <= viewportHeight;
+    });
+
+    return {
+      allCardsReachable,
+      canScroll: overlay.scrollHeight > overlay.clientHeight,
+      overlayClientHeight: overlay.clientHeight,
+      overlayScrollHeight: overlay.scrollHeight,
+    };
+  });
+  if (!levelSelectLayout || (!levelSelectLayout.allCardsReachable && !levelSelectLayout.canScroll)) {
+    throw new Error(`Level select is neither fully visible nor scrollable: ${JSON.stringify(levelSelectLayout)}`);
+  }
+  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-level-select.png`, fullPage: true });
   const debugLevelCount = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { levelCount: () => number } };
     return debugWindow.__shadowCircuitDebug?.levelCount();

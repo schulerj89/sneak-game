@@ -132,10 +132,12 @@ button:hover {
 
 .overlay {
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 20px;
   background: rgba(3, 5, 10, 0.52);
+  overflow: auto;
   pointer-events: auto;
 }
 
@@ -187,14 +189,15 @@ button:hover {
 }
 
 .level-select-panel {
-  width: min(960px, 100%);
-  max-height: calc(100vh - 48px);
+  width: min(1180px, calc(100vw - 32px));
+  max-height: none;
+  margin: auto 0;
   overflow: auto;
 }
 
 .level-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
   gap: 12px;
   margin: 16px 0 18px;
 }
@@ -202,7 +205,7 @@ button:hover {
 .level-card {
   display: grid;
   gap: 8px;
-  min-height: 258px;
+  min-height: 220px;
   padding: 10px;
   text-align: left;
   align-content: start;
@@ -230,6 +233,10 @@ button:hover {
   color: #9fb2c2;
   font-size: 13px;
   line-height: 1.4;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .settings-panel label {
@@ -276,5 +283,15 @@ button:hover {
 
   .debug {
     width: calc(100vw - 32px);
+  }
+
+  .overlay {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .level-select-panel {
+    width: 100%;
+    margin: 0;
   }
 }
