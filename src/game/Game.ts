@@ -553,6 +553,7 @@ export class Game {
       ? `Collected ${objective?.label ?? 'objective'} - exit unlocked`
       : `Collected ${objective?.label ?? 'objective'}`;
     this.objectiveNoticeUntil = performance.now() + 2600;
+    this.music.playPickup(this.settings);
     this.renderUi();
     console.info(`[objective] collected=${[...this.collectedObjectiveIds].join(',')}`);
   }

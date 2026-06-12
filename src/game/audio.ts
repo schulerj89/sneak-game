@@ -57,6 +57,7 @@ export const soundtrackOptions = [
 
 export class MusicDirector {
   private readonly audio = new Audio();
+  private effectContext: AudioContext | null = null;
   private activeTrackId: GameSettings['soundtrackId'] | null = null;
 
   constructor() {
@@ -90,6 +91,39 @@ export class MusicDirector {
   stop(): void {
     this.audio.pause();
     this.audio.currentTime = 0;
+  }
+
+  playPickup(settings: GameSettings): void {
+    if (!settings.musicEnabled || settings.masterVolume <= 0) return;
+
+    const context = this.effectContext ?? new AudioContext();
+    this.effectContext = context;
+    void context.resume();
+
+    const now = context.currentTime;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, settings.masterVolume * 0.18), now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    gain.connect(context.destination);
+
+    const first = context.createOscillator();
+    first.type = 'triangle';
+    first.frequency.setValueAtTime(660, now);
+    first.frequency.exponentialRampToValueAtTime(990, now + 0.08);
+    first.connect(gain);
+    first.start(now);
+    first.stop(now + 0.12);
+
+    const second = context.createOscillator();
+    second.type = 'sine';
+    second.frequency.setValueAtTime(1320, now + 0.06);
+    second.connect(gain);
+    second.start(now + 0.06);
+    second.stop(now + 0.2);
+
+    second.addEventListener('ended', () => gain.disconnect(), { once: true });
+    console.info('[audio] pickup chime');
   }
 
   currentTrack(): GameSettings['soundtrackId'] | null {

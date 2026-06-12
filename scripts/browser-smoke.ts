@@ -236,6 +236,10 @@ try {
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5, z: -3.2 });
   });
   await expectVisible('text=Exit Reached');
+  const pickupChimeCount = logs.filter((line) => line.includes('[audio] pickup chime')).length;
+  if (pickupChimeCount < 2) {
+    throw new Error(`Expected pickup chime for both objectives, got ${pickupChimeCount}. Logs: ${logs.join('\n')}`);
+  }
   const objectiveCompleteState = await page.evaluate(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
