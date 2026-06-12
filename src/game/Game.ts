@@ -51,6 +51,7 @@ declare global {
       performance: () => DebugSample | null;
       levelId: () => string;
       goalVisible: () => boolean;
+      playerVisible: () => boolean;
       forceEnemyCollision: () => void;
       suspicion: () => SuspicionState;
       objectives: () => ObjectiveProgress;
@@ -317,7 +318,7 @@ export class Game {
   private setupScene(): void {
     this.scene.background = new THREE.Color('#03050a');
     this.scene.fog = new THREE.Fog('#03050a', 8, 22);
-    this.camera.position.set(0, 8.6, 8.8);
+    this.camera.position.set(0, 10.2, 10.4);
     this.camera.lookAt(0, 0, 0);
 
     const ambient = new THREE.AmbientLight('#253044', 0.18);
@@ -677,6 +678,7 @@ export class Game {
       performance: () => this.latestDebugSample,
       levelId: () => this.level.id,
       goalVisible: () => this.isGoalVisibleInCamera(),
+      playerVisible: () => this.isPlayerVisibleInCamera(),
       forceEnemyCollision: () => this.forceEnemyCollision(),
       suspicion: () => this.currentSuspicion,
       objectives: () => this.objectiveProgress(),
@@ -708,9 +710,17 @@ export class Game {
   }
 
   private isGoalVisibleInCamera(): boolean {
+    return this.isObjectVisibleInCamera(this.goalMesh);
+  }
+
+  private isPlayerVisibleInCamera(): boolean {
+    return this.isObjectVisibleInCamera(this.playerMesh);
+  }
+
+  private isObjectVisibleInCamera(object: THREE.Object3D): boolean {
     this.camera.updateMatrixWorld();
-    this.goalMesh.updateMatrixWorld();
-    const position = this.goalMesh.getWorldPosition(new THREE.Vector3()).project(this.camera);
+    object.updateMatrixWorld();
+    const position = object.getWorldPosition(new THREE.Vector3()).project(this.camera);
     return position.x >= -1 && position.x <= 1 && position.y >= -1 && position.y <= 1 && position.z >= -1 && position.z <= 1;
   }
 

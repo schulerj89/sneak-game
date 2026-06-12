@@ -112,15 +112,42 @@ try {
       __shadowCircuitDebug?: {
         levelId: () => string;
         goalVisible: () => boolean;
+        playerVisible: () => boolean;
+        objectives: () => { totalRequired: number; collectedRequired: number; exitUnlocked: boolean };
       };
     };
     return {
       levelId: debugWindow.__shadowCircuitDebug?.levelId(),
       goalVisible: debugWindow.__shadowCircuitDebug?.goalVisible(),
+      playerVisible: debugWindow.__shadowCircuitDebug?.playerVisible(),
+      objectives: debugWindow.__shadowCircuitDebug?.objectives(),
     };
   });
-  if (levelState.levelId !== 'signal-vault' || !levelState.goalVisible) {
+  if (levelState.levelId !== 'signal-vault' || !levelState.goalVisible || !levelState.playerVisible || levelState.objectives?.totalRequired !== 2) {
     throw new Error(`Expected visible Signal Vault goal, got ${JSON.stringify(levelState)}`);
+  }
+
+  await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { selectLevel: (levelIndex: number) => void } };
+    debugWindow.__shadowCircuitDebug?.selectLevel(3);
+  });
+  await page.waitForTimeout(500);
+  const neonAtriumState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        levelId: () => string;
+        playerVisible: () => boolean;
+        objectives: () => { totalRequired: number };
+      };
+    };
+    return {
+      levelId: debugWindow.__shadowCircuitDebug?.levelId(),
+      playerVisible: debugWindow.__shadowCircuitDebug?.playerVisible(),
+      objectives: debugWindow.__shadowCircuitDebug?.objectives(),
+    };
+  });
+  if (neonAtriumState.levelId !== 'neon-atrium' || !neonAtriumState.playerVisible || neonAtriumState.objectives?.totalRequired !== 2) {
+    throw new Error(`Expected visible Neon Atrium start with objectives, got ${JSON.stringify(neonAtriumState)}`);
   }
 
   const playingScreenshot = await page.screenshot({ path: `${screenshotDir}/shadow-circuit-playing.png`, fullPage: true });

@@ -6,12 +6,13 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 
 - Five playable levels: Dock Blackout, Archive Lanes, Reactor Core, Neon Atrium, and Signal Vault.
 - Menu, settings, retry, and level-complete flows.
+- Clear SC circuit-lock logo and branded menu presentation.
 - Level select menu with generated level preview images.
 - Guard patrols with visible cones and raycast line-of-sight detection.
 - Suspicion meter with alert recovery and detection leniency settings.
 - Guard collision: touching a guard now triggers detection.
-- Objective-gated exits across all levels with keycards, terminals, HUD chips, and collection notices.
-- Dark-room lighting, emissive goals, shadows by quality setting, and simple custom assets.
+- Objective-gated exits across all levels with keycards, terminals, color-swatch HUD chips, collection notices, and pickup chimes.
+- Dark-room lighting, dim locked exits, unlock-only goal beacons, shadows by quality setting, and simple custom assets.
 - Shader-based floor detail, goal beacons, and contact shadows.
 - Custom generated soundtrack with four selectable tracks, including a compressed higher-tempo replacement candidate.
 - Balanced default rendering with a 75 MB browser heap cap and Memory first fallback.
