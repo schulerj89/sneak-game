@@ -1,6 +1,6 @@
 # Shadow Circuit
 
-Shadow Circuit is a local Three.js stealth game prototype. You sneak through dark rooms, avoid patrolling guards and their visible sight cones, use cover to block line-of-sight rays, and reach the exit pad to advance through the first three levels.
+Shadow Circuit is a local Three.js stealth game prototype. You sneak through dark rooms, avoid patrolling guards and their visible sight cones, use cover to block line-of-sight rays, and reach the exit pad across five levels.
 
 ## Current Features
 
@@ -42,8 +42,9 @@ npm run build        # Type-check and build production assets
 npm run test:run     # Run Vitest unit tests
 npm run test:levels  # Validate authored level routes
 npm run test:browser # Run Playwright smoke test against the local dev server
+npm run screenshots   # Capture README screenshots into docs/images
 npm run verify       # Run unit tests, level validation, and production build
-npm run assets:audio # Regenerate the custom WAV theme
+npm run assets:audio # Regenerate the custom WAV soundtrack
 ```
 
 `npm run test:browser` expects the dev server to be running at `http://127.0.0.1:5173/`. It runs headed by default for realistic frame pacing; set `SMOKE_HEADLESS=true` if a headless smoke pass is needed.
@@ -64,10 +65,29 @@ Before pushing gameplay changes:
 ```powershell
 npm run verify
 npm run test:browser
-Get-Process node | Select-Object Id,ProcessName,CPU,WorkingSet,StartTime
 ```
 
 Then commit and push the checkpoint.
+
+## Screenshots
+
+### Menus
+
+![Level Select](docs/images/shadow-circuit-level-select.png)
+
+![Settings](docs/images/shadow-circuit-settings.png)
+
+### Levels
+
+![Dock Blackout](docs/images/shadow-circuit-level-1-dock-blackout.png)
+
+![Archive Lanes](docs/images/shadow-circuit-level-2-archive-lanes.png)
+
+![Reactor Core](docs/images/shadow-circuit-level-3-reactor-core.png)
+
+![Neon Atrium](docs/images/shadow-circuit-level-4-neon-atrium.png)
+
+![Signal Vault](docs/images/shadow-circuit-level-5-signal-vault.png)
 
 ## Documentation
 

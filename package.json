@@ -12,6 +12,7 @@
     "test:run": "vitest run",
     "test:levels": "tsx scripts/level-walkthrough.ts",
     "test:browser": "tsx scripts/browser-smoke.ts",
+    "screenshots": "tsx scripts/capture-screenshots.ts",
     "verify": "npm run test:run && npm run test:levels && npm run build"
   },
   "dependencies": {
