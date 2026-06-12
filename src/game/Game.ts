@@ -54,6 +54,7 @@ declare global {
       forceEnemyCollision: () => void;
       suspicion: () => SuspicionState;
       objectives: () => ObjectiveProgress;
+      goalLit: () => boolean;
       movePlayerTo: (point: Vec2) => void;
       playerPosition: () => Vec2;
       activeTrackId: () => GameSettings['soundtrackId'] | null;
@@ -83,6 +84,7 @@ export class Game {
   );
   private readonly playerContactShadow = createContactShadow(0.8, 0.52, 0.28);
   private goalMesh = new THREE.Mesh();
+  private goalBeaconMesh = new THREE.Mesh();
   private enemies: EnemyRuntime[] = [];
   private blockers: THREE.Mesh[] = [];
   private objectives: ObjectiveRuntime[] = [];
@@ -289,13 +291,13 @@ export class Game {
     this.goalMesh.position.set(level.goal.x, 0.08, level.goal.z);
     this.goalMesh.name = 'goal';
     this.scene.add(this.goalMesh);
-    const goalBeacon = new THREE.Mesh(
+    this.goalBeaconMesh = new THREE.Mesh(
       new THREE.CylinderGeometry(level.goalRadius * 0.58, level.goalRadius * 0.58, 0.95, 32, 1, true),
       createGoalBeaconMaterial(),
     );
-    goalBeacon.position.set(level.goal.x, 0.52, level.goal.z);
-    goalBeacon.name = 'goal-beacon';
-    this.scene.add(goalBeacon);
+    this.goalBeaconMesh.position.set(level.goal.x, 0.52, level.goal.z);
+    this.goalBeaconMesh.name = 'goal-beacon';
+    this.scene.add(this.goalBeaconMesh);
 
     this.playerMesh.castShadow = true;
     this.playerMesh.name = 'player';
@@ -563,9 +565,11 @@ export class Game {
     }
 
     const unlocked = this.objectiveProgress().exitUnlocked;
+    this.goalBeaconMesh.visible = unlocked;
     if (this.goalMesh.material instanceof THREE.MeshStandardMaterial) {
-      this.goalMesh.material.color.set(unlocked ? '#7dff9b' : '#ffcf5a');
-      this.goalMesh.material.emissive.set(unlocked ? '#1a6f34' : '#5f3807');
+      this.goalMesh.material.color.set(unlocked ? '#7dff9b' : '#374151');
+      this.goalMesh.material.emissive.set(unlocked ? '#1a6f34' : '#0d131b');
+      this.goalMesh.material.emissiveIntensity = unlocked ? 0.85 : 0.12;
     }
   }
 
@@ -675,6 +679,7 @@ export class Game {
       forceEnemyCollision: () => this.forceEnemyCollision(),
       suspicion: () => this.currentSuspicion,
       objectives: () => this.objectiveProgress(),
+      goalLit: () => this.goalBeaconMesh.visible,
       movePlayerTo: (point: Vec2) => this.movePlayerTo(point),
       playerPosition: () => this.playerPosition,
       activeTrackId: () => this.music.currentTrack(),

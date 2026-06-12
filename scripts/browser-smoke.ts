@@ -209,14 +209,16 @@ try {
       __shadowCircuitDebug?: {
         phase: () => string;
         objectives: () => { collectedRequired: number; totalRequired: number; exitUnlocked: boolean };
+        goalLit: () => boolean;
       };
     };
     return {
       phase: debugWindow.__shadowCircuitDebug?.phase(),
       objectives: debugWindow.__shadowCircuitDebug?.objectives(),
+      goalLit: debugWindow.__shadowCircuitDebug?.goalLit(),
     };
   });
-  if (lockedExitState.phase !== 'playing' || lockedExitState.objectives?.exitUnlocked) {
+  if (lockedExitState.phase !== 'playing' || lockedExitState.objectives?.exitUnlocked || lockedExitState.goalLit) {
     throw new Error(`Expected locked exit before objectives, got ${JSON.stringify(lockedExitState)}`);
   }
   await page.evaluate(() => {
@@ -239,14 +241,16 @@ try {
       __shadowCircuitDebug?: {
         phase: () => string;
         objectives: () => { collectedRequired: number; totalRequired: number; exitUnlocked: boolean };
+        goalLit: () => boolean;
       };
     };
     return {
       phase: debugWindow.__shadowCircuitDebug?.phase(),
       objectives: debugWindow.__shadowCircuitDebug?.objectives(),
+      goalLit: debugWindow.__shadowCircuitDebug?.goalLit(),
     };
   });
-  if (objectiveCompleteState.phase !== 'complete' || !objectiveCompleteState.objectives?.exitUnlocked) {
+  if (objectiveCompleteState.phase !== 'complete' || !objectiveCompleteState.objectives?.exitUnlocked || !objectiveCompleteState.goalLit) {
     throw new Error(`Expected objective-gated completion, got ${JSON.stringify(objectiveCompleteState)}`);
   }
 

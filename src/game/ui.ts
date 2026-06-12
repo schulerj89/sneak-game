@@ -64,7 +64,7 @@ export class GameUi {
             ${objectives.items.map((objective) => `
               <span class="objective-chip ${objective.collected ? 'is-collected' : ''} objective-${objective.type}">
                 <span class="objective-icon">${objective.type === 'keycard' ? 'KEY' : 'TERM'}</span>
-                <span>${objective.label}</span>
+                <span class="objective-label">${objective.label}</span>
               </span>
             `).join('')}
           </div>
