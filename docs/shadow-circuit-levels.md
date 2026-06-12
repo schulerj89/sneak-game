@@ -1,6 +1,6 @@
 # Shadow Circuit Levels
 
-Levels live in `src/game/levels.ts` and are plain strict TypeScript data.
+Levels live in `src/game/levels.ts` and are plain strict TypeScript data. The current build ships five levels.
 
 Each level defines:
 
@@ -25,3 +25,11 @@ The script samples each validation route and checks:
 - Route points are not immediately inside dangerous close-range guard sight.
 
 These routes are not full AI solutions. They are maintenance rails that catch broken level geometry or impossible starts.
+
+## Current Levels
+
+- `Dock Blackout`
+- `Archive Lanes`
+- `Reactor Core`
+- `Neon Atrium`
+- `Signal Vault`

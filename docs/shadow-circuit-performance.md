@@ -1,12 +1,12 @@
 # Shadow Circuit Performance
 
-The project prioritizes memory by default. Settings persist in local storage and start in `Memory first` mode.
+The project targets crisp rendering while staying under a `75 MB` browser heap budget when browser memory reporting is available. Settings persist in local storage and start in `Balanced` mode.
 
 ## Quality Profiles
 
 - `Memory first`: pixel ratio is capped at `1`, antialiasing is disabled, shadows are disabled.
-- `Balanced`: pixel ratio is capped at `1.5`, antialiasing and shadows are enabled.
-- `Cinematic`: pixel ratio is capped at `2`, antialiasing and shadows are enabled.
+- `Balanced`: pixel ratio is capped at `1.35`, antialiasing and shadows are enabled.
+- `Cinematic`: pixel ratio is capped at `1.65`, antialiasing and shadows are enabled.
 
 ## Monitoring
 
@@ -14,6 +14,7 @@ The debug panel displays:
 
 - FPS and frame time.
 - Browser JS heap usage when `performance.memory` is available.
+- Memory cap and pressure state.
 - Three.js draw calls and triangle count.
 - Active render quality.
 

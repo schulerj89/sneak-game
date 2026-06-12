@@ -1,4 +1,5 @@
 import type { DebugSample, DetectionState, GameSettings, LevelDefinition, Vec2 } from './types';
+import { memoryCapMb, targetFps } from './settings';
 
 type MemoryPerformance = Performance & {
   memory?: {
@@ -23,6 +24,8 @@ export class DebugPanel {
       fps: this.smoothedFps,
       frameMs,
       usedMemoryMb: memory ? memory.usedJSHeapSize / 1024 / 1024 : null,
+      memoryCapMb,
+      memoryPressure: memory ? (memory.usedJSHeapSize / 1024 / 1024 > memoryCapMb ? 'over-cap' : 'ok') : 'unknown',
       drawCalls,
       triangles,
     };
@@ -45,9 +48,12 @@ export class DebugPanel {
       <div>Detection: ${detection.spotted ? `SPOTTED by ${detection.enemyId}` : 'clear'}</div>
       <div>Ray blocked: ${detection.rayBlocked ? 'yes' : 'no'}</div>
       <div>FPS: ${sample.fps.toFixed(0)} (${sample.frameMs.toFixed(1)}ms)</div>
-      <div>Memory: ${sample.usedMemoryMb === null ? 'n/a' : `${sample.usedMemoryMb.toFixed(1)} MB`}</div>
+      <div>Target FPS: ${targetFps}</div>
+      <div>Memory: ${sample.usedMemoryMb === null ? 'n/a' : `${sample.usedMemoryMb.toFixed(1)} MB`} / ${sample.memoryCapMb} MB</div>
+      <div>Pressure: ${sample.memoryPressure}</div>
       <div>Draws: ${sample.drawCalls} Triangles: ${sample.triangles}</div>
       <div>Quality: ${settings.quality}</div>
+      <div>Track: ${settings.soundtrackId}</div>
     `;
   }
 }

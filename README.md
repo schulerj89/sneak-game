@@ -4,12 +4,13 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 
 ## Current Features
 
-- Three playable levels: Dock Blackout, Archive Lanes, and Reactor Core.
+- Five playable levels: Dock Blackout, Archive Lanes, Reactor Core, Neon Atrium, and Signal Vault.
 - Menu, settings, retry, and level-complete flows.
+- Level select menu with generated level preview images.
 - Guard patrols with visible cones and raycast line-of-sight detection.
 - Dark-room lighting, emissive goals, shadows by quality setting, and simple custom assets.
-- Custom generated theme music in `src/assets/shadow-circuit-theme.wav`.
-- Memory-first default rendering with Balanced and Cinematic options.
+- Custom generated soundtrack with three selectable tracks.
+- Balanced default rendering with a 75 MB browser heap cap and Memory first fallback.
 - On-screen debug panel with FPS, memory, draw calls, player position, and detection state.
 - Console logs for game phase, level loads, settings, audio, and detection events.
 - Unit tests, level route validation, and browser smoke coverage.
@@ -45,7 +46,7 @@ npm run verify       # Run unit tests, level validation, and production build
 npm run assets:audio # Regenerate the custom WAV theme
 ```
 
-`npm run test:browser` expects the dev server to be running at `http://127.0.0.1:5173/`.
+`npm run test:browser` expects the dev server to be running at `http://127.0.0.1:5173/`. It runs headed by default for realistic frame pacing; set `SMOKE_HEADLESS=true` if a headless smoke pass is needed.
 
 ## Project Structure
 
@@ -75,3 +76,6 @@ Then commit and push the checkpoint.
 - `docs/shadow-circuit-performance.md`
 - `docs/shadow-circuit-levels.md`
 - `docs/shadow-circuit-assets.md`
+- `docs/shadow-circuit-level-select.md`
+- `docs/shadow-circuit-soundtrack.md`
+- `docs/shadow-circuit-memory-budget.md`

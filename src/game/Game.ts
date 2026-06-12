@@ -5,8 +5,8 @@ import { getDetectionState, isSightBlocked } from './detection';
 import { InputController } from './input';
 import { levels } from './levels';
 import { add, clampToRoom, distance, normalize, pointInRect, scale, subtract } from './math';
-import { loadSettings, qualityProfile, saveSettings } from './settings';
-import type { DetectionState, EnemySpec, GamePhase, GameSettings, LevelDefinition, Vec2 } from './types';
+import { loadSettings, memoryCapMb, qualityProfile, saveSettings } from './settings';
+import type { DebugSample, DetectionState, EnemySpec, GamePhase, GameSettings, LevelDefinition, Vec2 } from './types';
 import { GameUi } from './ui';
 
 type EnemyRuntime = {
@@ -27,6 +27,9 @@ declare global {
     __shadowCircuitDebug?: {
       forceCaught: () => void;
       phase: () => GamePhase;
+      selectLevel: (levelIndex: number) => void;
+      levelCount: () => number;
+      performance: () => DebugSample | null;
     };
   }
 }
@@ -55,6 +58,7 @@ export class Game {
   private blockers: THREE.Mesh[] = [];
   private debugRays = new THREE.Group();
   private currentDetection: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
+  private latestDebugSample: DebugSample | null = null;
   private animationId = 0;
 
   constructor(mount: HTMLElement) {
@@ -63,6 +67,8 @@ export class Game {
       onResume: () => this.setPhase(this.settingsReturnPhase),
       onSettings: () => this.openSettings(),
       onMenu: () => this.setPhase('menu'),
+      onLevelSelect: () => this.setPhase('level-select'),
+      onSelectLevel: (levelIndex) => this.selectLevel(levelIndex),
       onRestart: () => this.retryLevel(),
       onNextLevel: () => this.nextLevel(),
       onSettingsChange: (settings) => void this.applySettings(settings),
@@ -103,8 +109,7 @@ export class Game {
 
   private setPhase(phase: GamePhase): void {
     this.phase = phase;
-    this.ui.renderHud(this.level, this.levelIndex, this.phase);
-    this.ui.renderOverlay(this.phase, this.level);
+    this.renderUi();
     console.info(`[game] phase=${phase} level=${this.level.id}`);
   }
 
@@ -119,8 +124,7 @@ export class Game {
     saveSettings(settings);
     this.applyRendererQuality();
     await this.music.sync(settings);
-    this.ui.renderHud(this.level, this.levelIndex, this.phase);
-    this.ui.renderOverlay(this.phase, this.level);
+    this.renderUi();
     console.info(`[settings] quality=${settings.quality} music=${settings.musicEnabled} debug=${settings.debugEnabled}`);
   }
 
@@ -148,6 +152,11 @@ export class Game {
     this.setPhase('playing');
   }
 
+  private selectLevel(levelIndex: number): void {
+    this.loadLevel(levelIndex);
+    this.setPhase('playing');
+  }
+
   private loadLevel(index: number): void {
     this.levelIndex = index;
     this.clearLevelObjects();
@@ -162,6 +171,7 @@ export class Game {
     floor.receiveShadow = true;
     floor.name = 'floor';
     this.scene.add(floor);
+    this.scene.add(this.createFloorTiles(level));
 
     const wallMaterial = new THREE.MeshStandardMaterial({ color: '#05070b', roughness: 0.78 });
     const wallGeometryX = new THREE.BoxGeometry(level.floorSize.x, 1.8, 0.18);
@@ -193,6 +203,13 @@ export class Game {
       mesh.receiveShadow = true;
       mesh.name = `blocker:${obstacle.id}`;
       this.scene.add(mesh);
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(mesh.geometry),
+        new THREE.LineBasicMaterial({ color: '#5f7896', transparent: true, opacity: 0.42 }),
+      );
+      edges.position.copy(mesh.position);
+      edges.name = `blocker-edge:${obstacle.id}`;
+      this.scene.add(edges);
       this.blockers.push(mesh);
     }
 
@@ -231,8 +248,7 @@ export class Game {
     });
 
     this.restartLevel();
-    this.ui.renderHud(level, this.levelIndex, this.phase);
-    this.ui.renderOverlay(this.phase, level);
+    this.renderUi();
     console.info(`[level] loaded ${level.id} blockers=${this.blockers.length} enemies=${this.enemies.length}`);
   }
 
@@ -245,6 +261,34 @@ export class Game {
     const ambient = new THREE.AmbientLight('#253044', 0.18);
     this.scene.add(ambient);
     this.scene.add(this.debugRays);
+  }
+
+  private createFloorTiles(level: LevelDefinition): THREE.InstancedMesh {
+    const columns = Math.floor(level.floorSize.x);
+    const rows = Math.floor(level.floorSize.z);
+    const geometry = new THREE.BoxGeometry(0.92, 0.018, 0.92);
+    const material = new THREE.MeshStandardMaterial({
+      color: '#141c28',
+      roughness: 0.92,
+      metalness: 0.05,
+    });
+    const tiles = new THREE.InstancedMesh(geometry, material, columns * rows);
+    const matrix = new THREE.Matrix4();
+    let index = 0;
+
+    for (let column = 0; column < columns; column += 1) {
+      for (let row = 0; row < rows; row += 1) {
+        const x = -level.floorSize.x / 2 + 0.5 + column;
+        const z = -level.floorSize.z / 2 + 0.5 + row;
+        matrix.makeTranslation(x, 0.002, z);
+        tiles.setMatrixAt(index, matrix);
+        index += 1;
+      }
+    }
+
+    tiles.receiveShadow = true;
+    tiles.name = 'floor-detail';
+    return tiles;
   }
 
   private createRenderer(): THREE.WebGLRenderer {
@@ -428,6 +472,8 @@ export class Game {
     this.renderer.render(this.scene, this.camera);
 
     const sample = this.debugPanel.sample(now, this.renderer.info.render.calls, this.renderer.info.render.triangles);
+    this.latestDebugSample = sample;
+    this.enforceMemoryCap(sample.usedMemoryMb);
     this.debugPanel.render(this.settings, this.level, this.playerPosition, this.currentDetection, sample);
     this.renderer.info.reset();
 
@@ -459,7 +505,22 @@ export class Game {
     window.__shadowCircuitDebug = {
       forceCaught: () => this.setPhase('caught'),
       phase: () => this.phase,
+      selectLevel: (levelIndex: number) => this.selectLevel(levelIndex),
+      levelCount: () => levels.length,
+      performance: () => this.latestDebugSample,
     };
+  }
+
+  private enforceMemoryCap(usedMemoryMb: number | null): void {
+    if (usedMemoryMb === null || usedMemoryMb <= memoryCapMb || this.settings.quality === 'memory') return;
+
+    void this.applySettings({ ...this.settings, quality: 'memory' });
+    console.warn(`[performance] memory cap exceeded ${usedMemoryMb.toFixed(1)} MB > ${memoryCapMb} MB; downgraded to memory quality`);
+  }
+
+  private renderUi(): void {
+    this.ui.renderHud(this.level, this.levelIndex, this.phase, levels.length);
+    this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex);
   }
 
   private get level(): LevelDefinition {

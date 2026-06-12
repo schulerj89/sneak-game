@@ -1,12 +1,15 @@
-import type { GameSettings, RenderQuality } from './types';
+import type { GameSettings, RenderQuality, SoundtrackId } from './types';
 
 const storageKey = 'shadow-circuit-settings-v1';
+export const memoryCapMb = 75;
+export const targetFps = 60;
 
 export const defaultSettings: GameSettings = {
-  quality: 'memory',
+  quality: 'balanced',
   musicEnabled: true,
   debugEnabled: true,
   masterVolume: 0.36,
+  soundtrackId: 'shadow-circuit',
 };
 
 export function loadSettings(): GameSettings {
@@ -20,6 +23,7 @@ export function loadSettings(): GameSettings {
       debugEnabled: parsed.debugEnabled ?? defaultSettings.debugEnabled,
       masterVolume:
         typeof parsed.masterVolume === 'number' ? Math.min(1, Math.max(0, parsed.masterVolume)) : defaultSettings.masterVolume,
+      soundtrackId: isSoundtrackId(parsed.soundtrackId) ? parsed.soundtrackId : defaultSettings.soundtrackId,
     };
   } catch {
     return { ...defaultSettings };
@@ -37,11 +41,11 @@ export function qualityProfile(quality: RenderQuality): {
   debugRayCount: number;
 } {
   if (quality === 'cinematic') {
-    return { pixelRatio: Math.min(window.devicePixelRatio, 2), antialias: true, shadows: true, debugRayCount: 18 };
+    return { pixelRatio: Math.min(window.devicePixelRatio, 1.65), antialias: true, shadows: true, debugRayCount: 18 };
   }
 
   if (quality === 'balanced') {
-    return { pixelRatio: Math.min(window.devicePixelRatio, 1.5), antialias: true, shadows: true, debugRayCount: 10 };
+    return { pixelRatio: Math.min(window.devicePixelRatio, 1.35), antialias: true, shadows: true, debugRayCount: 10 };
   }
 
   return { pixelRatio: 1, antialias: false, shadows: false, debugRayCount: 6 };
@@ -49,4 +53,8 @@ export function qualityProfile(quality: RenderQuality): {
 
 function isQuality(value: unknown): value is RenderQuality {
   return value === 'memory' || value === 'balanced' || value === 'cinematic';
+}
+
+function isSoundtrackId(value: unknown): value is SoundtrackId {
+  return value === 'shadow-circuit' || value === 'pulse-runner' || value === 'deep-cover';
 }

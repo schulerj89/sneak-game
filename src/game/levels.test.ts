@@ -3,9 +3,15 @@ import { levels } from './levels';
 import { pointInRect, segmentIntersectsRect } from './math';
 
 describe('level definitions', () => {
-  it('ships the requested first three levels', () => {
-    expect(levels).toHaveLength(3);
-    expect(levels.map((level) => level.id)).toEqual(['dock-blackout', 'archive-lanes', 'reactor-core']);
+  it('ships the requested five levels', () => {
+    expect(levels).toHaveLength(5);
+    expect(levels.map((level) => level.id)).toEqual([
+      'dock-blackout',
+      'archive-lanes',
+      'reactor-core',
+      'neon-atrium',
+      'signal-vault',
+    ]);
   });
 
   it('keeps starts, goals, and validation routes out of hard cover', () => {

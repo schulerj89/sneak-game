@@ -45,14 +45,17 @@ export type LevelDefinition = Readonly<{
 
 export type RenderQuality = 'memory' | 'balanced' | 'cinematic';
 
+export type SoundtrackId = 'shadow-circuit' | 'pulse-runner' | 'deep-cover';
+
 export type GameSettings = {
   quality: RenderQuality;
   musicEnabled: boolean;
   debugEnabled: boolean;
   masterVolume: number;
+  soundtrackId: SoundtrackId;
 };
 
-export type GamePhase = 'menu' | 'playing' | 'paused' | 'caught' | 'complete' | 'settings';
+export type GamePhase = 'menu' | 'playing' | 'paused' | 'caught' | 'complete' | 'settings' | 'level-select';
 
 export type DetectionState = Readonly<{
   spotted: boolean;
@@ -65,6 +68,8 @@ export type DebugSample = Readonly<{
   fps: number;
   frameMs: number;
   usedMemoryMb: number | null;
+  memoryCapMb: number;
+  memoryPressure: 'unknown' | 'ok' | 'over-cap';
   drawCalls: number;
   triangles: number;
 }>;

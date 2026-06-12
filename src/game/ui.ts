@@ -1,4 +1,5 @@
-import { logoSvg } from './assets';
+import { soundtrackOptions } from './audio';
+import { levelThumbnailSvg, logoSvg } from './assets';
 import type { GamePhase, GameSettings, LevelDefinition } from './types';
 
 type UiCallbacks = {
@@ -6,6 +7,8 @@ type UiCallbacks = {
   onResume: () => void;
   onSettings: () => void;
   onMenu: () => void;
+  onLevelSelect: () => void;
+  onSelectLevel: (levelIndex: number) => void;
   onRestart: () => void;
   onNextLevel: () => void;
   onSettingsChange: (settings: GameSettings) => void;
@@ -40,13 +43,14 @@ export class GameUi {
     this.settings = settings;
   }
 
-  renderHud(level: LevelDefinition, levelNumber: number, phase: GamePhase): void {
+  renderHud(level: LevelDefinition, levelNumber: number, phase: GamePhase, totalLevels: number): void {
     this.hud.innerHTML = `
       <div class="hud-left">
         <strong>${level.name}</strong>
-        <span>Level ${levelNumber + 1} / 3</span>
+        <span>Level ${levelNumber + 1} / ${totalLevels}</span>
       </div>
       <div class="hud-right">
+        <button type="button" data-action="level-select" title="Level Select">Levels</button>
         <button type="button" data-action="settings" title="Settings">Settings</button>
         <button type="button" data-action="menu" title="Menu">Menu</button>
       </div>
@@ -55,7 +59,7 @@ export class GameUi {
     this.bindHud();
   }
 
-  renderOverlay(phase: GamePhase, level: LevelDefinition): void {
+  renderOverlay(phase: GamePhase, level: LevelDefinition, levels: readonly LevelDefinition[], levelIndex: number): void {
     this.overlay.hidden = phase === 'playing';
 
     if (phase === 'menu') {
@@ -65,7 +69,26 @@ export class GameUi {
           <p>${level.briefing}</p>
           <div class="panel-actions">
             <button type="button" data-action="start">Start Run</button>
+            <button type="button" data-action="level-select">Level Select</button>
             <button type="button" data-action="settings">Settings</button>
+          </div>
+        </div>
+      `;
+    } else if (phase === 'level-select') {
+      this.overlay.innerHTML = `
+        <div class="panel level-select-panel">
+          <h1>Level Select</h1>
+          <div class="level-grid">
+            ${levels.map((candidate, index) => `
+              <button type="button" class="level-card ${index === levelIndex ? 'is-active' : ''}" data-level-index="${index}">
+                <span class="level-thumb">${levelThumbnailSvg(candidate, index + 1)}</span>
+                <span class="level-card-title">${candidate.name}</span>
+                <span class="level-card-copy">${candidate.briefing}</span>
+              </button>
+            `).join('')}
+          </div>
+          <div class="panel-actions">
+            <button type="button" data-action="menu">Back</button>
           </div>
         </div>
       `;
@@ -83,6 +106,13 @@ export class GameUi {
           <label class="check-row">
             <input type="checkbox" data-setting="music" ${this.settings.musicEnabled ? 'checked' : ''}/>
             Music
+          </label>
+          <label>Soundtrack
+            <select data-setting="soundtrack">
+              ${soundtrackOptions.map((track) => `
+                <option value="${track.id}" ${this.settings.soundtrackId === track.id ? 'selected' : ''}>${track.name}</option>
+              `).join('')}
+            </select>
           </label>
           <label class="check-row">
             <input type="checkbox" data-setting="debug" ${this.settings.debugEnabled ? 'checked' : ''}/>
@@ -125,12 +155,21 @@ export class GameUi {
 
   private bindHud(): void {
     this.hud.querySelector('[data-action="settings"]')?.addEventListener('click', this.callbacks.onSettings);
+    this.hud.querySelector('[data-action="level-select"]')?.addEventListener('click', this.callbacks.onLevelSelect);
     this.hud.querySelector('[data-action="menu"]')?.addEventListener('click', this.callbacks.onMenu);
   }
 
   private bindOverlay(): void {
     this.overlay.querySelector('[data-action="start"]')?.addEventListener('click', this.callbacks.onStart);
     this.overlay.querySelector('[data-action="resume"]')?.addEventListener('click', this.callbacks.onResume);
+    this.overlay.querySelectorAll('[data-action="level-select"]').forEach((button) =>
+      button.addEventListener('click', this.callbacks.onLevelSelect),
+    );
+    this.overlay.querySelectorAll('[data-level-index]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.callbacks.onSelectLevel(Number((button as HTMLElement).dataset.levelIndex));
+      });
+    });
     this.overlay.querySelectorAll('[data-action="settings"]').forEach((button) =>
       button.addEventListener('click', this.callbacks.onSettings),
     );
@@ -142,6 +181,9 @@ export class GameUi {
     });
     this.overlay.querySelector('[data-setting="music"]')?.addEventListener('change', (event) => {
       this.callbacks.onSettingsChange({ ...this.settings, musicEnabled: (event.target as HTMLInputElement).checked });
+    });
+    this.overlay.querySelector('[data-setting="soundtrack"]')?.addEventListener('change', (event) => {
+      this.callbacks.onSettingsChange({ ...this.settings, soundtrackId: (event.target as HTMLSelectElement).value as GameSettings['soundtrackId'] });
     });
     this.overlay.querySelector('[data-setting="debug"]')?.addEventListener('change', (event) => {
       this.callbacks.onSettingsChange({ ...this.settings, debugEnabled: (event.target as HTMLInputElement).checked });
