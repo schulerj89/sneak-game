@@ -20,6 +20,14 @@ describe('soundtrack metadata', () => {
     expect(replacement?.tempoBpm).toBeGreaterThan(160);
   });
 
+  it('includes the external cyberpunk selection', () => {
+    const cyberpunk = soundtrackOptions.find((track) => track.id === 'cyberpunk-moonlight');
+    expect(cyberpunk?.name).toBe('Cyberpunk Moonlight');
+    expect(cyberpunk?.url).toContain('.mp3');
+    expect(cyberpunk?.source.license).toBe('CC0');
+    expect(cyberpunk?.source.sourceUrl).toContain('opengameart.org/content/cyberpunk-moonlight-sonata');
+  });
+
   it('uses the external stealth track as the default option', () => {
     expect(soundtrackOptions[0]?.id).toBe('ghost-steps');
     expect(soundtrackOptions[0]?.name).toBe('Ghost Steps');

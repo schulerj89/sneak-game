@@ -35,13 +35,13 @@ try {
   await page.screenshot({ path: `${outputDir}/shadow-circuit-level-select.png`, fullPage: true });
 
   for (const shot of levelShots) {
-    await page.evaluate((levelIndex) => {
+    await page.evaluate(async (levelIndex) => {
       const debugWindow = window as Window & {
         __shadowCircuitDebug?: {
-          selectLevel: (index: number) => void;
+          selectLevel: (index: number) => Promise<void>;
         };
       };
-      debugWindow.__shadowCircuitDebug?.selectLevel(levelIndex);
+      await debugWindow.__shadowCircuitDebug?.selectLevel(levelIndex);
     }, shot.index);
     await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 8000 });
     await page.waitForTimeout(900);

@@ -73,7 +73,8 @@ try {
     throw new Error(`Expected debug level count 8, found ${debugLevelCount}`);
   }
   await page.locator('[data-level-index="4"]').click();
-  await page.waitForTimeout(500);
+  await expectVisible('[data-testid="loading-panel"]');
+  await assertPlayingPhase('after selecting Signal Vault from level select');
   const selectedLevelTrackId = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
     return debugWindow.__shadowCircuitDebug?.activeTrackId();
@@ -103,11 +104,12 @@ try {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
   await expectVisible('text=Render quality');
   await page.selectOption('[data-setting="quality"]', 'cinematic');
-  await page.selectOption('[data-setting="soundtrack"]', 'metro-escape');
+  await page.selectOption('[data-setting="soundtrack"]', 'cyberpunk-moonlight');
+  await expectVisible('text=Cyberpunk Moonlight Sonata v2');
   await page.selectOption('[data-setting="detection-leniency"]', 'standard');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
-  await page.waitForTimeout(800);
+  await expectVisible('[data-testid="loading-panel"]');
   await assertPlayingPhase('after start run');
   const beforeKeyboardMove = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { playerPosition: () => { x: number; z: number } } };
@@ -156,11 +158,7 @@ try {
     throw new Error(`Expected visible Signal Vault goal, got ${JSON.stringify(levelState)}`);
   }
 
-  await page.evaluate(() => {
-    const debugWindow = window as Window & { __shadowCircuitDebug?: { selectLevel: (levelIndex: number) => void } };
-    debugWindow.__shadowCircuitDebug?.selectLevel(3);
-  });
-  await page.waitForTimeout(500);
+  await selectDebugLevel(3);
   const neonAtriumState = await page.evaluate(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
@@ -213,50 +211,45 @@ try {
     throw new Error(`Expected initialization console log. Logs: ${logs.join('\n')}`);
   }
 
-  if (!logs.some((line) => line.includes('[audio] soundtrack playing Metro Escape'))) {
+  if (!logs.some((line) => line.includes('[audio] soundtrack playing Cyberpunk Moonlight'))) {
     throw new Error(`Expected selected soundtrack console log. Logs: ${logs.join('\n')}`);
   }
   const activeTrackId = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
     return debugWindow.__shadowCircuitDebug?.activeTrackId();
   });
-  if (activeTrackId !== 'metro-escape') {
-    throw new Error(`Expected active Metro Escape track, got ${activeTrackId}`);
+  if (activeTrackId !== 'cyberpunk-moonlight') {
+    throw new Error(`Expected active Cyberpunk Moonlight track, got ${activeTrackId}`);
   }
 
-  const visibilityStates = await page.evaluate(() => {
-    const debugWindow = window as Window & {
-      __shadowCircuitDebug?: {
-        levelCount: () => number;
-        levelId: () => string;
-        selectLevel: (levelIndex: number) => void;
-        goalVisible: () => boolean;
-        playerVisible: () => boolean;
-        objectiveVisible: (objectiveId: string) => boolean;
+  const visibilityStates: {
+    index: number;
+    levelId: string;
+    playerVisible: boolean;
+    goalVisible: boolean;
+    lensConsoleVisible: boolean;
+  }[] = [];
+  for (let index = 0; index < debugLevelCount; index += 1) {
+    await selectDebugLevel(index);
+    visibilityStates.push(await page.evaluate((levelIndex) => {
+      const debugWindow = window as Window & {
+        __shadowCircuitDebug?: {
+          levelId: () => string;
+          goalVisible: () => boolean;
+          playerVisible: () => boolean;
+          objectiveVisible: (objectiveId: string) => boolean;
+        };
       };
-    };
-    const debug = debugWindow.__shadowCircuitDebug;
-    if (!debug) return [];
-
-    const states: {
-      index: number;
-      levelId: string;
-      playerVisible: boolean;
-      goalVisible: boolean;
-      lensConsoleVisible: boolean;
-    }[] = [];
-    for (let index = 0; index < debug.levelCount(); index += 1) {
-      debug.selectLevel(index);
-      states.push({
-        index,
-        levelId: debug.levelId(),
-        playerVisible: debug.playerVisible(),
-        goalVisible: debug.goalVisible(),
-        lensConsoleVisible: debug.objectiveVisible('lab-terminal-a'),
-      });
-    }
-    return states;
-  });
+      const debug = debugWindow.__shadowCircuitDebug;
+      return {
+        index: levelIndex,
+        levelId: debug?.levelId() ?? '',
+        playerVisible: debug?.playerVisible() ?? false,
+        goalVisible: debug?.goalVisible() ?? false,
+        lensConsoleVisible: debug?.objectiveVisible('lab-terminal-a') ?? false,
+      };
+    }, index));
+  }
   const hiddenLevelStates = visibilityStates.filter((state) => !state.playerVisible || !state.goalVisible);
   if (hiddenLevelStates.length > 0) {
     throw new Error(`Expected every level start and goal to be camera-visible, got ${JSON.stringify(hiddenLevelStates)}`);
@@ -266,14 +259,13 @@ try {
     throw new Error(`Expected Mirror Lab Lens Console to be camera-visible, got ${JSON.stringify(visibilityStates)}`);
   }
 
+  await selectDebugLevel(0);
   await page.evaluate(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
-        selectLevel: (levelIndex: number) => void;
         movePlayerTo: (point: { x: number; z: number }) => void;
       };
     };
-    debugWindow.__shadowCircuitDebug?.selectLevel(0);
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 1.6, z: -2.5 });
   });
   await page.waitForTimeout(320);
@@ -398,6 +390,24 @@ try {
   if (objectiveCompleteState.phase !== 'complete' || !objectiveCompleteState.objectives?.exitUnlocked || !objectiveCompleteState.goalLit) {
     throw new Error(`Expected objective-gated completion, got ${JSON.stringify(objectiveCompleteState)}`);
   }
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Next Level' }).click();
+  await expectVisible('[data-testid="loading-panel"]');
+  await assertPlayingPhase('after next level loading');
+  const nextLevelState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        levelId: () => string;
+        objectives: () => { totalRequired: number };
+      };
+    };
+    return {
+      levelId: debugWindow.__shadowCircuitDebug?.levelId(),
+      objectives: debugWindow.__shadowCircuitDebug?.objectives(),
+    };
+  });
+  if (nextLevelState.levelId !== 'archive-lanes' || nextLevelState.objectives?.totalRequired !== 2) {
+    throw new Error(`Expected Next Level to load Archive Lanes, got ${JSON.stringify(nextLevelState)}`);
+  }
 
   await completeFinalLevel();
   await expectVisible('text=Game Complete');
@@ -428,7 +438,8 @@ try {
 
   await completeFinalLevel();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Over' }).click();
-  await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 8000 });
+  await expectVisible('[data-testid="loading-panel"]');
+  await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 10000 });
   const startOverState = await page.evaluate(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
@@ -451,7 +462,8 @@ try {
   });
   await expectVisible('text=Retry Level');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Retry Level' }).click();
-  await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 8000 });
+  await expectVisible('[data-testid="loading-panel"]');
+  await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 10000 });
   const phase = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
     return debugWindow.__shadowCircuitDebug?.phase();
@@ -478,15 +490,26 @@ async function expectVisible(selector: string): Promise<void> {
   await page.locator(selector).waitFor({ state: 'visible', timeout: 8000 });
 }
 
+async function selectDebugLevel(levelIndex: number): Promise<void> {
+  await page.evaluate(async (targetLevelIndex) => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        selectLevel: (levelIndex: number) => Promise<void>;
+      };
+    };
+    await debugWindow.__shadowCircuitDebug?.selectLevel(targetLevelIndex);
+  }, levelIndex);
+  await assertPlayingPhase(`after debug selecting level ${levelIndex}`);
+}
+
 async function completeFinalLevel(): Promise<void> {
+  await selectDebugLevel(7);
   await page.evaluate(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
-        selectLevel: (levelIndex: number) => void;
         movePlayerTo: (point: { x: number; z: number }) => void;
       };
     };
-    debugWindow.__shadowCircuitDebug?.selectLevel(7);
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -7.4, z: 6.6 });
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -0.5, z: -6.6 });
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5.5, z: 6.6 });
@@ -496,6 +519,10 @@ async function completeFinalLevel(): Promise<void> {
 }
 
 async function assertPlayingPhase(context: string): Promise<void> {
+  await page.waitForFunction(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
+    return debugWindow.__shadowCircuitDebug?.phase() === 'playing';
+  }, undefined, { timeout: 10000 });
   const phase = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
     return debugWindow.__shadowCircuitDebug?.phase();

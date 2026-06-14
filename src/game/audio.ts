@@ -6,6 +6,7 @@ import themeUrl from '../assets/shadow-circuit-theme.wav?url';
 import pulseRunnerUrl from '../assets/pulse-runner.wav?url';
 import deepCoverUrl from '../assets/deep-cover.wav?url';
 import metroEscapeUrl from '../assets/metro-escape.mp3?url';
+import cyberpunkMoonlightUrl from '../assets/cyberpunk-moonlight-sonata.mp3?url';
 
 export const soundtrackOptions = [
   {
@@ -79,6 +80,18 @@ export const soundtrackOptions = [
       license: 'Project-owned generated audio',
       sourceUrl: 'scripts/generate-audio.ts',
       attribution: 'Generated for Shadow Circuit by the local audio script as the first replacement-track candidate.',
+    },
+  },
+  {
+    id: 'cyberpunk-moonlight',
+    name: 'Cyberpunk Moonlight',
+    url: cyberpunkMoonlightUrl,
+    tempoBpm: 108,
+    source: {
+      kind: 'external',
+      license: 'CC0',
+      sourceUrl: 'https://opengameart.org/content/cyberpunk-moonlight-sonata',
+      attribution: '"Cyberpunk Moonlight Sonata v2" by Joth. License: CC0. Attribution appreciated, but not required.',
     },
   },
 ] as const;

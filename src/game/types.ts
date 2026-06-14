@@ -60,7 +60,14 @@ export type RenderQuality = 'memory' | 'balanced' | 'cinematic';
 
 export type DetectionLeniency = 'forgiving' | 'standard' | 'sharp';
 
-export type SoundtrackId = 'ghost-steps' | 'night-ops' | 'shadow-circuit' | 'pulse-runner' | 'deep-cover' | 'metro-escape';
+export type SoundtrackId =
+  | 'ghost-steps'
+  | 'night-ops'
+  | 'shadow-circuit'
+  | 'pulse-runner'
+  | 'deep-cover'
+  | 'metro-escape'
+  | 'cyberpunk-moonlight';
 
 export type GameSettings = {
   quality: RenderQuality;

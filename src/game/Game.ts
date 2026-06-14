@@ -60,7 +60,7 @@ declare global {
     __shadowCircuitDebug?: {
       forceCaught: () => void;
       phase: () => GamePhase;
-      selectLevel: (levelIndex: number) => void;
+      selectLevel: (levelIndex: number) => Promise<void>;
       levelCount: () => number;
       loadingProgress: () => LoadingProgress;
       pickupDebug: () => PickupDebugSample;
@@ -175,13 +175,7 @@ export class Game {
   }
 
   private async start(): Promise<void> {
-    if (isLoadingPhase(this.phase)) return;
-
-    this.restartLevel();
-    this.beginRun();
-    this.setPhase('playing');
-    this.music.warmupEffects(this.settings);
-    await this.music.sync(this.settings);
+    await this.startPreparedRun(this.levelIndex);
   }
 
   private setPhase(phase: GamePhase): void {
@@ -244,13 +238,7 @@ export class Game {
   }
 
   private async retryLevel(): Promise<void> {
-    if (isLoadingPhase(this.phase)) return;
-
-    this.restartLevel();
-    this.beginRun();
-    this.setPhase('playing');
-    this.music.warmupEffects(this.settings);
-    await this.music.sync(this.settings);
+    await this.startPreparedRun(this.levelIndex);
   }
 
   private async nextLevel(): Promise<void> {
@@ -261,11 +249,7 @@ export class Game {
       return;
     }
 
-    this.loadLevel(this.levelIndex + 1);
-    this.beginRun();
-    this.setPhase('playing');
-    this.music.warmupEffects(this.settings);
-    await this.music.sync(this.settings);
+    await this.startPreparedRun(this.levelIndex + 1);
   }
 
   private returnToTitle(): void {
@@ -276,23 +260,50 @@ export class Game {
   }
 
   private async startOver(): Promise<void> {
+    await this.startPreparedRun(0);
+  }
+
+  private async selectLevel(levelIndex: number): Promise<void> {
+    await this.startPreparedRun(levelIndex);
+  }
+
+  private async startPreparedRun(levelIndex: number): Promise<void> {
     if (isLoadingPhase(this.phase)) return;
 
-    this.loadLevel(0);
+    await this.loadLevelWithTransition(levelIndex);
+    if (this.disposed) return;
+
     this.beginRun();
     this.setPhase('playing');
     this.music.warmupEffects(this.settings);
     await this.music.sync(this.settings);
   }
 
-  private async selectLevel(levelIndex: number): Promise<void> {
-    if (isLoadingPhase(this.phase)) return;
+  private async loadLevelWithTransition(levelIndex: number): Promise<void> {
+    const targetIndex = Math.max(0, Math.min(levels.length - 1, levelIndex));
+    const targetLevel = levels[targetIndex];
+    this.loadingProgress = { value: 0, label: `Loading ${targetLevel.name}` };
+    this.setPhase('loading');
 
-    this.loadLevel(levelIndex);
-    this.beginRun();
-    this.setPhase('playing');
-    this.music.warmupEffects(this.settings);
-    await this.music.sync(this.settings);
+    await runLoadingSequence({
+      tasks: this.levelTransitionTasks(targetIndex),
+      onProgress: (progress) => this.updateLoadingProgress(progress),
+      shouldCancel: () => this.disposed,
+      minDurationMs: 950,
+      minTaskMs: 150,
+      readyDelayMs: 140,
+    });
+  }
+
+  private levelTransitionTasks(levelIndex: number): readonly LoadingTask[] {
+    const targetLevel = levels[levelIndex];
+    return [
+      { label: `Loading ${targetLevel.name}`, run: () => this.loadLevel(levelIndex) },
+      { label: 'Loading soundtrack', run: () => this.music.preload(this.settings) },
+      { label: 'Compiling level materials', run: () => this.warmupRenderStates() },
+      { label: 'Priming objective states', run: () => this.warmupObjectiveStates() },
+      { label: 'Preparing pickup audio', run: () => this.music.preloadPickupCue() },
+    ];
   }
 
   private loadLevel(index: number): void {

@@ -68,7 +68,8 @@ function isSoundtrackId(value: unknown): value is SoundtrackId {
     value === 'shadow-circuit' ||
     value === 'pulse-runner' ||
     value === 'deep-cover' ||
-    value === 'metro-escape'
+    value === 'metro-escape' ||
+    value === 'cyberpunk-moonlight'
   );
 }
 
