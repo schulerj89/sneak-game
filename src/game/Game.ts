@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MusicDirector } from './audio';
+import { CharacterAssetLibrary } from './characterAssets';
 import { collidesWithEnemies, collidesWithObstacles, enemyRadius, playerRadius } from './collision';
 import { DebugPanel } from './debug';
 import { advanceSuspicion, emptySuspicion, getDetectionState, isSightBlocked } from './detection';
@@ -40,7 +41,7 @@ import { GameUi } from './ui';
 
 type EnemyRuntime = {
   spec: EnemySpec;
-  mesh: THREE.Mesh;
+  mesh: THREE.Object3D;
   cone: THREE.Mesh;
   light: THREE.SpotLight;
   contactShadow: THREE.Mesh;
@@ -88,6 +89,7 @@ export class Game {
   private renderer: THREE.WebGLRenderer;
   private readonly input = new InputController();
   private readonly music = new MusicDirector();
+  private readonly characterAssets = new CharacterAssetLibrary();
   private readonly objectiveAssets = new ObjectiveAssetLibrary();
   private readonly ui: GameUi;
   private readonly debugPanel: DebugPanel;
@@ -100,10 +102,8 @@ export class Game {
   private loadingProgress: LoadingProgress = { value: 0, label: 'Starting systems' };
   private levelIndex = 0;
   private playerPosition: Vec2 = { ...levels[0].start };
-  private readonly playerMesh = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.22, 0.32, 4, 8),
-    new THREE.MeshStandardMaterial({ color: '#7dfcc6', emissive: '#12382f', roughness: 0.55 }),
-  );
+  private readonly playerMesh = new THREE.Group();
+  private playerVisual: THREE.Object3D | null = null;
   private readonly playerContactShadow = createContactShadow(0.8, 0.52, 0.28);
   private goalMesh = new THREE.Mesh();
   private goalBeaconMesh = new THREE.Mesh();
@@ -126,12 +126,14 @@ export class Game {
   private qualityMemoryReserve: Float32Array | null = null;
   private reservedMemoryMb = 0;
   private memoryPressureWarned = false;
+  private firstLevelBriefingSeen = false;
   private animationId = 0;
   private disposed = false;
 
   constructor(mount: HTMLElement) {
     this.ui = new GameUi(mount, this.settings, {
       onStart: () => void this.start(),
+      onBeginBriefing: () => void this.beginBriefedRun(),
       onResume: () => this.setPhase(this.settingsReturnPhase),
       onSettings: () => this.openSettings(),
       onMenu: () => this.setPhase('menu'),
@@ -171,6 +173,7 @@ export class Game {
     window.removeEventListener('keydown', this.handleHotkeys);
     this.input.dispose();
     this.music.stop();
+    this.characterAssets.dispose();
     this.objectiveAssets.dispose();
     this.renderer.dispose();
     this.qualityMemoryReserve = null;
@@ -178,7 +181,17 @@ export class Game {
   }
 
   private async start(): Promise<void> {
+    if (this.levelIndex === 0 && !this.firstLevelBriefingSeen) {
+      this.setPhase('briefing');
+      return;
+    }
+
     await this.startPreparedRun(this.levelIndex);
+  }
+
+  private async beginBriefedRun(): Promise<void> {
+    this.firstLevelBriefingSeen = true;
+    await this.startPreparedRun(0);
   }
 
   private setPhase(phase: GamePhase): void {
@@ -188,14 +201,14 @@ export class Game {
   }
 
   private openSettings(): void {
-    if (isLoadingPhase(this.phase)) return;
+    if (this.isTransitioning()) return;
 
     this.settingsReturnPhase = this.phase === 'settings' ? this.settingsReturnPhase : this.phase;
     this.setPhase('settings');
   }
 
   private openLevelSelect(): void {
-    if (isLoadingPhase(this.phase)) return;
+    if (this.isTransitioning()) return;
 
     this.levelSelectReturnPhase = this.phase === 'level-select' ? this.levelSelectReturnPhase : this.phase;
     this.setPhase('level-select');
@@ -212,8 +225,13 @@ export class Game {
     this.ui.setSettings(settings);
     saveSettings(settings);
     this.applyRendererQuality();
-    if (qualityChanged && (settings.quality !== 'cinematic' || this.objectiveAssets.hasCinematicAssets())) {
-      this.rebuildObjectiveMeshes();
+    if (qualityChanged) {
+      if (settings.quality !== 'cinematic' || this.objectiveAssets.hasCinematicAssets()) {
+        this.rebuildObjectiveMeshes();
+      }
+      if (settings.quality !== 'cinematic' || this.characterAssets.hasCinematicAssets()) {
+        this.rebuildCharacterMeshes();
+      }
     }
     if (audioChanged) {
       this.music.warmupEffects(settings);
@@ -256,7 +274,7 @@ export class Game {
   }
 
   private async nextLevel(): Promise<void> {
-    if (isLoadingPhase(this.phase)) return;
+    if (this.isTransitioning()) return;
 
     if (this.levelIndex >= levels.length - 1) {
       this.returnToTitle();
@@ -267,7 +285,7 @@ export class Game {
   }
 
   private returnToTitle(): void {
-    if (isLoadingPhase(this.phase)) return;
+    if (this.isTransitioning()) return;
 
     this.loadLevel(0);
     this.setPhase('menu');
@@ -282,7 +300,7 @@ export class Game {
   }
 
   private async startPreparedRun(levelIndex: number): Promise<void> {
-    if (isLoadingPhase(this.phase)) return;
+    if (this.isTransitioning()) return;
 
     await this.loadLevelWithTransition(levelIndex);
     if (this.disposed) return;
@@ -312,6 +330,7 @@ export class Game {
   private levelTransitionTasks(levelIndex: number): readonly LoadingTask[] {
     const targetLevel = levels[levelIndex];
     return [
+      { label: 'Loading character assets', run: () => this.characterAssets.preload(this.settings.quality) },
       { label: 'Loading objective assets', run: () => this.objectiveAssets.preload(this.settings.quality) },
       { label: `Loading ${targetLevel.name}`, run: () => this.loadLevel(levelIndex) },
       { label: 'Loading soundtrack', run: () => this.music.preload(this.settings) },
@@ -405,6 +424,7 @@ export class Game {
     this.goalBeaconMesh.name = 'goal-beacon';
     this.scene.add(this.goalBeaconMesh);
 
+    this.refreshPlayerVisual();
     this.playerMesh.castShadow = true;
     this.playerMesh.name = 'player';
     this.scene.add(this.playerMesh, this.playerContactShadow);
@@ -589,13 +609,7 @@ export class Game {
   }
 
   private createEnemy(spec: EnemySpec): EnemyRuntime {
-    const mesh = new THREE.Mesh(
-      new THREE.ConeGeometry(0.32, 0.8, 5),
-      new THREE.MeshStandardMaterial({ color: '#ff5964', emissive: '#441219', roughness: 0.52 }),
-    );
-    mesh.castShadow = true;
-    mesh.rotation.x = Math.PI;
-    mesh.name = `enemy:${spec.id}`;
+    const mesh = this.characterAssets.createEnemy(spec.id, this.settings.quality);
 
     const cone = new THREE.Mesh(
       createVisionConeGeometry(spec.visionRange, spec.visionAngleDegrees),
@@ -652,8 +666,26 @@ export class Game {
     this.updateObjectiveMeshes();
   }
 
+  private rebuildCharacterMeshes(): void {
+    this.refreshPlayerVisual();
+    this.playerMesh.position.set(this.playerPosition.x, 0.48, this.playerPosition.z);
+
+    for (const enemy of this.enemies) {
+      this.scene.remove(enemy.mesh);
+      enemy.mesh = this.characterAssets.createEnemy(enemy.spec.id, this.settings.quality);
+      this.scene.add(enemy.mesh);
+      this.placeEnemy(enemy);
+    }
+  }
+
+  private refreshPlayerVisual(): void {
+    this.playerMesh.clear();
+    this.playerVisual = this.characterAssets.createHero(this.settings.quality);
+    this.playerMesh.add(this.playerVisual);
+  }
+
   private updatePlayer(delta: number): void {
-    if (!isPlayingPhase(this.phase)) return;
+    if (!this.canUpdateRun()) return;
 
     const movement = this.input.movement();
     const next = add(this.playerPosition, scale(movement, delta * 2.4));
@@ -680,7 +712,7 @@ export class Game {
   }
 
   private updateEnemies(delta: number): void {
-    if (!isPlayingPhase(this.phase)) return;
+    if (!this.canUpdateRun()) return;
 
     for (const enemy of this.enemies) {
       if (enemy.pauseRemaining > 0) {
@@ -710,7 +742,7 @@ export class Game {
   }
 
   private updateDetection(delta: number): void {
-    if (!isPlayingPhase(this.phase)) return;
+    if (!this.canUpdateRun()) return;
 
     let nearest: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
 
@@ -730,13 +762,13 @@ export class Game {
     const previousStatus = this.currentSuspicion.status;
     this.currentSuspicion = advanceSuspicion(this.currentSuspicion, nearest, delta, this.settings.detectionLeniency);
     this.recordAlertTransition(previousStatus, this.currentSuspicion.status);
-    if (this.currentSuspicion.status === 'detected' && isPlayingPhase(this.phase)) {
+    if (this.currentSuspicion.status === 'detected' && this.canUpdateRun()) {
       this.setPhase('caught');
       console.warn(`[detection] player detected by ${this.currentSuspicion.enemyId}`);
     }
 
     const collision = collidesWithEnemies(this.playerPosition, this.enemyBodies(), playerRadius);
-    if (collision && isPlayingPhase(this.phase)) {
+    if (collision && this.canUpdateRun()) {
       this.currentDetection = { spotted: true, enemyId: collision.id, rayBlocked: false, distance: 0 };
       this.recordAlertTransition(this.currentSuspicion.status, 'detected');
       this.currentSuspicion = { value: 1, status: 'detected', enemyId: collision.id };
@@ -830,6 +862,14 @@ export class Game {
     return hits.length > 0;
   }
 
+  private isTransitioning(): boolean {
+    return isLoadingPhase(this.phase);
+  }
+
+  private canUpdateRun(): boolean {
+    return isPlayingPhase(this.phase);
+  }
+
   private placeEnemy(enemy: EnemyRuntime): void {
     enemy.mesh.position.set(enemy.position.x, 0.55, enemy.position.z);
     enemy.mesh.rotation.y = Math.atan2(enemy.facing.x, enemy.facing.z);
@@ -852,6 +892,24 @@ export class Game {
     this.objectives = [];
   }
 
+  private updateCharacterAnimations(now: number): void {
+    if (this.settings.quality !== 'cinematic') return;
+
+    const time = now / 1000;
+    if (this.playerVisual) {
+      const movement = this.canUpdateRun() ? this.input.movement() : { x: 0, z: 0 };
+      const moving = Math.hypot(movement.x, movement.z) > 0.01;
+      this.playerVisual.position.y = moving ? Math.sin(time * 12) * 0.035 : Math.sin(time * 3) * 0.012;
+      this.playerVisual.rotation.z = moving ? Math.sin(time * 12) * 0.045 : 0;
+      this.playerVisual.rotation.x = moving ? Math.cos(time * 9) * 0.028 : 0;
+    }
+
+    this.enemies.forEach((enemy, index) => {
+      enemy.mesh.position.y = 0.55 + Math.sin(time * 5 + index * 0.8) * 0.035;
+      enemy.mesh.rotation.z = Math.sin(time * 3.5 + index) * 0.035;
+    });
+  }
+
   private readonly tick = (): void => {
     const delta = Math.min(this.clock.getDelta(), 0.05);
     const now = performance.now();
@@ -860,11 +918,12 @@ export class Game {
     this.updateEnemies(delta);
     this.updateDetection(delta);
     this.updateDebugRays();
+    this.updateCharacterAnimations(now);
     if (this.objectiveNotice && now > this.objectiveNoticeUntil) {
       this.objectiveNotice = '';
       this.renderUi();
     }
-    if (isPlayingPhase(this.phase)) {
+    if (this.canUpdateRun()) {
       const hudSecond = Math.floor(this.currentRunElapsedMs() / 1000);
       if (hudSecond !== this.lastHudSecond) {
         this.lastHudSecond = hudSecond;
@@ -906,10 +965,17 @@ export class Game {
   };
 
   private readonly handleHotkeys = (event: KeyboardEvent): void => {
-    if (isLoadingPhase(this.phase)) return;
+    if (this.isTransitioning()) return;
 
     if (event.code === 'Escape') {
-      this.setPhase(isPlayingPhase(this.phase) ? 'menu' : 'playing');
+      event.preventDefault();
+      if (this.canUpdateRun()) {
+        this.setPhase('menu');
+      } else if (this.phase === 'settings') {
+        this.setPhase(this.settingsReturnPhase);
+      } else if (this.phase === 'level-select') {
+        this.setPhase(this.levelSelectReturnPhase);
+      }
     }
     if (event.code === 'F1') {
       event.preventDefault();
@@ -1070,7 +1136,7 @@ export class Game {
   }
 
   private recordAlertTransition(previous: SuspicionState['status'], next: SuspicionState['status']): void {
-    if (isPlayingPhase(this.phase) && previous === 'hidden' && next !== 'hidden') {
+    if (this.canUpdateRun() && previous === 'hidden' && next !== 'hidden') {
       this.runAlertCount += 1;
       this.ui.updateRunHud(this.currentRunElapsedMs(), this.runAlertCount);
     }

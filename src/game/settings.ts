@@ -1,7 +1,7 @@
 import type { DetectionLeniency, GameSettings, RenderQuality, SoundtrackId } from './types';
 
 const storageKey = 'shadow-circuit-settings-v2';
-export const memoryCapMb = 192;
+export const memoryCapMb = 224;
 export const targetFps = 60;
 
 export const defaultSettings: GameSettings = {
@@ -64,7 +64,10 @@ function isQuality(value: unknown): value is RenderQuality {
 function isSoundtrackId(value: unknown): value is SoundtrackId {
   return (
     value === 'ghost-steps' ||
-    value === 'cyberpunk-moonlight'
+    value === 'cyberpunk-moonlight' ||
+    value === 'dark-sci-fi-sector' ||
+    value === 'dark-sci-fi-pulse' ||
+    value === 'dark-sci-fi-urgent'
   );
 }
 

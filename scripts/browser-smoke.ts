@@ -38,16 +38,29 @@ try {
   if (initialPhase !== 'menu') {
     throw new Error(`Expected initial menu phase without preloading, got ${initialPhase}`);
   }
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
+  await expectVisible('[data-testid="briefing-panel"]');
+  await page.getByText('Sentries', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
+  await expectVisible('text=Yellow access cards');
+  const briefingPhase = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
+    return debugWindow.__shadowCircuitDebug?.phase();
+  });
+  if (briefingPhase !== 'briefing') {
+    throw new Error(`Expected first-level briefing phase, got ${briefingPhase}`);
+  }
+  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-briefing.png`, fullPage: true });
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Title' }).click();
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-menu.png`, fullPage: true });
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Level Select' }).click();
   await expectVisible('text=Signal Vault');
   const objectiveHintCount = await page.locator('.level-card-objectives').count();
-  if (objectiveHintCount !== 8) {
-    throw new Error(`Expected objective hints on all 8 level cards, found ${objectiveHintCount}`);
+  if (objectiveHintCount !== 12) {
+    throw new Error(`Expected objective hints on all 12 level cards, found ${objectiveHintCount}`);
   }
   const levelCardCount = await page.locator('[data-level-index]').count();
-  if (levelCardCount !== 8) {
-    throw new Error(`Expected 8 level cards, found ${levelCardCount}`);
+  if (levelCardCount !== 12) {
+    throw new Error(`Expected 12 level cards, found ${levelCardCount}`);
   }
   const levelSelectLayout = await page.evaluate(() => {
     const overlay = document.querySelector('[data-testid="overlay"]');
@@ -75,8 +88,8 @@ try {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { levelCount: () => number } };
     return debugWindow.__shadowCircuitDebug?.levelCount();
   });
-  if (debugLevelCount !== 8) {
-    throw new Error(`Expected debug level count 8, found ${debugLevelCount}`);
+  if (debugLevelCount !== 12) {
+    throw new Error(`Expected debug level count 12, found ${debugLevelCount}`);
   }
   await page.locator('[data-level-index="4"]').click();
   await expectLoadingCover('selecting Signal Vault');
@@ -116,6 +129,12 @@ try {
   });
   if (selectedRenderQuality !== 'cinematic') {
     throw new Error(`Expected render quality selection to persist as cinematic, got ${selectedRenderQuality}`);
+  }
+  const soundtrackLabels = await page.locator('[data-setting="soundtrack"] option').allTextContents();
+  for (const track of ['Dark Sci-Fi: Sector', 'Dark Sci-Fi: Pulse', 'Dark Sci-Fi: Urgent']) {
+    if (!soundtrackLabels.includes(track)) {
+      throw new Error(`Missing soundtrack option ${track}: ${JSON.stringify(soundtrackLabels)}`);
+    }
   }
   await page.selectOption('[data-setting="soundtrack"]', 'cyberpunk-moonlight');
   await expectVisible('text=Cyberpunk Moonlight Sonata v2');
@@ -242,6 +261,11 @@ try {
   for (const assetType of ['keycard', 'terminal']) {
     if (!logs.some((line) => line.includes(`[assets] loaded cinematic objective ${assetType}`))) {
       throw new Error(`Expected cinematic objective asset ${assetType} to preload. Logs: ${logs.join('\n')}`);
+    }
+  }
+  for (const assetType of ['hero', 'sentry']) {
+    if (!logs.some((line) => line.includes(`[assets] loaded cinematic character ${assetType}`))) {
+      throw new Error(`Expected cinematic character asset ${assetType} to preload. Logs: ${logs.join('\n')}`);
     }
   }
   const activeTrackId = await page.evaluate(() => {
@@ -549,18 +573,18 @@ async function selectDebugLevel(levelIndex: number): Promise<void> {
 }
 
 async function completeFinalLevel(): Promise<void> {
-  await selectDebugLevel(7);
+  await selectDebugLevel(11);
   await page.evaluate(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
         movePlayerTo: (point: { x: number; z: number }) => void;
       };
     };
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -7.4, z: 6.6 });
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -0.5, z: -6.6 });
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5.5, z: 6.6 });
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 9.6, z: -5.8 });
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 10, z: 7 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -9.6, z: -8.0 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -3.0, z: 8.0 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 7.2, z: -8.0 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 10.2, z: -3.2 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 11, z: 8 });
   });
 }
 

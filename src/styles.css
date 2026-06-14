@@ -333,6 +333,72 @@ button:hover {
   color: #eff8ff;
 }
 
+.briefing-panel {
+  width: min(680px, 100%);
+}
+
+.briefing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.briefing-item {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 4px 10px;
+  align-items: center;
+  border: 1px solid rgba(127, 160, 190, 0.28);
+  border-radius: 7px;
+  padding: 11px;
+  background: rgba(8, 15, 24, 0.78);
+}
+
+.briefing-item strong {
+  color: #eff8ff;
+}
+
+.briefing-item > span:last-child {
+  grid-column: 2;
+  color: #bdcbd6;
+  font-size: 13px;
+  line-height: 1.42;
+}
+
+.briefing-icon {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+}
+
+.briefing-icon .objective-icon {
+  width: 22px;
+  min-height: 22px;
+}
+
+.sentry-icon::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-right: 12px solid transparent;
+  border-left: 12px solid transparent;
+  border-bottom: 28px solid #ff5964;
+  filter: drop-shadow(0 0 8px rgba(255, 89, 100, 0.75));
+}
+
+.exit-icon::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  border: 2px solid #8eff81;
+  border-radius: 50%;
+  background: rgba(142, 255, 129, 0.14);
+  box-shadow: 0 0 14px rgba(142, 255, 129, 0.5);
+}
+
 .run-summary {
   display: grid;
   grid-template-columns: 92px 1fr;
@@ -544,6 +610,10 @@ button:hover {
   .level-select-panel {
     width: 100%;
     margin: 0;
+  }
+
+  .briefing-grid {
+    grid-template-columns: 1fr;
   }
 
   .run-summary {

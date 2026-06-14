@@ -62,7 +62,10 @@ export type DetectionLeniency = 'forgiving' | 'standard' | 'sharp';
 
 export type SoundtrackId =
   | 'ghost-steps'
-  | 'cyberpunk-moonlight';
+  | 'cyberpunk-moonlight'
+  | 'dark-sci-fi-sector'
+  | 'dark-sci-fi-pulse'
+  | 'dark-sci-fi-urgent';
 
 export type GameSettings = {
   quality: RenderQuality;
@@ -73,7 +76,16 @@ export type GameSettings = {
   detectionLeniency: DetectionLeniency;
 };
 
-export type GamePhase = 'loading' | 'menu' | 'playing' | 'paused' | 'caught' | 'complete' | 'settings' | 'level-select';
+export type GamePhase =
+  | 'loading'
+  | 'menu'
+  | 'briefing'
+  | 'playing'
+  | 'paused'
+  | 'caught'
+  | 'complete'
+  | 'settings'
+  | 'level-select';
 
 export type LoadingProgress = Readonly<{
   value: number;

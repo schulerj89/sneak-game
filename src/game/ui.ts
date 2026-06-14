@@ -5,6 +5,7 @@ import type { GamePhase, GameSettings, LevelDefinition, LoadingProgress, Objecti
 
 type UiCallbacks = {
   onStart: () => void;
+  onBeginBriefing: () => void;
   onResume: () => void;
   onSettings: () => void;
   onMenu: () => void;
@@ -153,6 +154,39 @@ export class GameUi {
           </div>
         </div>
       `;
+    } else if (phase === 'briefing') {
+      this.overlay.innerHTML = `
+        <div class="panel briefing-panel" data-testid="briefing-panel">
+          <h1>Mission Briefing</h1>
+          <p>${level.briefing}</p>
+          <div class="briefing-grid">
+            <div class="briefing-item">
+              <span class="briefing-icon objective-keycard" aria-hidden="true"><span class="objective-icon"></span></span>
+              <strong>Keycards</strong>
+              <span>Yellow access cards are required. Collect every required card before heading for the exit.</span>
+            </div>
+            <div class="briefing-item">
+              <span class="briefing-icon objective-terminal" aria-hidden="true"><span class="objective-icon"></span></span>
+              <strong>Terminals</strong>
+              <span>Blue consoles complete the access chain. Each collected terminal removes its HUD chip.</span>
+            </div>
+            <div class="briefing-item">
+              <span class="briefing-icon sentry-icon" aria-hidden="true"></span>
+              <strong>Sentries</strong>
+              <span>Red sentries patrol fixed routes. Amber cones show their vision; cover blocks sight, but touching a sentry ends the run.</span>
+            </div>
+            <div class="briefing-item">
+              <span class="briefing-icon exit-icon" aria-hidden="true"></span>
+              <strong>Exit Pad</strong>
+              <span>The exit turns green after the required collectibles are secured.</span>
+            </div>
+          </div>
+          <div class="panel-actions">
+            <button type="button" data-action="begin-briefing">Start Level</button>
+            <button type="button" data-action="menu">Title</button>
+          </div>
+        </div>
+      `;
     } else if (phase === 'level-select') {
       this.overlay.innerHTML = `
         <div class="panel level-select-panel">
@@ -283,6 +317,7 @@ export class GameUi {
 
   private bindOverlay(): void {
     this.overlay.querySelector('[data-action="start"]')?.addEventListener('click', this.callbacks.onStart);
+    this.overlay.querySelector('[data-action="begin-briefing"]')?.addEventListener('click', this.callbacks.onBeginBriefing);
     this.overlay.querySelector('[data-action="resume"]')?.addEventListener('click', this.callbacks.onResume);
     this.overlay.querySelectorAll('[data-action="level-select"]').forEach((button) =>
       button.addEventListener('click', this.callbacks.onLevelSelect),

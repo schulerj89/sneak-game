@@ -12,6 +12,7 @@
     "test:levels": "tsx scripts/level-walkthrough.ts",
     "test:browser": "tsx scripts/browser-smoke.ts",
     "assets:meshy-objectives": "tsx scripts/generate-meshy-objectives.ts",
+    "assets:meshy-characters": "tsx scripts/generate-meshy-characters.ts",
     "screenshots": "tsx scripts/capture-screenshots.ts",
     "verify": "npm run test:run && npm run test:levels && npm run build"
   },

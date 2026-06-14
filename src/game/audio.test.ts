@@ -15,7 +15,13 @@ describe('soundtrack metadata', () => {
   });
 
   it('only exposes downloaded external tracks', () => {
-    expect(soundtrackOptions.map((track) => track.id)).toEqual(['ghost-steps', 'cyberpunk-moonlight']);
+    expect(soundtrackOptions.map((track) => track.id)).toEqual([
+      'ghost-steps',
+      'cyberpunk-moonlight',
+      'dark-sci-fi-sector',
+      'dark-sci-fi-pulse',
+      'dark-sci-fi-urgent',
+    ]);
   });
 
   it('includes the external cyberpunk selection', () => {
@@ -31,5 +37,15 @@ describe('soundtrack metadata', () => {
     expect(soundtrackOptions[0]?.name).toBe('Ghost Steps');
     expect(soundtrackOptions[0]?.url).toContain('.mp3');
     expect(soundtrackOptions[0]?.source.license).toBe('CC-BY 4.0');
+  });
+
+  it('includes the new CC0 dark sci-fi tracks', () => {
+    const darkSciFiTracks = soundtrackOptions.filter((track) => track.id.startsWith('dark-sci-fi-'));
+    expect(darkSciFiTracks).toHaveLength(3);
+    for (const track of darkSciFiTracks) {
+      expect.soft(track.url).toContain('.mp3');
+      expect.soft(track.source.license).toBe('CC0');
+      expect.soft(track.source.sourceUrl).toContain('opengameart.org/content/dark-sci-fi-audio-pack');
+    }
   });
 });

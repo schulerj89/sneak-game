@@ -32,4 +32,4 @@ Shader and geometry creation moved out of `Game.ts` into `src/game/shaders.ts`. 
 
 ## Performance
 
-Cinematic mode now reserves additional memory, increases shadow-map resolution, and preloads objective GLBs while staying under the `192 MB` advisory cap in browser smoke testing.
+Cinematic mode now reserves additional memory, increases shadow-map resolution, and preloads objective and character GLBs while staying under the `224 MB` advisory cap in browser smoke testing.

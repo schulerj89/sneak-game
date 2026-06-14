@@ -3,8 +3,8 @@ import { levels } from './levels';
 import { pointInRect, segmentIntersectsRect } from './math';
 
 describe('level definitions', () => {
-  it('ships the requested eight levels', () => {
-    expect(levels).toHaveLength(8);
+  it('ships the requested twelve levels', () => {
+    expect(levels).toHaveLength(12);
     expect(levels.map((level) => level.id)).toEqual([
       'dock-blackout',
       'archive-lanes',
@@ -14,6 +14,10 @@ describe('level definitions', () => {
       'transit-switchyard',
       'mirror-lab',
       'command-spire',
+      'service-gallery',
+      'cooling-ducts',
+      'datacore-maze',
+      'blackout-crown',
     ]);
   });
 

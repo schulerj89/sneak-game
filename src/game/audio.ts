@@ -2,6 +2,9 @@ import type { PickupAudioDebug } from './pickupDiagnostics';
 import type { GameSettings } from './types';
 import ghostStepsUrl from '../assets/ghost-steps.mp3?url';
 import cyberpunkMoonlightUrl from '../assets/cyberpunk-moonlight-sonata.mp3?url';
+import darkSciFiSectorUrl from '../assets/dark-sci-fi-sector.mp3?url';
+import darkSciFiPulseUrl from '../assets/dark-sci-fi-pulse.mp3?url';
+import darkSciFiUrgentUrl from '../assets/dark-sci-fi-urgent.mp3?url';
 
 export const soundtrackOptions = [
   {
@@ -27,6 +30,45 @@ export const soundtrackOptions = [
       license: 'CC0',
       sourceUrl: 'https://opengameart.org/content/cyberpunk-moonlight-sonata',
       attribution: '"Cyberpunk Moonlight Sonata v2" by Joth. License: CC0. Attribution appreciated, but not required.',
+    },
+  },
+  {
+    id: 'dark-sci-fi-sector',
+    name: 'Dark Sci-Fi: Sector',
+    url: darkSciFiSectorUrl,
+    tempoBpm: 88,
+    source: {
+      kind: 'external',
+      license: 'CC0',
+      sourceUrl: 'https://opengameart.org/content/dark-sci-fi-audio-pack',
+      attribution:
+        '"Sector" from "Ball Logic: Dark Sci-Fi Audio Pack" by SRG774. License: CC0. Attribution is appreciated, but not required.',
+    },
+  },
+  {
+    id: 'dark-sci-fi-pulse',
+    name: 'Dark Sci-Fi: Pulse',
+    url: darkSciFiPulseUrl,
+    tempoBpm: 104,
+    source: {
+      kind: 'external',
+      license: 'CC0',
+      sourceUrl: 'https://opengameart.org/content/dark-sci-fi-audio-pack',
+      attribution:
+        '"Pulse" from "Ball Logic: Dark Sci-Fi Audio Pack" by SRG774. License: CC0. Attribution is appreciated, but not required.',
+    },
+  },
+  {
+    id: 'dark-sci-fi-urgent',
+    name: 'Dark Sci-Fi: Urgent',
+    url: darkSciFiUrgentUrl,
+    tempoBpm: 124,
+    source: {
+      kind: 'external',
+      license: 'CC0',
+      sourceUrl: 'https://opengameart.org/content/dark-sci-fi-audio-pack',
+      attribution:
+        '"Urgent" from "Ball Logic: Dark Sci-Fi Audio Pack" by SRG774. License: CC0. Attribution is appreciated, but not required.',
     },
   },
 ] as const;

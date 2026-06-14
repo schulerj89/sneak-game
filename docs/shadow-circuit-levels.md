@@ -2,7 +2,7 @@
 
 Each level includes required objective markers before the exit unlocks. Yellow keycards and blue terminals are placed on the validated route, shown as HUD objective chips, and confirmed with a short collection notice when picked up.
 
-Levels live in `src/game/levels.ts` and are plain strict TypeScript data. The current build ships eight levels.
+Levels live in `src/game/levels.ts` and are plain strict TypeScript data. The current build ships twelve levels.
 
 Each level defines:
 
@@ -40,3 +40,7 @@ These routes are not full AI solutions. They are maintenance rails that catch br
 - `Transit Switchyard`
 - `Mirror Lab`
 - `Command Spire`
+- `Service Gallery`
+- `Cooling Ducts`
+- `Datacore Maze`
+- `Blackout Crown`
