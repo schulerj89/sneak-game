@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "assets:audio": "tsx scripts/generate-audio.ts",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",

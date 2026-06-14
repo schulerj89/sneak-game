@@ -1,11 +1,6 @@
 import type { PickupAudioDebug } from './pickupDiagnostics';
 import type { GameSettings } from './types';
 import ghostStepsUrl from '../assets/ghost-steps.mp3?url';
-import nightOpsUrl from '../assets/night-ops.mp3?url';
-import themeUrl from '../assets/shadow-circuit-theme.wav?url';
-import pulseRunnerUrl from '../assets/pulse-runner.wav?url';
-import deepCoverUrl from '../assets/deep-cover.wav?url';
-import metroEscapeUrl from '../assets/metro-escape.mp3?url';
 import cyberpunkMoonlightUrl from '../assets/cyberpunk-moonlight-sonata.mp3?url';
 
 export const soundtrackOptions = [
@@ -20,66 +15,6 @@ export const soundtrackOptions = [
       sourceUrl: 'https://opengameart.org/content/ghost-steps-davidkbd-vs-tsorthan-grove',
       attribution:
         '"Ghost Steps" from "Code Injection Dark Techno Music Pack" by DavidKBD. License: CC BY 4.0. Includes tracks by Tsorthan Grove: "Morbid technology" and "Dark Ambient Drone #2", CC-BY 4.0.',
-    },
-  },
-  {
-    id: 'night-ops',
-    name: 'Night Ops',
-    url: nightOpsUrl,
-    tempoBpm: 132,
-    source: {
-      kind: 'project-generated',
-      license: 'Project-owned generated audio',
-      sourceUrl: 'scripts/generate-audio.ts',
-      attribution: 'Generated for Shadow Circuit by the local audio script as the smoother default stealth mix.',
-    },
-  },
-  {
-    id: 'shadow-circuit',
-    name: 'Shadow Circuit',
-    url: themeUrl,
-    tempoBpm: 127,
-    source: {
-      kind: 'project-generated',
-      license: 'Project-owned generated audio',
-      sourceUrl: 'scripts/generate-audio.ts',
-      attribution: 'Generated for Shadow Circuit by the local audio script.',
-    },
-  },
-  {
-    id: 'pulse-runner',
-    name: 'Pulse Runner',
-    url: pulseRunnerUrl,
-    tempoBpm: 153,
-    source: {
-      kind: 'project-generated',
-      license: 'Project-owned generated audio',
-      sourceUrl: 'scripts/generate-audio.ts',
-      attribution: 'Generated for Shadow Circuit by the local audio script.',
-    },
-  },
-  {
-    id: 'deep-cover',
-    name: 'Deep Cover',
-    url: deepCoverUrl,
-    tempoBpm: 109,
-    source: {
-      kind: 'project-generated',
-      license: 'Project-owned generated audio',
-      sourceUrl: 'scripts/generate-audio.ts',
-      attribution: 'Generated for Shadow Circuit by the local audio script.',
-    },
-  },
-  {
-    id: 'metro-escape',
-    name: 'Metro Escape',
-    url: metroEscapeUrl,
-    tempoBpm: 168,
-    source: {
-      kind: 'project-generated',
-      license: 'Project-owned generated audio',
-      sourceUrl: 'scripts/generate-audio.ts',
-      attribution: 'Generated for Shadow Circuit by the local audio script as the first replacement-track candidate.',
     },
   },
   {

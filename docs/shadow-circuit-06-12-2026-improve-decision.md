@@ -14,7 +14,7 @@ The sub-agent review recommended suspicion buildup, progress/best times, and obj
 
 ## Context
 
-Shadow Circuit currently has five playable levels, visible guard cones, collision detection, a level select screen, settings, screenshots, three generated WAV tracks, shader polish, and a 75 MB browser heap cap. The strongest improvements should add player-visible value without breaking the existing lightweight runtime.
+At this checkpoint, Shadow Circuit had five playable levels, visible guard cones, collision detection, a level select screen, settings, screenshots, generated WAV tracks, shader polish, and a 75 MB browser heap cap. The strongest improvements should add player-visible value without breaking the existing lightweight runtime.
 
 ## Music Research
 

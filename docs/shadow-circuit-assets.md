@@ -1,6 +1,6 @@
 # Shadow Circuit Assets
 
-The first iteration uses procedural and code-native assets so the repo is self-contained:
+The game uses procedural geometry, code-native UI assets, and downloaded external music tracks:
 
 - Player: teal capsule mesh.
 - Guards: red cone meshes.
@@ -8,12 +8,6 @@ The first iteration uses procedural and code-native assets so the repo is self-c
 - Cover: box meshes sized per level.
 - Goal: emissive green cylinder.
 - Logo: inline SVG in `src/game/assets.ts`.
-- Music: generated custom WAV soundtrack files in `src/assets/`.
+- Music: downloaded external MP3 tracks in `src/assets/`.
 
 The logo includes the player character silhouette inside a search cone to keep the brand connected to the game mechanic.
-
-Regenerate the soundtrack with:
-
-```powershell
-npm run assets:audio
-```

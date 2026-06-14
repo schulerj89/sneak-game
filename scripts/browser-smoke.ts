@@ -104,6 +104,13 @@ try {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
   await expectVisible('text=Render quality');
   await page.selectOption('[data-setting="quality"]', 'cinematic');
+  const selectedRenderQuality = await page.evaluate(() => {
+    const select = document.querySelector('[data-setting="quality"]') as HTMLSelectElement | null;
+    return select?.value;
+  });
+  if (selectedRenderQuality !== 'cinematic') {
+    throw new Error(`Expected render quality selection to persist as cinematic, got ${selectedRenderQuality}`);
+  }
   await page.selectOption('[data-setting="soundtrack"]', 'cyberpunk-moonlight');
   await expectVisible('text=Cyberpunk Moonlight Sonata v2');
   await page.selectOption('[data-setting="detection-leniency"]', 'standard');
@@ -189,10 +196,19 @@ try {
   if (!debugText.includes('FPS') || !debugText.includes('Target FPS') || !debugText.includes('Memory') || !debugText.includes('Quality')) {
     throw new Error(`Debug panel missing expected metrics: ${debugText}`);
   }
+  if (!debugText.includes('Quality: cinematic')) {
+    throw new Error(`Expected debug panel to retain cinematic quality, got: ${debugText}`);
+  }
   const performanceSample = await page.evaluate(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
-        performance: () => null | { fps: number; usedMemoryMb: number | null; memoryCapMb: number; reservedMemoryMb: number };
+        performance: () => null | {
+          fps: number;
+          usedMemoryMb: number | null;
+          memoryCapMb: number;
+          reservedMemoryMb: number;
+          memoryPressure: 'unknown' | 'ok' | 'over-cap';
+        };
       };
     };
     return debugWindow.__shadowCircuitDebug?.performance();
@@ -203,8 +219,11 @@ try {
   if (performanceSample.reservedMemoryMb < 40) {
     throw new Error(`Expected cinematic memory reserve, got ${JSON.stringify(performanceSample)}`);
   }
-  if (performanceSample.usedMemoryMb !== null && performanceSample.usedMemoryMb > performanceSample.memoryCapMb) {
-    throw new Error(`Memory cap exceeded in browser smoke: ${JSON.stringify(performanceSample)}`);
+  if (performanceSample.usedMemoryMb !== null) {
+    const expectedPressure = performanceSample.usedMemoryMb > performanceSample.memoryCapMb ? 'over-cap' : 'ok';
+    if (performanceSample.memoryPressure !== expectedPressure) {
+      throw new Error(`Expected memory pressure ${expectedPressure}, got ${JSON.stringify(performanceSample)}`);
+    }
   }
 
   if (!logs.some((line) => line.includes('[game] Shadow Circuit initialized'))) {

@@ -123,6 +123,7 @@ export class Game {
   private pickupFrameProbe: PickupFrameProbe | null = null;
   private qualityMemoryReserve: Float32Array | null = null;
   private reservedMemoryMb = 0;
+  private memoryPressureWarned = false;
   private animationId = 0;
   private disposed = false;
 
@@ -199,12 +200,19 @@ export class Game {
   }
 
   private async applySettings(settings: GameSettings): Promise<void> {
+    const audioChanged =
+      this.settings.musicEnabled !== settings.musicEnabled ||
+      this.settings.masterVolume !== settings.masterVolume ||
+      this.settings.soundtrackId !== settings.soundtrackId;
+
     this.settings = settings;
     this.ui.setSettings(settings);
     saveSettings(settings);
     this.applyRendererQuality();
-    this.music.warmupEffects(settings);
-    await this.music.sync(settings);
+    if (audioChanged) {
+      this.music.warmupEffects(settings);
+      await this.music.sync(settings);
+    }
     this.renderUi();
     console.info(`[settings] quality=${settings.quality} music=${settings.musicEnabled} debug=${settings.debugEnabled}`);
   }
@@ -883,7 +891,7 @@ export class Game {
     this.pickupDebug = pickupProbeResult.debug;
     this.pickupFrameProbe = pickupProbeResult.probe;
     this.latestDebugSample = sample;
-    this.enforceMemoryCap(sample.usedMemoryMb);
+    this.reportMemoryPressure(sample.usedMemoryMb);
     this.debugPanel.render(
       this.settings,
       this.level,
@@ -998,11 +1006,18 @@ export class Game {
     return position.x >= -1 && position.x <= 1 && position.y >= -1 && position.y <= 1 && position.z >= -1 && position.z <= 1;
   }
 
-  private enforceMemoryCap(usedMemoryMb: number | null): void {
-    if (usedMemoryMb === null || usedMemoryMb <= memoryCapMb || this.settings.quality === 'memory') return;
+  private reportMemoryPressure(usedMemoryMb: number | null): void {
+    if (usedMemoryMb === null || usedMemoryMb <= memoryCapMb) {
+      this.memoryPressureWarned = false;
+      return;
+    }
 
-    void this.applySettings({ ...this.settings, quality: 'memory' });
-    console.warn(`[performance] memory cap exceeded ${usedMemoryMb.toFixed(1)} MB > ${memoryCapMb} MB; downgraded to memory quality`);
+    if (this.memoryPressureWarned) return;
+
+    this.memoryPressureWarned = true;
+    console.warn(
+      `[performance] memory cap exceeded ${usedMemoryMb.toFixed(1)} MB > ${memoryCapMb} MB; keeping selected ${this.settings.quality} quality`,
+    );
   }
 
   private renderUi(): void {

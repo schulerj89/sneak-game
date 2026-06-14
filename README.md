@@ -14,8 +14,8 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Objective-gated exits across all levels with keycards, terminals, color-swatch HUD chips, collection notices, and pickup chimes.
 - Dark-room lighting, dim locked exits, unlock-only goal beacons, shadows by quality setting, and simple custom assets.
 - Shader-based floor detail, goal beacons, and contact shadows.
-- CC-BY external default soundtrack plus five generated fallback tracks.
-- Balanced default rendering with a 75 MB browser heap cap and Memory first fallback.
+- Downloaded external soundtrack choices with auditable license metadata.
+- Balanced default rendering with a 128 MB advisory browser heap cap.
 - On-screen debug panel with FPS, memory, draw calls, player position, and detection state.
 - Console logs for game phase, level loads, settings, audio, and detection events.
 - Unit tests, level route validation, and browser smoke coverage.
@@ -49,7 +49,6 @@ npm run test:levels  # Validate authored level routes
 npm run test:browser # Run Playwright smoke test against the local dev server
 npm run screenshots   # Capture README screenshots into docs/images
 npm run verify       # Run unit tests, level validation, and production build
-npm run assets:audio # Regenerate the custom soundtrack; ffmpeg also rebuilds compressed MP3 tracks
 ```
 
 `npm run test:browser` expects the dev server to be running at `http://127.0.0.1:5173/`. It runs headed by default for realistic frame pacing; set `SMOKE_HEADLESS=true` if a headless smoke pass is needed.
@@ -58,8 +57,8 @@ npm run assets:audio # Regenerate the custom soundtrack; ffmpeg also rebuilds co
 
 ```text
 src/game/                 Core game systems
-src/assets/               Generated runtime assets
-scripts/                  Validation, browser smoke, and asset generation scripts
+src/assets/               Downloaded runtime assets
+scripts/                  Validation, browser smoke, and screenshot scripts
 docs/shadow-circuit-*.md  Focused design and system notes
 ```
 

@@ -7,17 +7,15 @@ describe('soundtrack metadata', () => {
       expect.soft(track.id).toBeTruthy();
       expect.soft(track.name).toBeTruthy();
       expect.soft(track.tempoBpm).toBeGreaterThan(0);
+      expect.soft(track.source.kind).toBe('external');
       expect.soft(track.source.license).toBeTruthy();
       expect.soft(track.source.sourceUrl).toBeTruthy();
       expect.soft(track.source.attribution).toBeTruthy();
     }
   });
 
-  it('includes a compressed replacement candidate', () => {
-    const replacement = soundtrackOptions.find((track) => track.id === 'metro-escape');
-    expect(replacement?.name).toBe('Metro Escape');
-    expect(replacement?.url).toContain('.mp3');
-    expect(replacement?.tempoBpm).toBeGreaterThan(160);
+  it('only exposes downloaded external tracks', () => {
+    expect(soundtrackOptions.map((track) => track.id)).toEqual(['ghost-steps', 'cyberpunk-moonlight']);
   });
 
   it('includes the external cyberpunk selection', () => {
