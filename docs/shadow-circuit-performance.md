@@ -1,12 +1,12 @@
 # Shadow Circuit Performance
 
-The project targets crisp rendering while staying under a `128 MB` advisory browser heap budget when browser memory reporting is available. Settings persist in local storage and start in `Balanced` mode.
+The project targets crisp rendering while staying under a `192 MB` advisory browser heap budget when browser memory reporting is available. Settings persist in local storage and start in `Balanced` mode.
 
 ## Quality Profiles
 
 - `Memory first`: pixel ratio is capped at `1`, antialiasing is disabled, shadows are disabled.
 - `Balanced`: pixel ratio is capped at `1.35`, antialiasing and shadows are enabled.
-- `Cinematic`: pixel ratio is capped at `1.9`, antialiasing and shadows are enabled with larger shadow maps and a `42 MB` quality reserve.
+- `Cinematic`: pixel ratio is capped at `1.9`, antialiasing and shadows are enabled with larger shadow maps, a `64 MB` quality reserve, and preloaded GLB objective props.
 
 ## Monitoring
 

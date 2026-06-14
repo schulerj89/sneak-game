@@ -222,7 +222,7 @@ try {
   if (!performanceSample || performanceSample.fps < 55) {
     throw new Error(`Expected near-60 FPS sample, got ${JSON.stringify(performanceSample)}`);
   }
-  if (performanceSample.reservedMemoryMb < 40) {
+  if (performanceSample.reservedMemoryMb < 60) {
     throw new Error(`Expected cinematic memory reserve, got ${JSON.stringify(performanceSample)}`);
   }
   if (performanceSample.usedMemoryMb !== null) {
@@ -238,6 +238,11 @@ try {
 
   if (!logs.some((line) => line.includes('[audio] soundtrack playing Cyberpunk Moonlight'))) {
     throw new Error(`Expected selected soundtrack console log. Logs: ${logs.join('\n')}`);
+  }
+  for (const assetType of ['keycard', 'terminal']) {
+    if (!logs.some((line) => line.includes(`[assets] loaded cinematic objective ${assetType}`))) {
+      throw new Error(`Expected cinematic objective asset ${assetType} to preload. Logs: ${logs.join('\n')}`);
+    }
   }
   const activeTrackId = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };

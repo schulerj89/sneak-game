@@ -11,11 +11,11 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Guard patrols with visible cones and raycast line-of-sight detection.
 - Suspicion meter with alert recovery and detection leniency settings.
 - Guard collision: touching a guard now triggers detection.
-- Objective-gated exits across all levels with keycards, terminals, color-swatch HUD chips, collection notices, and pickup chimes.
+- Objective-gated exits across all levels with keycards, terminals, color-swatch HUD chips, collection notices, pickup chimes, and cinematic 3D objective props.
 - Dark-room lighting, dim locked exits, unlock-only goal beacons, shadows by quality setting, and simple custom assets.
 - Shader-based floor detail, goal beacons, and contact shadows.
 - Downloaded external soundtrack choices with auditable license metadata.
-- Balanced default rendering with a 128 MB advisory browser heap cap.
+- Balanced default rendering with a 192 MB advisory browser heap cap.
 - On-screen debug panel with FPS, memory, draw calls, player position, and detection state.
 - Console logs for game phase, level loads, settings, audio, and detection events.
 - Unit tests, level route validation, and browser smoke coverage.
@@ -47,6 +47,7 @@ npm run build        # Type-check and build production assets
 npm run test:run     # Run Vitest unit tests
 npm run test:levels  # Validate authored level routes
 npm run test:browser # Run Playwright smoke test against the local dev server
+npm run assets:meshy-objectives # Generate Meshy objective GLBs when MESHY_API_KEY is set
 npm run screenshots   # Capture README screenshots into docs/images
 npm run verify       # Run unit tests, level validation, and production build
 ```
@@ -57,8 +58,8 @@ npm run verify       # Run unit tests, level validation, and production build
 
 ```text
 src/game/                 Core game systems
-src/assets/               Downloaded runtime assets
-scripts/                  Validation, browser smoke, and screenshot scripts
+src/assets/               Downloaded and generated runtime assets
+scripts/                  Validation, browser smoke, Meshy asset, and screenshot scripts
 docs/shadow-circuit-*.md  Focused design and system notes
 ```
 
@@ -108,6 +109,7 @@ Then commit and push the checkpoint.
 - `docs/shadow-circuit-assets.md`
 - `docs/shadow-circuit-level-select.md`
 - `docs/shadow-circuit-soundtrack.md`
+- `docs/shadow-circuit-meshy.md`
 - `docs/shadow-circuit-memory-budget.md`
 - `docs/shadow-circuit-shaders.md`
 - `docs/shadow-circuit-06-12-2026-improve-decision.md`

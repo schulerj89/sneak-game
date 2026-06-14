@@ -1,0 +1,3 @@
+[mcp_servers.meshy]
+command = "npx"
+args = [ "-y", "@meshy-ai/meshy-mcp-server" ]

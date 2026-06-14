@@ -1,7 +1,7 @@
 import type { DetectionLeniency, GameSettings, RenderQuality, SoundtrackId } from './types';
 
 const storageKey = 'shadow-circuit-settings-v2';
-export const memoryCapMb = 128;
+export const memoryCapMb = 192;
 export const targetFps = 60;
 
 export const defaultSettings: GameSettings = {
@@ -47,7 +47,7 @@ export function qualityProfile(quality: RenderQuality): {
   memoryReserveMb: number;
 } {
   if (quality === 'cinematic') {
-    return { pixelRatio: Math.min(window.devicePixelRatio, 1.9), antialias: true, shadows: true, debugRayCount: 18, shadowMapSize: 2048, memoryReserveMb: 42 };
+    return { pixelRatio: Math.min(window.devicePixelRatio, 1.9), antialias: true, shadows: true, debugRayCount: 18, shadowMapSize: 2048, memoryReserveMb: 64 };
   }
 
   if (quality === 'balanced') {

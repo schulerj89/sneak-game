@@ -8,6 +8,7 @@ import { levels } from './levels';
 import { runLoadingSequence, type LoadingTask } from './loading';
 import { add, clampToRoom, distance, normalize, scale, subtract } from './math';
 import { collectNearbyObjectives, getObjectiveProgress } from './objectives';
+import { ObjectiveAssetLibrary } from './objectiveAssets';
 import { isLoadingPhase, isPlayingPhase } from './phase';
 import {
   beginPickupFrameProbe,
@@ -51,7 +52,7 @@ type EnemyRuntime = {
 
 type ObjectiveRuntime = {
   spec: ObjectiveDefinition;
-  mesh: THREE.Mesh;
+  mesh: THREE.Object3D;
   glow: THREE.PointLight;
 };
 
@@ -87,6 +88,7 @@ export class Game {
   private renderer: THREE.WebGLRenderer;
   private readonly input = new InputController();
   private readonly music = new MusicDirector();
+  private readonly objectiveAssets = new ObjectiveAssetLibrary();
   private readonly ui: GameUi;
   private readonly debugPanel: DebugPanel;
   private readonly clock = new THREE.Clock();
@@ -169,6 +171,7 @@ export class Game {
     window.removeEventListener('keydown', this.handleHotkeys);
     this.input.dispose();
     this.music.stop();
+    this.objectiveAssets.dispose();
     this.renderer.dispose();
     this.qualityMemoryReserve = null;
     delete window.__shadowCircuitDebug;
@@ -203,11 +206,15 @@ export class Game {
       this.settings.musicEnabled !== settings.musicEnabled ||
       this.settings.masterVolume !== settings.masterVolume ||
       this.settings.soundtrackId !== settings.soundtrackId;
+    const qualityChanged = this.settings.quality !== settings.quality;
 
     this.settings = settings;
     this.ui.setSettings(settings);
     saveSettings(settings);
     this.applyRendererQuality();
+    if (qualityChanged && (settings.quality !== 'cinematic' || this.objectiveAssets.hasCinematicAssets())) {
+      this.rebuildObjectiveMeshes();
+    }
     if (audioChanged) {
       this.music.warmupEffects(settings);
       await this.music.sync(settings);
@@ -305,6 +312,7 @@ export class Game {
   private levelTransitionTasks(levelIndex: number): readonly LoadingTask[] {
     const targetLevel = levels[levelIndex];
     return [
+      { label: 'Loading objective assets', run: () => this.objectiveAssets.preload(this.settings.quality) },
       { label: `Loading ${targetLevel.name}`, run: () => this.loadLevel(levelIndex) },
       { label: 'Loading soundtrack', run: () => this.music.preload(this.settings) },
       { label: 'Compiling level materials', run: () => this.warmupRenderStates() },
@@ -623,25 +631,25 @@ export class Game {
 
   private createObjective(spec: ObjectiveDefinition): ObjectiveRuntime {
     const isKeycard = spec.type === 'keycard';
-    const mesh = new THREE.Mesh(
-      isKeycard ? new THREE.BoxGeometry(0.52, 0.08, 0.32) : new THREE.BoxGeometry(0.66, 0.24, 0.46),
-      new THREE.MeshStandardMaterial({
-        color: isKeycard ? '#ffd45a' : '#5ad7ff',
-        emissive: isKeycard ? '#6d4c08' : '#063f58',
-        emissiveIntensity: 0.9,
-        roughness: 0.38,
-        metalness: 0.18,
-      }),
-    );
-    mesh.position.set(spec.position.x, isKeycard ? 0.16 : 0.24, spec.position.z);
-    mesh.rotation.y = isKeycard ? -0.35 : 0.45;
-    mesh.name = `objective:${spec.id}`;
+    const mesh = this.objectiveAssets.create(spec, this.settings.quality);
 
     const glow = new THREE.PointLight(isKeycard ? '#ffd45a' : '#5ad7ff', 18, 2.1);
     glow.position.set(spec.position.x, 0.68, spec.position.z);
     glow.name = `objective-glow:${spec.id}`;
 
     return { spec, mesh, glow };
+  }
+
+  private rebuildObjectiveMeshes(): void {
+    const specs = this.level.objectives ?? [];
+    this.objectives.forEach((objective) => {
+      this.scene.remove(objective.mesh, objective.glow);
+    });
+    this.objectives = specs.map((objective) => this.createObjective(objective));
+    this.objectives.forEach((objective) => {
+      this.scene.add(objective.mesh, objective.glow);
+    });
+    this.updateObjectiveMeshes();
   }
 
   private updatePlayer(delta: number): void {
