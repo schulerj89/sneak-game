@@ -21,6 +21,7 @@ import type {
   ObjectiveProgress,
   LightSpec,
   LoadingProgress,
+  PickupDebugSample,
   RunSummary,
   SuspicionState,
   Vec2,
@@ -53,6 +54,7 @@ declare global {
       selectLevel: (levelIndex: number) => void;
       levelCount: () => number;
       loadingProgress: () => LoadingProgress;
+      pickupDebug: () => PickupDebugSample;
       performance: () => DebugSample | null;
       levelId: () => string;
       goalVisible: () => boolean;
@@ -108,6 +110,8 @@ export class Game {
   private runSummary: RunSummary | null = null;
   private lastHudSecond = -1;
   private latestDebugSample: DebugSample | null = null;
+  private pickupDebug: PickupDebugSample = emptyPickupDebugSample();
+  private pickupFrameProbe: { collectedAtMs: number; maxFrameMs: number; framesObserved: number } | null = null;
   private qualityMemoryReserve: Float32Array | null = null;
   private reservedMemoryMb = 0;
   private animationId = 0;
@@ -446,18 +450,28 @@ export class Game {
       const task = tasks[index];
       this.updateLoadingProgress(index / tasks.length, task.label);
       await nextFrame();
+      const taskStartedAt = performance.now();
       await task.run();
+      const taskRemainingMs = 260 - (performance.now() - taskStartedAt);
+      if (taskRemainingMs > 0) {
+        await delay(taskRemainingMs);
+      }
+      if (this.disposed) return;
+
       this.updateLoadingProgress((index + 1) / tasks.length, task.label);
       await nextFrame();
     }
 
-    const remainingMs = 900 - (performance.now() - startedAt);
+    const remainingMs = 1800 - (performance.now() - startedAt);
     if (remainingMs > 0) {
       await delay(remainingMs);
     }
     if (this.disposed) return;
 
     this.updateLoadingProgress(1, 'Ready');
+    await delay(260);
+    if (this.disposed) return;
+
     this.setPhase('menu');
     console.info('[loading] complete');
   }
@@ -738,21 +752,47 @@ export class Game {
   }
 
   private collectObjectives(): void {
+    const startedAt = performance.now();
+    const collectStartedAt = performance.now();
     const next = collectNearbyObjectives(this.level, this.playerPosition, this.collectedObjectiveIds);
+    const collectMs = performance.now() - collectStartedAt;
     if (next.size === this.collectedObjectiveIds.size) return;
 
     const collectedNow = [...next].filter((id) => !this.collectedObjectiveIds.has(id));
     this.collectedObjectiveIds = next;
+    const meshStartedAt = performance.now();
     this.updateObjectiveMeshes();
+    const meshMs = performance.now() - meshStartedAt;
     const objective = (this.level.objectives ?? []).find((candidate) => collectedNow.includes(candidate.id));
     const progress = this.objectiveProgress();
     this.objectiveNotice = progress.exitUnlocked
       ? `Collected ${objective?.label ?? 'objective'} - exit unlocked`
       : `Collected ${objective?.label ?? 'objective'}`;
     this.objectiveNoticeUntil = performance.now() + 2600;
-    this.music.playPickup(this.settings);
+    const audioStartedAt = performance.now();
+    const audioDebug = this.music.playPickup(this.settings);
+    const audioMs = performance.now() - audioStartedAt;
+    const uiStartedAt = performance.now();
     this.renderUi();
-    console.info(`[objective] collected=${[...this.collectedObjectiveIds].join(',')}`);
+    const uiMs = performance.now() - uiStartedAt;
+    const totalMs = performance.now() - startedAt;
+    this.pickupDebug = {
+      id: objective?.id ?? collectedNow[0] ?? null,
+      label: objective?.label ?? 'objective',
+      collectedAtMs: startedAt,
+      totalMs,
+      collectMs,
+      meshMs,
+      audioMs,
+      uiMs,
+      frameSpikeMs: 0,
+      framesObserved: 0,
+      audio: audioDebug,
+    };
+    this.pickupFrameProbe = { collectedAtMs: startedAt, maxFrameMs: 0, framesObserved: 0 };
+    console.info(
+      `[objective] collected=${[...this.collectedObjectiveIds].join(',')} pickupMs=${totalMs.toFixed(1)} audioMs=${audioMs.toFixed(1)} uiMs=${uiMs.toFixed(1)}`,
+    );
   }
 
   private updateObjectiveMeshes(): void {
@@ -843,9 +883,19 @@ export class Game {
     this.renderer.render(this.scene, this.camera);
 
     const sample = this.debugPanel.sample(now, this.renderer.info.render.calls, this.renderer.info.render.triangles, this.reservedMemoryMb);
+    this.updatePickupFrameProbe(sample.frameMs, now);
     this.latestDebugSample = sample;
     this.enforceMemoryCap(sample.usedMemoryMb);
-    this.debugPanel.render(this.settings, this.level, this.playerPosition, this.currentDetection, this.currentSuspicion, this.objectiveProgress(), sample);
+    this.debugPanel.render(
+      this.settings,
+      this.level,
+      this.playerPosition,
+      this.currentDetection,
+      this.currentSuspicion,
+      this.objectiveProgress(),
+      sample,
+      this.pickupDebug,
+    );
     this.renderer.info.reset();
 
     this.animationId = requestAnimationFrame(this.tick);
@@ -882,6 +932,7 @@ export class Game {
       selectLevel: (levelIndex: number) => this.selectLevel(levelIndex),
       levelCount: () => levels.length,
       loadingProgress: () => this.loadingProgress,
+      pickupDebug: () => this.pickupDebug,
       performance: () => this.latestDebugSample,
       levelId: () => this.level.id,
       goalVisible: () => this.isGoalVisibleInCamera(),
@@ -947,6 +998,24 @@ export class Game {
     object.updateMatrixWorld();
     const position = object.getWorldPosition(new THREE.Vector3()).project(this.camera);
     return position.x >= -1 && position.x <= 1 && position.y >= -1 && position.y <= 1 && position.z >= -1 && position.z <= 1;
+  }
+
+  private updatePickupFrameProbe(frameMs: number, now: number): void {
+    if (!this.pickupFrameProbe) return;
+    if (now - this.pickupFrameProbe.collectedAtMs < 8) return;
+
+    const framesObserved = this.pickupFrameProbe.framesObserved + 1;
+    const maxFrameMs = Math.max(this.pickupFrameProbe.maxFrameMs, frameMs);
+    this.pickupFrameProbe = { ...this.pickupFrameProbe, framesObserved, maxFrameMs };
+    this.pickupDebug = {
+      ...this.pickupDebug,
+      frameSpikeMs: maxFrameMs,
+      framesObserved,
+    };
+
+    if (framesObserved >= 12 || now - this.pickupFrameProbe.collectedAtMs > 500) {
+      this.pickupFrameProbe = null;
+    }
   }
 
   private enforceMemoryCap(usedMemoryMb: number | null): void {
@@ -1033,6 +1102,31 @@ function createContactShadow(width: number, depth: number, opacity: number): THR
   shadow.scale.set(width, depth, 1);
   shadow.name = 'contact-shadow';
   return shadow;
+}
+
+function emptyPickupDebugSample(): PickupDebugSample {
+  return {
+    id: null,
+    label: 'none',
+    collectedAtMs: null,
+    totalMs: 0,
+    collectMs: 0,
+    meshMs: 0,
+    audioMs: 0,
+    uiMs: 0,
+    frameSpikeMs: 0,
+    framesObserved: 0,
+    audio: {
+      status: 'idle',
+      setupMs: 0,
+      contextState: 'none',
+      samplesReady: false,
+      bufferReady: false,
+      bufferCreated: false,
+      effectsPrimed: false,
+      gain: 0,
+    },
+  };
 }
 
 function nextFrame(): Promise<void> {

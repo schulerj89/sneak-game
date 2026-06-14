@@ -1,4 +1,4 @@
-import type { GameSettings } from './types';
+import type { GameSettings, PickupAudioDebug } from './types';
 import ghostStepsUrl from '../assets/ghost-steps.mp3?url';
 import nightOpsUrl from '../assets/night-ops.mp3?url';
 import themeUrl from '../assets/shadow-circuit-theme.wav?url';
@@ -151,19 +151,35 @@ export class MusicDirector {
     });
   }
 
-  playPickup(settings: GameSettings): void {
-    if (!settings.musicEnabled || settings.masterVolume <= 0) return;
+  playPickup(settings: GameSettings): PickupAudioDebug {
+    const startedAt = performance.now();
+    if (!settings.musicEnabled || settings.masterVolume <= 0) {
+      return {
+        status: 'muted',
+        setupMs: performance.now() - startedAt,
+        contextState: this.effectContext?.state ?? 'none',
+        samplesReady: this.pickupSamples !== null,
+        bufferReady: this.pickupBuffer !== null,
+        bufferCreated: false,
+        effectsPrimed: this.effectsPrimed,
+        gain: 0,
+      };
+    }
 
     const context = this.effectContext ?? new AudioContext();
     this.effectContext = context;
-    void context.resume();
+    void context.resume().catch((error: unknown) => {
+      console.warn(`[audio] pickup resume deferred ${error instanceof Error ? error.message : String(error)}`);
+    });
+    const bufferCreated = this.pickupBuffer === null;
     const buffer = this.pickupBuffer ?? this.createPickupBuffer(context);
     this.pickupBuffer = buffer;
 
     const now = context.currentTime;
+    const gainLevel = Math.max(0.0001, Math.min(0.55, settings.masterVolume * 0.9));
     const gain = context.createGain();
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, settings.masterVolume * 0.18), now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(gainLevel, now + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
     gain.connect(context.destination);
 
@@ -176,6 +192,16 @@ export class MusicDirector {
       gain.disconnect();
     }, { once: true });
     console.info('[audio] pickup chime');
+    return {
+      status: 'played',
+      setupMs: performance.now() - startedAt,
+      contextState: context.state,
+      samplesReady: this.pickupSamples !== null,
+      bufferReady: this.pickupBuffer !== null,
+      bufferCreated,
+      effectsPrimed: this.effectsPrimed,
+      gain: gainLevel,
+    };
   }
 
   currentTrack(): GameSettings['soundtrackId'] | null {

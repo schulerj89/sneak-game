@@ -117,6 +117,8 @@ export class GameUi {
     loadingProgress: LoadingProgress,
   ): void {
     this.overlay.hidden = phase === 'playing';
+    if (phase === 'playing') return;
+
     const isFinalLevel = levelIndex === levels.length - 1;
 
     if (phase === 'loading') {

@@ -329,6 +329,44 @@ try {
     throw new Error(`Expected warmed first pickup below 80ms, got ${firstPickupLatencyMs.toFixed(1)}ms`);
   }
   await expectVisible('text=Collected Gate Keycard');
+  await page.waitForFunction(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        pickupDebug: () => { id: string | null; framesObserved: number };
+      };
+    };
+    const pickup = debugWindow.__shadowCircuitDebug?.pickupDebug();
+    return pickup?.id === 'dock-keycard' && pickup.framesObserved > 0;
+  });
+  const firstPickupDebug = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        pickupDebug: () => {
+          id: string | null;
+          totalMs: number;
+          audioMs: number;
+          uiMs: number;
+          frameSpikeMs: number;
+          framesObserved: number;
+          audio: { status: string; bufferReady: boolean; gain: number };
+        };
+      };
+    };
+    return debugWindow.__shadowCircuitDebug?.pickupDebug();
+  });
+  if (
+    firstPickupDebug?.id !== 'dock-keycard' ||
+    firstPickupDebug.totalMs > 80 ||
+    firstPickupDebug.audio.status !== 'played' ||
+    !firstPickupDebug.audio.bufferReady ||
+    firstPickupDebug.audio.gain < 0.3
+  ) {
+    throw new Error(`Unexpected pickup debug sample: ${JSON.stringify(firstPickupDebug)}`);
+  }
+  const pickupDebugText = await page.locator('[data-testid="debug-panel"]').innerText();
+  if (!pickupDebugText.includes('Pickup cost') || !pickupDebugText.includes('Pickup audio')) {
+    throw new Error(`Debug panel missing pickup diagnostics: ${pickupDebugText}`);
+  }
   await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { movePlayerTo: (point: { x: number; z: number }) => void } };
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 2.4, z: -3.4 });

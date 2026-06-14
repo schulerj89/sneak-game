@@ -1,4 +1,13 @@
-import type { DebugSample, DetectionState, GameSettings, LevelDefinition, ObjectiveProgress, SuspicionState, Vec2 } from './types';
+import type {
+  DebugSample,
+  DetectionState,
+  GameSettings,
+  LevelDefinition,
+  ObjectiveProgress,
+  PickupDebugSample,
+  SuspicionState,
+  Vec2,
+} from './types';
 import { memoryCapMb, targetFps } from './settings';
 
 type MemoryPerformance = Performance & {
@@ -40,6 +49,7 @@ export class DebugPanel {
     suspicion: SuspicionState,
     objectives: ObjectiveProgress,
     sample: DebugSample,
+    pickup: PickupDebugSample,
   ): void {
     this.element.hidden = !settings.debugEnabled;
     if (!settings.debugEnabled) return;
@@ -60,6 +70,10 @@ export class DebugPanel {
       <div>Draws: ${sample.drawCalls} Triangles: ${sample.triangles}</div>
       <div>Quality: ${settings.quality}</div>
       <div>Track: ${settings.soundtrackId}</div>
+      <div>Pickup: ${pickup.id ? `${pickup.label} (${pickup.id})` : 'none'}</div>
+      <div>Pickup cost: ${pickup.totalMs.toFixed(1)}ms total | audio ${pickup.audioMs.toFixed(1)}ms | UI ${pickup.uiMs.toFixed(1)}ms</div>
+      <div>Pickup detail: collect ${pickup.collectMs.toFixed(1)}ms | mesh ${pickup.meshMs.toFixed(1)}ms | frame ${pickup.frameSpikeMs.toFixed(1)}ms/${pickup.framesObserved}f</div>
+      <div>Pickup audio: ${pickup.audio.status} ${pickup.audio.contextState} | buffer ${pickup.audio.bufferReady ? 'ready' : 'missing'} | new ${pickup.audio.bufferCreated ? 'yes' : 'no'} | gain ${pickup.audio.gain.toFixed(2)}</div>
     `;
   }
 }
