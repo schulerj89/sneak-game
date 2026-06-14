@@ -92,7 +92,7 @@ export class Game {
   private readonly clock = new THREE.Clock();
 
   private settings: GameSettings = loadSettings();
-  private phase: GamePhase = 'loading';
+  private phase: GamePhase = 'menu';
   private settingsReturnPhase: GamePhase = 'menu';
   private levelSelectReturnPhase: GamePhase = 'menu';
   private loadingProgress: LoadingProgress = { value: 0, label: 'Starting systems' };
@@ -154,7 +154,6 @@ export class Game {
     window.addEventListener('resize', this.resize);
     window.addEventListener('keydown', this.handleHotkeys);
     this.installDebugHooks();
-    void this.preloadBeforeTitle();
     console.info('[game] Shadow Circuit initialized');
   }
 
@@ -461,25 +460,6 @@ export class Game {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     return renderer;
-  }
-
-  private async preloadBeforeTitle(): Promise<void> {
-    const tasks: readonly LoadingTask[] = [
-      { label: 'Loading soundtrack', run: () => this.music.preload(this.settings) },
-      { label: 'Preparing pickup audio', run: () => this.music.preloadPickupCue() },
-      { label: 'Compiling level materials', run: () => this.warmupRenderStates() },
-      { label: 'Priming objective states', run: () => this.warmupObjectiveStates() },
-    ];
-
-    await runLoadingSequence({
-      tasks,
-      onProgress: (progress) => this.updateLoadingProgress(progress),
-      shouldCancel: () => this.disposed,
-    });
-    if (this.disposed) return;
-
-    this.setPhase('menu');
-    console.info('[loading] complete');
   }
 
   private updateLoadingProgress(progress: LoadingProgress): void {

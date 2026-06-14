@@ -25,13 +25,19 @@ try {
   await mkdir(screenshotDir, { recursive: true });
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
-  await expectVisible('[data-testid="loading-panel"]');
-  const loadingBarCount = await page.locator('[data-testid="loading-bar"]').count();
-  if (loadingBarCount !== 1) {
-    throw new Error(`Expected one loading bar, found ${loadingBarCount}`);
-  }
   await expectVisible('[data-testid="overlay"]');
   await expectVisible('text=Collect yellow keycards and blue terminals');
+  const initialLoadingCount = await page.locator('[data-testid="loading-panel"]').count();
+  if (initialLoadingCount !== 0) {
+    throw new Error(`Expected title screen without preload, found ${initialLoadingCount} loading panels`);
+  }
+  const initialPhase = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
+    return debugWindow.__shadowCircuitDebug?.phase();
+  });
+  if (initialPhase !== 'menu') {
+    throw new Error(`Expected initial menu phase without preloading, got ${initialPhase}`);
+  }
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-menu.png`, fullPage: true });
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Level Select' }).click();
   await expectVisible('text=Signal Vault');
@@ -73,7 +79,7 @@ try {
     throw new Error(`Expected debug level count 8, found ${debugLevelCount}`);
   }
   await page.locator('[data-level-index="4"]').click();
-  await expectVisible('[data-testid="loading-panel"]');
+  await expectLoadingCover('selecting Signal Vault');
   await assertPlayingPhase('after selecting Signal Vault from level select');
   const selectedLevelTrackId = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
@@ -116,7 +122,7 @@ try {
   await page.selectOption('[data-setting="detection-leniency"]', 'standard');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
-  await expectVisible('[data-testid="loading-panel"]');
+  await expectLoadingCover('starting run');
   await assertPlayingPhase('after start run');
   const beforeKeyboardMove = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { playerPosition: () => { x: number; z: number } } };
@@ -410,7 +416,7 @@ try {
     throw new Error(`Expected objective-gated completion, got ${JSON.stringify(objectiveCompleteState)}`);
   }
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Next Level' }).click();
-  await expectVisible('[data-testid="loading-panel"]');
+  await expectLoadingCover('next level');
   await assertPlayingPhase('after next level loading');
   const nextLevelState = await page.evaluate(() => {
     const debugWindow = window as Window & {
@@ -457,7 +463,7 @@ try {
 
   await completeFinalLevel();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Over' }).click();
-  await expectVisible('[data-testid="loading-panel"]');
+  await expectLoadingCover('start over');
   await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 10000 });
   const startOverState = await page.evaluate(() => {
     const debugWindow = window as Window & {
@@ -481,7 +487,7 @@ try {
   });
   await expectVisible('text=Retry Level');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Retry Level' }).click();
-  await expectVisible('[data-testid="loading-panel"]');
+  await expectLoadingCover('retry level');
   await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 10000 });
   const phase = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
@@ -507,6 +513,22 @@ try {
 
 async function expectVisible(selector: string): Promise<void> {
   await page.locator(selector).waitFor({ state: 'visible', timeout: 8000 });
+}
+
+async function expectLoadingCover(context: string): Promise<void> {
+  await expectVisible('[data-testid="loading-panel"]');
+  const loadingState = await page.evaluate(() => {
+    const overlay = document.querySelector('[data-testid="overlay"]');
+    const style = overlay ? window.getComputedStyle(overlay) : null;
+    return {
+      hasLoadingClass: overlay?.classList.contains('is-loading') ?? false,
+      backgroundColor: style?.backgroundColor ?? null,
+      hidden: overlay?.hasAttribute('hidden') ?? null,
+    };
+  });
+  if (!loadingState.hasLoadingClass || loadingState.hidden || loadingState.backgroundColor !== 'rgb(0, 0, 0)') {
+    throw new Error(`Expected black loading cover while ${context}, got ${JSON.stringify(loadingState)}`);
+  }
 }
 
 async function selectDebugLevel(levelIndex: number): Promise<void> {

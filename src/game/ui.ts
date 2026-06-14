@@ -117,6 +117,7 @@ export class GameUi {
     runSummary: RunSummary | null,
     loadingProgress: LoadingProgress,
   ): void {
+    this.overlay.classList.toggle('is-loading', isLoadingPhase(phase));
     this.overlay.hidden = isPlayingPhase(phase);
     if (isPlayingPhase(phase)) return;
 

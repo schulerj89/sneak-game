@@ -253,6 +253,10 @@ button:hover {
   pointer-events: auto;
 }
 
+.overlay.is-loading {
+  background: #000;
+}
+
 .overlay[hidden],
 .debug[hidden] {
   display: none;
