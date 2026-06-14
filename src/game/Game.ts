@@ -20,6 +20,7 @@ import type {
   ObjectiveDefinition,
   ObjectiveProgress,
   LightSpec,
+  LoadingProgress,
   RunSummary,
   SuspicionState,
   Vec2,
@@ -51,6 +52,7 @@ declare global {
       phase: () => GamePhase;
       selectLevel: (levelIndex: number) => void;
       levelCount: () => number;
+      loadingProgress: () => LoadingProgress;
       performance: () => DebugSample | null;
       levelId: () => string;
       goalVisible: () => boolean;
@@ -79,9 +81,10 @@ export class Game {
   private readonly clock = new THREE.Clock();
 
   private settings: GameSettings = loadSettings();
-  private phase: GamePhase = 'menu';
+  private phase: GamePhase = 'loading';
   private settingsReturnPhase: GamePhase = 'menu';
   private levelSelectReturnPhase: GamePhase = 'menu';
+  private loadingProgress: LoadingProgress = { value: 0, label: 'Starting systems' };
   private levelIndex = 0;
   private playerPosition: Vec2 = { ...levels[0].start };
   private readonly playerMesh = new THREE.Mesh(
@@ -108,6 +111,7 @@ export class Game {
   private qualityMemoryReserve: Float32Array | null = null;
   private reservedMemoryMb = 0;
   private animationId = 0;
+  private disposed = false;
 
   constructor(mount: HTMLElement) {
     this.ui = new GameUi(mount, this.settings, {
@@ -136,6 +140,7 @@ export class Game {
     window.addEventListener('resize', this.resize);
     window.addEventListener('keydown', this.handleHotkeys);
     this.installDebugHooks();
+    void this.preloadBeforeTitle();
     console.info('[game] Shadow Circuit initialized');
   }
 
@@ -145,6 +150,7 @@ export class Game {
   }
 
   dispose(): void {
+    this.disposed = true;
     cancelAnimationFrame(this.animationId);
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('keydown', this.handleHotkeys);
@@ -156,6 +162,8 @@ export class Game {
   }
 
   private async start(): Promise<void> {
+    if (this.phase === 'loading') return;
+
     this.restartLevel();
     this.beginRun();
     this.setPhase('playing');
@@ -170,11 +178,15 @@ export class Game {
   }
 
   private openSettings(): void {
+    if (this.phase === 'loading') return;
+
     this.settingsReturnPhase = this.phase === 'settings' ? this.settingsReturnPhase : this.phase;
     this.setPhase('settings');
   }
 
   private openLevelSelect(): void {
+    if (this.phase === 'loading') return;
+
     this.levelSelectReturnPhase = this.phase === 'level-select' ? this.levelSelectReturnPhase : this.phase;
     this.setPhase('level-select');
   }
@@ -219,6 +231,8 @@ export class Game {
   }
 
   private async retryLevel(): Promise<void> {
+    if (this.phase === 'loading') return;
+
     this.restartLevel();
     this.beginRun();
     this.setPhase('playing');
@@ -227,6 +241,8 @@ export class Game {
   }
 
   private async nextLevel(): Promise<void> {
+    if (this.phase === 'loading') return;
+
     if (this.levelIndex >= levels.length - 1) {
       this.returnToTitle();
       return;
@@ -240,11 +256,15 @@ export class Game {
   }
 
   private returnToTitle(): void {
+    if (this.phase === 'loading') return;
+
     this.loadLevel(0);
     this.setPhase('menu');
   }
 
   private async startOver(): Promise<void> {
+    if (this.phase === 'loading') return;
+
     this.loadLevel(0);
     this.beginRun();
     this.setPhase('playing');
@@ -253,6 +273,8 @@ export class Game {
   }
 
   private async selectLevel(levelIndex: number): Promise<void> {
+    if (this.phase === 'loading') return;
+
     this.loadLevel(levelIndex);
     this.beginRun();
     this.setPhase('playing');
@@ -407,6 +429,84 @@ export class Game {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     return renderer;
+  }
+
+  private async preloadBeforeTitle(): Promise<void> {
+    const startedAt = performance.now();
+    const tasks: readonly { label: string; run: () => void | Promise<void> }[] = [
+      { label: 'Loading soundtrack', run: () => this.music.preload(this.settings) },
+      { label: 'Preparing pickup audio', run: () => this.music.preloadPickupCue() },
+      { label: 'Compiling level materials', run: () => this.warmupRenderStates() },
+      { label: 'Priming objective states', run: () => this.warmupObjectiveStates() },
+    ];
+
+    for (let index = 0; index < tasks.length; index += 1) {
+      if (this.disposed) return;
+
+      const task = tasks[index];
+      this.updateLoadingProgress(index / tasks.length, task.label);
+      await nextFrame();
+      await task.run();
+      this.updateLoadingProgress((index + 1) / tasks.length, task.label);
+      await nextFrame();
+    }
+
+    const remainingMs = 900 - (performance.now() - startedAt);
+    if (remainingMs > 0) {
+      await delay(remainingMs);
+    }
+    if (this.disposed) return;
+
+    this.updateLoadingProgress(1, 'Ready');
+    this.setPhase('menu');
+    console.info('[loading] complete');
+  }
+
+  private updateLoadingProgress(value: number, label: string): void {
+    this.loadingProgress = { value, label };
+    this.renderUi();
+  }
+
+  private warmupRenderStates(): void {
+    const previousGoalBeaconVisible = this.goalBeaconMesh.visible;
+    const previousObjectiveVisibility = this.objectives.map((objective) => ({
+      mesh: objective.mesh.visible,
+      glow: objective.glow.visible,
+    }));
+
+    this.goalBeaconMesh.visible = true;
+    for (const objective of this.objectives) {
+      objective.mesh.visible = true;
+      objective.glow.visible = true;
+    }
+    this.renderer.compile(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera);
+
+    this.goalBeaconMesh.visible = previousGoalBeaconVisible;
+    this.objectives.forEach((objective, index) => {
+      objective.mesh.visible = previousObjectiveVisibility[index]?.mesh ?? objective.mesh.visible;
+      objective.glow.visible = previousObjectiveVisibility[index]?.glow ?? objective.glow.visible;
+    });
+    this.renderer.compile(this.scene, this.camera);
+  }
+
+  private warmupObjectiveStates(): void {
+    const previousCollectedIds = new Set(this.collectedObjectiveIds);
+    const previousNotice = this.objectiveNotice;
+    const previousNoticeUntil = this.objectiveNoticeUntil;
+
+    for (const objective of this.level.objectives ?? []) {
+      this.collectedObjectiveIds.add(objective.id);
+    }
+    this.updateObjectiveMeshes();
+    this.renderUi();
+    this.renderer.render(this.scene, this.camera);
+
+    this.collectedObjectiveIds = previousCollectedIds;
+    this.objectiveNotice = previousNotice;
+    this.objectiveNoticeUntil = previousNoticeUntil;
+    this.updateObjectiveMeshes();
+    this.renderUi();
   }
 
   private createLightFixture(light: LightSpec): THREE.Group {
@@ -762,6 +862,8 @@ export class Game {
   };
 
   private readonly handleHotkeys = (event: KeyboardEvent): void => {
+    if (this.phase === 'loading') return;
+
     if (event.code === 'Escape') {
       this.setPhase(this.phase === 'playing' ? 'menu' : 'playing');
     }
@@ -779,6 +881,7 @@ export class Game {
       phase: () => this.phase,
       selectLevel: (levelIndex: number) => this.selectLevel(levelIndex),
       levelCount: () => levels.length,
+      loadingProgress: () => this.loadingProgress,
       performance: () => this.latestDebugSample,
       levelId: () => this.level.id,
       goalVisible: () => this.isGoalVisibleInCamera(),
@@ -869,7 +972,7 @@ export class Game {
       runElapsedMs,
       this.runAlertCount,
     );
-    this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex, this.runSummary);
+    this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex, this.runSummary, this.loadingProgress);
   }
 
   private enemyBodies(): { id: string; position: Vec2; radius: number }[] {
@@ -930,4 +1033,23 @@ function createContactShadow(width: number, depth: number, opacity: number): THR
   shadow.scale.set(width, depth, 1);
   shadow.name = 'contact-shadow';
   return shadow;
+}
+
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (): void => {
+      if (resolved) return;
+      resolved = true;
+      resolve();
+    };
+    requestAnimationFrame(finish);
+    window.setTimeout(finish, 80);
+  });
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 }

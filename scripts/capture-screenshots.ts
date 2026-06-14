@@ -22,8 +22,8 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, dev
 try {
   await mkdir(outputDir, { recursive: true });
   await page.addInitScript(() => window.localStorage.clear());
-  await page.goto(baseUrl, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(700);
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).waitFor({ state: 'visible', timeout: 8000 });
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
   await page.locator('[data-setting="soundtrack"]').waitFor({ state: 'visible', timeout: 8000 });

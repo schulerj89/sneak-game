@@ -85,11 +85,30 @@ export const soundtrackOptions = [
 export class MusicDirector {
   private readonly audio = new Audio();
   private effectContext: AudioContext | null = null;
+  private pickupSamples: Float32Array | null = null;
+  private pickupBuffer: AudioBuffer | null = null;
+  private effectsPrimed = false;
   private activeTrackId: GameSettings['soundtrackId'] | null = null;
 
   constructor() {
     this.audio.loop = true;
-    this.audio.preload = 'metadata';
+    this.audio.preload = 'auto';
+  }
+
+  preload(settings: GameSettings): void {
+    this.preloadPickupCue();
+    const track = soundtrackOptions.find((option) => option.id === settings.soundtrackId) ?? soundtrackOptions[0];
+    if (this.activeTrackId !== track.id) {
+      this.audio.pause();
+      this.audio.src = track.url;
+      this.audio.currentTime = 0;
+      this.activeTrackId = track.id;
+    }
+    this.audio.load();
+  }
+
+  preloadPickupCue(): void {
+    this.preparePickupSamples();
   }
 
   async sync(settings: GameSettings): Promise<void> {
@@ -124,7 +143,12 @@ export class MusicDirector {
     if (!settings.musicEnabled || settings.masterVolume <= 0 || this.effectContext) return;
 
     this.effectContext = new AudioContext();
-    void this.effectContext.resume();
+    this.pickupBuffer = this.createPickupBuffer(this.effectContext);
+    void this.effectContext.resume().then(() => {
+      if (this.effectContext) {
+        this.primePickupGraph(this.effectContext);
+      }
+    });
   }
 
   playPickup(settings: GameSettings): void {
@@ -133,6 +157,8 @@ export class MusicDirector {
     const context = this.effectContext ?? new AudioContext();
     this.effectContext = context;
     void context.resume();
+    const buffer = this.pickupBuffer ?? this.createPickupBuffer(context);
+    this.pickupBuffer = buffer;
 
     const now = context.currentTime;
     const gain = context.createGain();
@@ -141,26 +167,67 @@ export class MusicDirector {
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
     gain.connect(context.destination);
 
-    const first = context.createOscillator();
-    first.type = 'triangle';
-    first.frequency.setValueAtTime(660, now);
-    first.frequency.exponentialRampToValueAtTime(990, now + 0.08);
-    first.connect(gain);
-    first.start(now);
-    first.stop(now + 0.12);
-
-    const second = context.createOscillator();
-    second.type = 'sine';
-    second.frequency.setValueAtTime(1320, now + 0.06);
-    second.connect(gain);
-    second.start(now + 0.06);
-    second.stop(now + 0.2);
-
-    second.addEventListener('ended', () => gain.disconnect(), { once: true });
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(gain);
+    source.start(now);
+    source.addEventListener('ended', () => {
+      source.disconnect();
+      gain.disconnect();
+    }, { once: true });
     console.info('[audio] pickup chime');
   }
 
   currentTrack(): GameSettings['soundtrackId'] | null {
     return this.activeTrackId;
+  }
+
+  private preparePickupSamples(): Float32Array {
+    if (this.pickupSamples) return this.pickupSamples;
+
+    const sampleRate = 44_100;
+    const duration = 0.24;
+    const data = new Float32Array(Math.ceil(sampleRate * duration));
+    const tau = Math.PI * 2;
+
+    for (let index = 0; index < data.length; index += 1) {
+      const time = index / sampleRate;
+      const attack = Math.min(1, time / 0.015);
+      const release = Math.max(0, 1 - time / 0.22);
+      const envelope = attack * release * release;
+      const sweepProgress = Math.min(1, time / 0.08);
+      const sweepFrequency = 660 * Math.pow(990 / 660, sweepProgress);
+      const triangle = (2 / Math.PI) * Math.asin(Math.sin(tau * sweepFrequency * time));
+      const upper = time >= 0.06 && time <= 0.2 ? Math.sin(tau * 1320 * (time - 0.06)) * 0.58 : 0;
+      data[index] = (triangle * 0.72 + upper) * envelope;
+    }
+
+    this.pickupSamples = data;
+    return data;
+  }
+
+  private createPickupBuffer(context: AudioContext): AudioBuffer {
+    const samples = this.preparePickupSamples();
+    const buffer = context.createBuffer(1, samples.length, 44_100);
+    buffer.getChannelData(0).set(samples);
+    return buffer;
+  }
+
+  private primePickupGraph(context: AudioContext): void {
+    if (this.effectsPrimed) return;
+
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = this.pickupBuffer ?? this.createPickupBuffer(context);
+    gain.gain.value = 0.0001;
+    source.connect(gain);
+    gain.connect(context.destination);
+    source.start();
+    source.stop(context.currentTime + 0.01);
+    source.addEventListener('ended', () => {
+      source.disconnect();
+      gain.disconnect();
+    }, { once: true });
+    this.effectsPrimed = true;
   }
 }

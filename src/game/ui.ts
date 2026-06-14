@@ -1,6 +1,6 @@
 import { soundtrackOptions } from './audio';
 import { levelThumbnailSvg, logoSvg } from './assets';
-import type { GamePhase, GameSettings, LevelDefinition, ObjectiveProgress, RunSummary, SuspicionState } from './types';
+import type { GamePhase, GameSettings, LevelDefinition, LoadingProgress, ObjectiveProgress, RunSummary, SuspicionState } from './types';
 
 type UiCallbacks = {
   onStart: () => void;
@@ -58,6 +58,11 @@ export class GameUi {
     runElapsedMs: number | null,
     runAlertCount: number,
   ): void {
+    if (phase === 'loading') {
+      this.hud.innerHTML = '';
+      return;
+    }
+
     const statusText = statusLabel(phase, suspicion, objectives);
     const soundButtonLabel = this.settings.musicEnabled ? 'Mute' : 'Unmute';
     const soundButtonTitle = this.settings.musicEnabled ? 'Mute Sound' : 'Unmute Sound';
@@ -109,11 +114,24 @@ export class GameUi {
     levels: readonly LevelDefinition[],
     levelIndex: number,
     runSummary: RunSummary | null,
+    loadingProgress: LoadingProgress,
   ): void {
     this.overlay.hidden = phase === 'playing';
     const isFinalLevel = levelIndex === levels.length - 1;
 
-    if (phase === 'menu') {
+    if (phase === 'loading') {
+      const percent = Math.round(loadingProgress.value * 100);
+      this.overlay.innerHTML = `
+        <div class="panel loading-panel" data-testid="loading-panel">
+          <div class="logo">${logoSvg()}</div>
+          <h1>Loading</h1>
+          <div class="loading-bar" data-testid="loading-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}">
+            <span style="width: ${percent}%"></span>
+          </div>
+          <p>${loadingProgress.label}</p>
+        </div>
+      `;
+    } else if (phase === 'menu') {
       this.overlay.innerHTML = `
         <div class="panel menu-panel">
           <div class="logo">${logoSvg()}</div>
@@ -304,6 +322,7 @@ export class GameUi {
 }
 
 function statusLabel(phase: GamePhase, suspicion: SuspicionState, objectives: ObjectiveProgress): string {
+  if (phase === 'loading') return 'Loading';
   if (phase !== 'playing') return phase;
   if (suspicion.status === 'detected') return 'Detected';
   if (suspicion.status === 'suspicious') return 'Suspicious';

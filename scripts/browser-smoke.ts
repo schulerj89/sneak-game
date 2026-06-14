@@ -24,11 +24,15 @@ page.on('console', (message: ConsoleMessage) => {
 try {
   await mkdir(screenshotDir, { recursive: true });
   await page.addInitScript(() => window.localStorage.clear());
-  await page.goto(baseUrl, { waitUntil: 'networkidle' });
-  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-menu.png`, fullPage: true });
-
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  await expectVisible('[data-testid="loading-panel"]');
+  const loadingBarCount = await page.locator('[data-testid="loading-bar"]').count();
+  if (loadingBarCount !== 1) {
+    throw new Error(`Expected one loading bar, found ${loadingBarCount}`);
+  }
   await expectVisible('[data-testid="overlay"]');
   await expectVisible('text=Collect yellow keycards and blue terminals');
+  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-menu.png`, fullPage: true });
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Level Select' }).click();
   await expectVisible('text=Signal Vault');
   const objectiveHintCount = await page.locator('.level-card-objectives').count();
@@ -315,10 +319,15 @@ try {
   if (lockedExitState.phase !== 'playing' || lockedExitState.objectives?.exitUnlocked || lockedExitState.goalLit) {
     throw new Error(`Expected locked exit before objectives, got ${JSON.stringify(lockedExitState)}`);
   }
-  await page.evaluate(() => {
+  const firstPickupLatencyMs = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { movePlayerTo: (point: { x: number; z: number }) => void } };
+    const startedAt = performance.now();
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -1.0, z: -1.2 });
+    return performance.now() - startedAt;
   });
+  if (firstPickupLatencyMs > 80) {
+    throw new Error(`Expected warmed first pickup below 80ms, got ${firstPickupLatencyMs.toFixed(1)}ms`);
+  }
   await expectVisible('text=Collected Gate Keycard');
   await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { movePlayerTo: (point: { x: number; z: number }) => void } };

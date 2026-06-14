@@ -71,7 +71,12 @@ export type GameSettings = {
   detectionLeniency: DetectionLeniency;
 };
 
-export type GamePhase = 'menu' | 'playing' | 'paused' | 'caught' | 'complete' | 'settings' | 'level-select';
+export type GamePhase = 'loading' | 'menu' | 'playing' | 'paused' | 'caught' | 'complete' | 'settings' | 'level-select';
+
+export type LoadingProgress = Readonly<{
+  value: number;
+  label: string;
+}>;
 
 export type DetectionState = Readonly<{
   spotted: boolean;
