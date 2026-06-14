@@ -115,10 +115,10 @@ export class Game {
       onTitle: () => this.returnToTitle(),
       onLevelSelect: () => this.openLevelSelect(),
       onLevelSelectBack: () => this.setPhase(this.levelSelectReturnPhase),
-      onSelectLevel: (levelIndex) => this.selectLevel(levelIndex),
-      onRestart: () => this.retryLevel(),
-      onNextLevel: () => this.nextLevel(),
-      onStartOver: () => this.startOver(),
+      onSelectLevel: (levelIndex) => void this.selectLevel(levelIndex),
+      onRestart: () => void this.retryLevel(),
+      onNextLevel: () => void this.nextLevel(),
+      onStartOver: () => void this.startOver(),
       onSettingsChange: (settings) => void this.applySettings(settings),
     });
     this.debugPanel = new DebugPanel(this.ui.debug);
@@ -208,13 +208,14 @@ export class Game {
     console.info(`[level] restarted ${this.level.id}`);
   }
 
-  private retryLevel(): void {
+  private async retryLevel(): Promise<void> {
     this.restartLevel();
     this.beginRun();
     this.setPhase('playing');
+    await this.music.sync(this.settings);
   }
 
-  private nextLevel(): void {
+  private async nextLevel(): Promise<void> {
     if (this.levelIndex >= levels.length - 1) {
       this.returnToTitle();
       return;
@@ -223,6 +224,7 @@ export class Game {
     this.loadLevel(this.levelIndex + 1);
     this.beginRun();
     this.setPhase('playing');
+    await this.music.sync(this.settings);
   }
 
   private returnToTitle(): void {
@@ -230,16 +232,18 @@ export class Game {
     this.setPhase('menu');
   }
 
-  private startOver(): void {
+  private async startOver(): Promise<void> {
     this.loadLevel(0);
     this.beginRun();
     this.setPhase('playing');
+    await this.music.sync(this.settings);
   }
 
-  private selectLevel(levelIndex: number): void {
+  private async selectLevel(levelIndex: number): Promise<void> {
     this.loadLevel(levelIndex);
     this.beginRun();
     this.setPhase('playing');
+    await this.music.sync(this.settings);
   }
 
   private loadLevel(index: number): void {
@@ -303,13 +307,13 @@ export class Game {
       point.name = `light:${light.id}`;
       this.scene.add(point);
 
-      const lamp = new THREE.Mesh(
-        new THREE.SphereGeometry(0.12, 12, 8),
-        new THREE.MeshStandardMaterial({ color: light.color, emissive: light.color, emissiveIntensity: 0.7 }),
+      const fixture = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.2, 0.24, 0.08, 16),
+        new THREE.MeshStandardMaterial({ color: '#5d6877', emissive: '#111722', emissiveIntensity: 0.25, roughness: 0.42 }),
       );
-      lamp.position.copy(point.position);
-      lamp.name = 'level-object';
-      this.scene.add(lamp);
+      fixture.position.copy(point.position);
+      fixture.name = `light-fixture:${light.id}`;
+      this.scene.add(fixture);
     }
 
     this.objectives = (level.objectives ?? []).map((objective) => this.createObjective(objective));

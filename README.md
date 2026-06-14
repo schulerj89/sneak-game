@@ -1,10 +1,10 @@
 # Shadow Circuit
 
-Shadow Circuit is a local Three.js stealth game prototype. You sneak through dark rooms, avoid patrolling guards and their visible sight cones, use cover to block line-of-sight rays, and reach the exit pad across five levels.
+Shadow Circuit is a local Three.js stealth game prototype. You sneak through dark rooms, avoid patrolling guards and their visible sight cones, use cover to block line-of-sight rays, and reach the exit pad across eight levels.
 
 ## Current Features
 
-- Five playable levels: Dock Blackout, Archive Lanes, Reactor Core, Neon Atrium, and Signal Vault.
+- Eight playable levels: Dock Blackout, Archive Lanes, Reactor Core, Neon Atrium, Signal Vault, Transit Switchyard, Mirror Lab, and Command Spire.
 - Menu, settings, retry, and level-complete flows.
 - Clear SC circuit-lock logo and branded menu presentation.
 - Level select menu with generated level preview images.
@@ -93,6 +93,12 @@ Then commit and push the checkpoint.
 ![Neon Atrium](docs/images/shadow-circuit-level-4-neon-atrium.png)
 
 ![Signal Vault](docs/images/shadow-circuit-level-5-signal-vault.png)
+
+![Transit Switchyard](docs/images/shadow-circuit-level-6-transit-switchyard.png)
+
+![Mirror Lab](docs/images/shadow-circuit-level-7-mirror-lab.png)
+
+![Command Spire](docs/images/shadow-circuit-level-8-command-spire.png)
 
 ## Documentation
 

@@ -3,14 +3,17 @@ import { levels } from './levels';
 import { pointInRect, segmentIntersectsRect } from './math';
 
 describe('level definitions', () => {
-  it('ships the requested five levels', () => {
-    expect(levels).toHaveLength(5);
+  it('ships the requested eight levels', () => {
+    expect(levels).toHaveLength(8);
     expect(levels.map((level) => level.id)).toEqual([
       'dock-blackout',
       'archive-lanes',
       'reactor-core',
       'neon-atrium',
       'signal-vault',
+      'transit-switchyard',
+      'mirror-lab',
+      'command-spire',
     ]);
   });
 

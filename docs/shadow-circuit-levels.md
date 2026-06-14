@@ -1,8 +1,8 @@
 # Shadow Circuit Levels
 
-Each level now includes two required objective markers before the exit unlocks. Yellow keycards and blue terminals are placed on the validated route, shown as HUD objective chips, and confirmed with a short collection notice when picked up.
+Each level includes required objective markers before the exit unlocks. Yellow keycards and blue terminals are placed on the validated route, shown as HUD objective chips, and confirmed with a short collection notice when picked up.
 
-Levels live in `src/game/levels.ts` and are plain strict TypeScript data. The current build ships five levels.
+Levels live in `src/game/levels.ts` and are plain strict TypeScript data. The current build ships eight levels.
 
 Each level defines:
 
@@ -10,7 +10,7 @@ Each level defines:
 - Player start.
 - Goal location and radius.
 - Rectangular blockers.
-- Colored lights.
+- Colored room lighting with neutral fixture meshes so lamps do not resemble objectives.
 - Guard specs.
 - Required keycard and terminal objectives.
 - A validation route for automated smoke checks.
@@ -37,3 +37,6 @@ These routes are not full AI solutions. They are maintenance rails that catch br
 - `Reactor Core`
 - `Neon Atrium`
 - `Signal Vault`
+- `Transit Switchyard`
+- `Mirror Lab`
+- `Command Spire`

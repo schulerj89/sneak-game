@@ -32,12 +32,12 @@ try {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Level Select' }).click();
   await expectVisible('text=Signal Vault');
   const objectiveHintCount = await page.locator('.level-card-objectives').count();
-  if (objectiveHintCount !== 5) {
-    throw new Error(`Expected objective hints on all 5 level cards, found ${objectiveHintCount}`);
+  if (objectiveHintCount !== 8) {
+    throw new Error(`Expected objective hints on all 8 level cards, found ${objectiveHintCount}`);
   }
   const levelCardCount = await page.locator('[data-level-index]').count();
-  if (levelCardCount !== 5) {
-    throw new Error(`Expected 5 level cards, found ${levelCardCount}`);
+  if (levelCardCount !== 8) {
+    throw new Error(`Expected 8 level cards, found ${levelCardCount}`);
   }
   const levelSelectLayout = await page.evaluate(() => {
     const overlay = document.querySelector('[data-testid="overlay"]');
@@ -65,11 +65,18 @@ try {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { levelCount: () => number } };
     return debugWindow.__shadowCircuitDebug?.levelCount();
   });
-  if (debugLevelCount !== 5) {
-    throw new Error(`Expected debug level count 5, found ${debugLevelCount}`);
+  if (debugLevelCount !== 8) {
+    throw new Error(`Expected debug level count 8, found ${debugLevelCount}`);
   }
   await page.locator('[data-level-index="4"]').click();
   await page.waitForTimeout(500);
+  const selectedLevelTrackId = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
+    return debugWindow.__shadowCircuitDebug?.activeTrackId();
+  });
+  if (selectedLevelTrackId !== 'shadow-circuit') {
+    throw new Error(`Expected music to start after selecting a non-first level, got ${selectedLevelTrackId}`);
+  }
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Menu' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
   await expectVisible('text=Render quality');
@@ -372,10 +379,12 @@ async function completeFinalLevel(): Promise<void> {
         movePlayerTo: (point: { x: number; z: number }) => void;
       };
     };
-    debugWindow.__shadowCircuitDebug?.selectLevel(4);
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 0.4, z: 5.6 });
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5.9, z: 5.6 });
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5.8, z: 4.2 });
+    debugWindow.__shadowCircuitDebug?.selectLevel(7);
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -7.4, z: 6.6 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -0.5, z: -6.6 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5.5, z: 6.6 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 9.6, z: -5.8 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 10, z: 7 });
   });
 }
 

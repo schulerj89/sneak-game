@@ -47,7 +47,7 @@ export function levelThumbnailSvg(level: LevelDefinition, levelNumber: number): 
     .join('');
 
   const lights = level.lights
-    .map((light) => `<circle cx="${toX(light.position.x).toFixed(1)}" cy="${toY(light.position.z).toFixed(1)}" r="10" fill="${light.color}" opacity=".16"/>`)
+    .map((light) => `<circle cx="${toX(light.position.x).toFixed(1)}" cy="${toY(light.position.z).toFixed(1)}" r="10" fill="#9fb2c2" opacity=".1"/>`)
     .join('');
 
   return `

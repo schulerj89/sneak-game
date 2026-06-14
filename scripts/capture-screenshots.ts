@@ -11,6 +11,9 @@ const levelShots = [
   { index: 2, file: 'shadow-circuit-level-3-reactor-core.png' },
   { index: 3, file: 'shadow-circuit-level-4-neon-atrium.png' },
   { index: 4, file: 'shadow-circuit-level-5-signal-vault.png' },
+  { index: 5, file: 'shadow-circuit-level-6-transit-switchyard.png' },
+  { index: 6, file: 'shadow-circuit-level-7-mirror-lab.png' },
+  { index: 7, file: 'shadow-circuit-level-8-command-spire.png' },
 ] as const;
 
 const browser = await chromium.launch({ headless });
@@ -28,7 +31,7 @@ try {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Level Select' }).click();
-  await page.locator('[data-level-index="4"]').waitFor({ state: 'visible', timeout: 8000 });
+  await page.locator('[data-level-index="7"]').waitFor({ state: 'visible', timeout: 8000 });
   await page.screenshot({ path: `${outputDir}/shadow-circuit-level-select.png`, fullPage: true });
 
   for (const shot of levelShots) {
