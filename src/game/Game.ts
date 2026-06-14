@@ -54,6 +54,7 @@ declare global {
       levelId: () => string;
       goalVisible: () => boolean;
       playerVisible: () => boolean;
+      objectiveVisible: (objectiveId: string) => boolean;
       forceEnemyCollision: () => void;
       suspicion: () => SuspicionState;
       objectives: () => ObjectiveProgress;
@@ -61,6 +62,7 @@ declare global {
       movePlayerTo: (point: Vec2) => void;
       playerPosition: () => Vec2;
       activeTrackId: () => GameSettings['soundtrackId'] | null;
+      musicEnabled: () => boolean;
     };
   }
 }
@@ -119,6 +121,7 @@ export class Game {
       onRestart: () => void this.retryLevel(),
       onNextLevel: () => void this.nextLevel(),
       onStartOver: () => void this.startOver(),
+      onToggleMute: () => void this.toggleMute(),
       onSettingsChange: (settings) => void this.applySettings(settings),
     });
     this.debugPanel = new DebugPanel(this.ui.debug);
@@ -182,6 +185,10 @@ export class Game {
     await this.music.sync(settings);
     this.renderUi();
     console.info(`[settings] quality=${settings.quality} music=${settings.musicEnabled} debug=${settings.debugEnabled}`);
+  }
+
+  private async toggleMute(): Promise<void> {
+    await this.applySettings({ ...this.settings, musicEnabled: !this.settings.musicEnabled });
   }
 
   private restartLevel(): void {
@@ -347,6 +354,7 @@ export class Game {
     });
 
     this.restartLevel();
+    this.fitCameraToLevel();
     this.renderUi();
     console.info(`[level] loaded ${level.id} blockers=${this.blockers.length} enemies=${this.enemies.length}`);
   }
@@ -469,7 +477,7 @@ export class Game {
   private createObjective(spec: ObjectiveDefinition): ObjectiveRuntime {
     const isKeycard = spec.type === 'keycard';
     const mesh = new THREE.Mesh(
-      isKeycard ? new THREE.BoxGeometry(0.52, 0.08, 0.32) : new THREE.CylinderGeometry(0.28, 0.28, 0.12, 6),
+      isKeycard ? new THREE.BoxGeometry(0.52, 0.08, 0.32) : new THREE.BoxGeometry(0.66, 0.24, 0.46),
       new THREE.MeshStandardMaterial({
         color: isKeycard ? '#ffd45a' : '#5ad7ff',
         emissive: isKeycard ? '#6d4c08' : '#063f58',
@@ -478,8 +486,8 @@ export class Game {
         metalness: 0.18,
       }),
     );
-    mesh.position.set(spec.position.x, 0.16, spec.position.z);
-    mesh.rotation.y = isKeycard ? -0.35 : Math.PI / 6;
+    mesh.position.set(spec.position.x, isKeycard ? 0.16 : 0.24, spec.position.z);
+    mesh.rotation.y = isKeycard ? -0.35 : 0.45;
     mesh.name = `objective:${spec.id}`;
 
     const glow = new THREE.PointLight(isKeycard ? '#ffd45a' : '#5ad7ff', 18, 2.1);
@@ -702,6 +710,7 @@ export class Game {
     const height = Math.max(320, bounds.height);
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
+    this.fitCameraToLevel();
     this.camera.updateProjectionMatrix();
   };
 
@@ -727,6 +736,7 @@ export class Game {
       levelId: () => this.level.id,
       goalVisible: () => this.isGoalVisibleInCamera(),
       playerVisible: () => this.isPlayerVisibleInCamera(),
+      objectiveVisible: (objectiveId: string) => this.isObjectiveVisibleInCamera(objectiveId),
       forceEnemyCollision: () => this.forceEnemyCollision(),
       suspicion: () => this.currentSuspicion,
       objectives: () => this.objectiveProgress(),
@@ -734,6 +744,7 @@ export class Game {
       movePlayerTo: (point: Vec2) => this.movePlayerTo(point),
       playerPosition: () => this.playerPosition,
       activeTrackId: () => this.music.currentTrack(),
+      musicEnabled: () => this.settings.musicEnabled,
     };
   }
 
@@ -763,6 +774,22 @@ export class Game {
 
   private isPlayerVisibleInCamera(): boolean {
     return this.isObjectVisibleInCamera(this.playerMesh);
+  }
+
+  private isObjectiveVisibleInCamera(objectiveId: string): boolean {
+    const objective = this.objectives.find((candidate) => candidate.spec.id === objectiveId);
+    return objective ? this.isObjectVisibleInCamera(objective.mesh) : false;
+  }
+
+  private fitCameraToLevel(): void {
+    const scale = Math.max(1, this.level.floorSize.x / 16.5, this.level.floorSize.z / 11.8, this.camera.aspect < 1 ? 1.2 : 1);
+    this.camera.position.set(0, 10.2 * scale, 10.4 * scale);
+    this.camera.lookAt(0, 0, 0);
+
+    if (this.scene.fog instanceof THREE.Fog) {
+      this.scene.fog.near = 8 * scale;
+      this.scene.fog.far = 22 * scale;
+    }
   }
 
   private isObjectVisibleInCamera(object: THREE.Object3D): boolean {

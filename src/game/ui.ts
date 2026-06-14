@@ -14,6 +14,7 @@ type UiCallbacks = {
   onRestart: () => void;
   onNextLevel: () => void;
   onStartOver: () => void;
+  onToggleMute: () => void;
   onSettingsChange: (settings: GameSettings) => void;
 };
 
@@ -58,6 +59,8 @@ export class GameUi {
     runAlertCount: number,
   ): void {
     const statusText = statusLabel(phase, suspicion, objectives);
+    const soundButtonLabel = this.settings.musicEnabled ? 'Mute' : 'Unmute';
+    const soundButtonTitle = this.settings.musicEnabled ? 'Mute Sound' : 'Unmute Sound';
     this.hud.innerHTML = `
       <div class="hud-left">
         <strong>${level.name}</strong>
@@ -79,6 +82,7 @@ export class GameUi {
         ` : ''}
       </div>
       <div class="hud-right">
+        <button type="button" data-action="toggle-mute" title="${soundButtonTitle}" aria-pressed="${!this.settings.musicEnabled}">${soundButtonLabel}</button>
         <button type="button" data-action="level-select" title="Level Select">Levels</button>
         <button type="button" data-action="settings" title="Settings">Settings</button>
         <button type="button" data-action="menu" title="Menu">Menu</button>
@@ -249,6 +253,7 @@ export class GameUi {
   }
 
   private bindHud(): void {
+    this.hud.querySelector('[data-action="toggle-mute"]')?.addEventListener('click', this.callbacks.onToggleMute);
     this.hud.querySelector('[data-action="settings"]')?.addEventListener('click', this.callbacks.onSettings);
     this.hud.querySelector('[data-action="level-select"]')?.addEventListener('click', this.callbacks.onLevelSelect);
     this.hud.querySelector('[data-action="menu"]')?.addEventListener('click', this.callbacks.onMenu);

@@ -1,7 +1,8 @@
 # Shadow Circuit Soundtrack
 
-Shadow Circuit now ships four generated loopable tracks:
+Shadow Circuit now ships five generated loopable tracks:
 
+- `Night Ops`
 - `Shadow Circuit`
 - `Pulse Runner`
 - `Deep Cover`
@@ -9,7 +10,7 @@ Shadow Circuit now ships four generated loopable tracks:
 
 The settings menu exposes a soundtrack selector. Runtime playback uses one `HTMLAudioElement` and swaps the source when the selected track changes, which avoids keeping multiple decoded tracks active in memory.
 
-`Metro Escape` is the first replacement-track candidate from the improvement decision. It uses a faster tempo, more kick weight, and heavier bass/sub-bass than the first three generated tracks. The game imports it as an MP3 so the runtime payload is much smaller than another full WAV loop.
+`Night Ops` is the new default mix. It uses a steadier tempo, lighter hats, and a slow pad layer so the track reads more like a stealth loop than an alarm loop. `Metro Escape` remains the higher-tempo replacement-track candidate. The game imports both as MP3 files so the runtime payload stays smaller than additional full WAV loops.
 
 ## License Manifest
 
@@ -35,6 +36,8 @@ This recreates:
 - `src/assets/shadow-circuit-theme.wav`
 - `src/assets/pulse-runner.wav`
 - `src/assets/deep-cover.wav`
+- `src/assets/night-ops.wav`
+- `src/assets/night-ops.mp3` when `ffmpeg` is available
 - `src/assets/metro-escape.wav`
 - `src/assets/metro-escape.mp3` when `ffmpeg` is available
 

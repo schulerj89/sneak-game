@@ -74,8 +74,26 @@ try {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
     return debugWindow.__shadowCircuitDebug?.activeTrackId();
   });
-  if (selectedLevelTrackId !== 'shadow-circuit') {
+  if (selectedLevelTrackId !== 'night-ops') {
     throw new Error(`Expected music to start after selecting a non-first level, got ${selectedLevelTrackId}`);
+  }
+  await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Mute' }).click();
+  await page.waitForTimeout(250);
+  const mutedMusicEnabled = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { musicEnabled: () => boolean } };
+    return debugWindow.__shadowCircuitDebug?.musicEnabled();
+  });
+  if (mutedMusicEnabled !== false) {
+    throw new Error(`Expected HUD mute button to disable audio, got ${mutedMusicEnabled}`);
+  }
+  await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Unmute' }).click();
+  await page.waitForTimeout(500);
+  const unmutedMusicEnabled = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { musicEnabled: () => boolean } };
+    return debugWindow.__shadowCircuitDebug?.musicEnabled();
+  });
+  if (unmutedMusicEnabled !== true) {
+    throw new Error(`Expected HUD mute button to re-enable audio, got ${unmutedMusicEnabled}`);
   }
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Menu' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
@@ -200,6 +218,48 @@ try {
   });
   if (activeTrackId !== 'metro-escape') {
     throw new Error(`Expected active Metro Escape track, got ${activeTrackId}`);
+  }
+
+  const visibilityStates = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        levelCount: () => number;
+        levelId: () => string;
+        selectLevel: (levelIndex: number) => void;
+        goalVisible: () => boolean;
+        playerVisible: () => boolean;
+        objectiveVisible: (objectiveId: string) => boolean;
+      };
+    };
+    const debug = debugWindow.__shadowCircuitDebug;
+    if (!debug) return [];
+
+    const states: {
+      index: number;
+      levelId: string;
+      playerVisible: boolean;
+      goalVisible: boolean;
+      lensConsoleVisible: boolean;
+    }[] = [];
+    for (let index = 0; index < debug.levelCount(); index += 1) {
+      debug.selectLevel(index);
+      states.push({
+        index,
+        levelId: debug.levelId(),
+        playerVisible: debug.playerVisible(),
+        goalVisible: debug.goalVisible(),
+        lensConsoleVisible: debug.objectiveVisible('lab-terminal-a'),
+      });
+    }
+    return states;
+  });
+  const hiddenLevelStates = visibilityStates.filter((state) => !state.playerVisible || !state.goalVisible);
+  if (hiddenLevelStates.length > 0) {
+    throw new Error(`Expected every level start and goal to be camera-visible, got ${JSON.stringify(hiddenLevelStates)}`);
+  }
+  const mirrorLabState = visibilityStates.find((state) => state.levelId === 'mirror-lab');
+  if (!mirrorLabState?.lensConsoleVisible) {
+    throw new Error(`Expected Mirror Lab Lens Console to be camera-visible, got ${JSON.stringify(visibilityStates)}`);
   }
 
   await page.evaluate(() => {

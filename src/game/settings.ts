@@ -9,7 +9,7 @@ export const defaultSettings: GameSettings = {
   musicEnabled: true,
   debugEnabled: true,
   masterVolume: 0.36,
-  soundtrackId: 'shadow-circuit',
+  soundtrackId: 'night-ops',
   detectionLeniency: 'standard',
 };
 
@@ -62,7 +62,13 @@ function isQuality(value: unknown): value is RenderQuality {
 }
 
 function isSoundtrackId(value: unknown): value is SoundtrackId {
-  return value === 'shadow-circuit' || value === 'pulse-runner' || value === 'deep-cover' || value === 'metro-escape';
+  return (
+    value === 'night-ops' ||
+    value === 'shadow-circuit' ||
+    value === 'pulse-runner' ||
+    value === 'deep-cover' ||
+    value === 'metro-escape'
+  );
 }
 
 function isDetectionLeniency(value: unknown): value is DetectionLeniency {

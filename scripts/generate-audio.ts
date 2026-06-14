@@ -12,6 +12,11 @@ type TrackSpec = {
   kickWeight: number;
   bassWeight: number;
   subWeight: number;
+  padNotes?: readonly number[];
+  padWeight?: number;
+  arpWeight?: number;
+  hatWeight?: number;
+  shimmerWeight?: number;
   seed: number;
 };
 
@@ -22,6 +27,23 @@ const bitsPerSample = 16;
 const execFileAsync = promisify(execFile);
 
 const tracks: readonly TrackSpec[] = [
+  {
+    file: 'night-ops.wav',
+    compressedFile: 'night-ops.mp3',
+    tempo: 2.2,
+    seconds: 32,
+    bassNotes: [49, 49, 55, 41.2, 61.74, 55, 73.42, 55],
+    arpNotes: [196, 246.94, 293.66, 369.99, 293.66, 246.94, 220, 246.94],
+    padNotes: [98, 110, 123.47, 82.41],
+    kickWeight: 0.25,
+    bassWeight: 0.45,
+    subWeight: 0.3,
+    padWeight: 0.11,
+    arpWeight: 0.09,
+    hatWeight: 0.035,
+    shimmerWeight: 0.025,
+    seed: 50_411,
+  },
   {
     file: 'shadow-circuit-theme.wav',
     tempo: 2.12,
@@ -109,22 +131,25 @@ function renderTrack(track: TrackSpec): Int16Array {
     const beat = time * track.tempo;
     const bass = noteAt(track.bassNotes, beat / 2);
     const arp = noteAt(track.arpNotes, beat * 2);
+    const pad = noteAt(track.padNotes ?? track.bassNotes, beat / 4);
     const bassEnv = pulseEnvelope(beat, 0.78, 2.0);
     const subEnv = pulseEnvelope(beat, 0.88, 1.5);
     const arpEnv = pulseEnvelope(beat * 2, 0.32, 7.2);
     const kickEnv = pulseEnvelope(beat, 0.2, 13);
     const hatEnv = pulseEnvelope(beat * 4 + 0.5, 0.08, 24);
+    const padEnv = 0.58 + Math.sin(TAU * 0.037 * time) * 0.16;
 
-    const shimmer = Math.sin(TAU * (arp * 2.01) * time) * 0.04 * arpEnv;
+    const shimmer = Math.sin(TAU * (arp * 2.01) * time) * (track.shimmerWeight ?? 0.04) * arpEnv;
     const bassTone = softSine(bass, time) * track.bassWeight * bassEnv;
     const subBass = Math.sin(TAU * (bass / 2) * time) * track.subWeight * subEnv;
-    const arpTone = triangle(arp, time) * 0.15 * arpEnv;
+    const arpTone = triangle(arp, time) * (track.arpWeight ?? 0.15) * arpEnv;
+    const padTone = (softSine(pad, time) * 0.52 + triangle(pad * 2, time) * 0.1) * (track.padWeight ?? 0) * padEnv;
     const kick = Math.sin(TAU * (54 - kickEnv * 24) * time) * track.kickWeight * kickEnv;
-    const hat = nextNoise() * 0.07 * hatEnv;
+    const hat = nextNoise() * (track.hatWeight ?? 0.07) * hatEnv;
     const roomBreath = Math.sin(TAU * 0.07 * time) * 0.05;
     const fade = edgeFade(time, track.seconds, 1.4);
 
-    data[index] = clamp16((bassTone + subBass + arpTone + shimmer + kick + hat + roomBreath) * fade * 23_500);
+    data[index] = clamp16((bassTone + subBass + arpTone + padTone + shimmer + kick + hat + roomBreath) * fade * 23_500);
   }
 
   return data;

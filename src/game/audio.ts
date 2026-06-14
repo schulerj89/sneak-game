@@ -1,10 +1,23 @@
 import type { GameSettings } from './types';
+import nightOpsUrl from '../assets/night-ops.mp3?url';
 import themeUrl from '../assets/shadow-circuit-theme.wav?url';
 import pulseRunnerUrl from '../assets/pulse-runner.wav?url';
 import deepCoverUrl from '../assets/deep-cover.wav?url';
 import metroEscapeUrl from '../assets/metro-escape.mp3?url';
 
 export const soundtrackOptions = [
+  {
+    id: 'night-ops',
+    name: 'Night Ops',
+    url: nightOpsUrl,
+    tempoBpm: 132,
+    source: {
+      kind: 'project-generated',
+      license: 'Project-owned generated audio',
+      sourceUrl: 'scripts/generate-audio.ts',
+      attribution: 'Generated for Shadow Circuit by the local audio script as the smoother default stealth mix.',
+    },
+  },
   {
     id: 'shadow-circuit',
     name: 'Shadow Circuit',

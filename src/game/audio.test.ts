@@ -19,4 +19,10 @@ describe('soundtrack metadata', () => {
     expect(replacement?.url).toContain('.mp3');
     expect(replacement?.tempoBpm).toBeGreaterThan(160);
   });
+
+  it('uses the smoother compressed track as the default option', () => {
+    expect(soundtrackOptions[0]?.id).toBe('night-ops');
+    expect(soundtrackOptions[0]?.name).toBe('Night Ops');
+    expect(soundtrackOptions[0]?.url).toContain('.mp3');
+  });
 });
