@@ -19,6 +19,7 @@ import type {
   LevelDefinition,
   ObjectiveDefinition,
   ObjectiveProgress,
+  LightSpec,
   RunSummary,
   SuspicionState,
   Vec2,
@@ -158,6 +159,7 @@ export class Game {
     this.restartLevel();
     this.beginRun();
     this.setPhase('playing');
+    this.music.warmupEffects(this.settings);
     await this.music.sync(this.settings);
   }
 
@@ -182,6 +184,7 @@ export class Game {
     this.ui.setSettings(settings);
     saveSettings(settings);
     this.applyRendererQuality();
+    this.music.warmupEffects(settings);
     await this.music.sync(settings);
     this.renderUi();
     console.info(`[settings] quality=${settings.quality} music=${settings.musicEnabled} debug=${settings.debugEnabled}`);
@@ -219,6 +222,7 @@ export class Game {
     this.restartLevel();
     this.beginRun();
     this.setPhase('playing');
+    this.music.warmupEffects(this.settings);
     await this.music.sync(this.settings);
   }
 
@@ -231,6 +235,7 @@ export class Game {
     this.loadLevel(this.levelIndex + 1);
     this.beginRun();
     this.setPhase('playing');
+    this.music.warmupEffects(this.settings);
     await this.music.sync(this.settings);
   }
 
@@ -243,6 +248,7 @@ export class Game {
     this.loadLevel(0);
     this.beginRun();
     this.setPhase('playing');
+    this.music.warmupEffects(this.settings);
     await this.music.sync(this.settings);
   }
 
@@ -250,6 +256,7 @@ export class Game {
     this.loadLevel(levelIndex);
     this.beginRun();
     this.setPhase('playing');
+    this.music.warmupEffects(this.settings);
     await this.music.sync(this.settings);
   }
 
@@ -314,13 +321,7 @@ export class Game {
       point.name = `light:${light.id}`;
       this.scene.add(point);
 
-      const fixture = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.2, 0.24, 0.08, 16),
-        new THREE.MeshStandardMaterial({ color: '#5d6877', emissive: '#111722', emissiveIntensity: 0.25, roughness: 0.42 }),
-      );
-      fixture.position.copy(point.position);
-      fixture.name = `light-fixture:${light.id}`;
-      this.scene.add(fixture);
+      this.scene.add(this.createLightFixture(light));
     }
 
     this.objectives = (level.objectives ?? []).map((objective) => this.createObjective(objective));
@@ -406,6 +407,52 @@ export class Game {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     return renderer;
+  }
+
+  private createLightFixture(light: LightSpec): THREE.Group {
+    const group = new THREE.Group();
+    group.position.set(light.position.x, light.height, light.position.z);
+    group.name = `light-fixture:${light.id}`;
+
+    const metal = new THREE.MeshStandardMaterial({
+      color: '#6b7280',
+      emissive: '#101923',
+      emissiveIntensity: 0.2,
+      roughness: 0.48,
+      metalness: 0.45,
+    });
+    const bulbMaterial = new THREE.MeshStandardMaterial({
+      color: '#f8fbff',
+      emissive: '#cfe7ff',
+      emissiveIntensity: 1.4,
+      roughness: 0.22,
+    });
+    const beamMaterial = new THREE.MeshBasicMaterial({
+      color: '#dbeafe',
+      transparent: true,
+      opacity: 0.08,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.45, 8), metal);
+    stem.position.y = -0.22;
+    stem.name = `light-stem:${light.id}`;
+
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.24, 0.22, 24), metal);
+    shade.position.y = -0.5;
+    shade.name = `light-shade:${light.id}`;
+
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 8), bulbMaterial);
+    bulb.position.y = -0.66;
+    bulb.name = `light-bulb:${light.id}`;
+
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(1.05, 2.1, 24, 1, true), beamMaterial);
+    beam.position.y = -1.68;
+    beam.name = `light-beam:${light.id}`;
+
+    group.add(stem, shade, bulb, beam);
+    return group;
   }
 
   private applyRendererQuality(): void {

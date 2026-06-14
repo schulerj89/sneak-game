@@ -1,4 +1,5 @@
 import type { GameSettings } from './types';
+import ghostStepsUrl from '../assets/ghost-steps.mp3?url';
 import nightOpsUrl from '../assets/night-ops.mp3?url';
 import themeUrl from '../assets/shadow-circuit-theme.wav?url';
 import pulseRunnerUrl from '../assets/pulse-runner.wav?url';
@@ -6,6 +7,19 @@ import deepCoverUrl from '../assets/deep-cover.wav?url';
 import metroEscapeUrl from '../assets/metro-escape.mp3?url';
 
 export const soundtrackOptions = [
+  {
+    id: 'ghost-steps',
+    name: 'Ghost Steps',
+    url: ghostStepsUrl,
+    tempoBpm: 122,
+    source: {
+      kind: 'external',
+      license: 'CC-BY 4.0',
+      sourceUrl: 'https://opengameart.org/content/ghost-steps-davidkbd-vs-tsorthan-grove',
+      attribution:
+        '"Ghost Steps" from "Code Injection Dark Techno Music Pack" by DavidKBD. License: CC BY 4.0. Includes tracks by Tsorthan Grove: "Morbid technology" and "Dark Ambient Drone #2", CC-BY 4.0.',
+    },
+  },
   {
     id: 'night-ops',
     name: 'Night Ops',
@@ -104,6 +118,13 @@ export class MusicDirector {
   stop(): void {
     this.audio.pause();
     this.audio.currentTime = 0;
+  }
+
+  warmupEffects(settings: GameSettings): void {
+    if (!settings.musicEnabled || settings.masterVolume <= 0 || this.effectContext) return;
+
+    this.effectContext = new AudioContext();
+    void this.effectContext.resume();
   }
 
   playPickup(settings: GameSettings): void {

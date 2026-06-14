@@ -1,6 +1,6 @@
 import type { DetectionLeniency, GameSettings, RenderQuality, SoundtrackId } from './types';
 
-const storageKey = 'shadow-circuit-settings-v1';
+const storageKey = 'shadow-circuit-settings-v2';
 export const memoryCapMb = 75;
 export const targetFps = 60;
 
@@ -9,7 +9,7 @@ export const defaultSettings: GameSettings = {
   musicEnabled: true,
   debugEnabled: true,
   masterVolume: 0.36,
-  soundtrackId: 'night-ops',
+  soundtrackId: 'ghost-steps',
   detectionLeniency: 'standard',
 };
 
@@ -64,6 +64,7 @@ function isQuality(value: unknown): value is RenderQuality {
 function isSoundtrackId(value: unknown): value is SoundtrackId {
   return (
     value === 'night-ops' ||
+    value === 'ghost-steps' ||
     value === 'shadow-circuit' ||
     value === 'pulse-runner' ||
     value === 'deep-cover' ||

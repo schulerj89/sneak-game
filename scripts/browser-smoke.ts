@@ -74,7 +74,7 @@ try {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
     return debugWindow.__shadowCircuitDebug?.activeTrackId();
   });
-  if (selectedLevelTrackId !== 'night-ops') {
+  if (selectedLevelTrackId !== 'ghost-steps') {
     throw new Error(`Expected music to start after selecting a non-first level, got ${selectedLevelTrackId}`);
   }
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Mute' }).click();

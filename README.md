@@ -14,7 +14,7 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Objective-gated exits across all levels with keycards, terminals, color-swatch HUD chips, collection notices, and pickup chimes.
 - Dark-room lighting, dim locked exits, unlock-only goal beacons, shadows by quality setting, and simple custom assets.
 - Shader-based floor detail, goal beacons, and contact shadows.
-- Custom generated soundtrack with five selectable tracks, including a smoother compressed default mix.
+- CC-BY external default soundtrack plus five generated fallback tracks.
 - Balanced default rendering with a 75 MB browser heap cap and Memory first fallback.
 - On-screen debug panel with FPS, memory, draw calls, player position, and detection state.
 - Console logs for game phase, level loads, settings, audio, and detection events.
