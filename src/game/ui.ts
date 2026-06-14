@@ -1,17 +1,19 @@
 import { soundtrackOptions } from './audio';
 import { levelThumbnailSvg, logoSvg } from './assets';
-import type { GamePhase, GameSettings, LevelDefinition, ObjectiveProgress, SuspicionState } from './types';
+import type { GamePhase, GameSettings, LevelDefinition, ObjectiveProgress, RunSummary, SuspicionState } from './types';
 
 type UiCallbacks = {
   onStart: () => void;
   onResume: () => void;
   onSettings: () => void;
   onMenu: () => void;
+  onTitle: () => void;
   onLevelSelect: () => void;
   onLevelSelectBack: () => void;
   onSelectLevel: (levelIndex: number) => void;
   onRestart: () => void;
   onNextLevel: () => void;
+  onStartOver: () => void;
   onSettingsChange: (settings: GameSettings) => void;
 };
 
@@ -52,12 +54,18 @@ export class GameUi {
     suspicion: SuspicionState,
     objectives: ObjectiveProgress,
     objectiveNotice: string,
+    runElapsedMs: number | null,
+    runAlertCount: number,
   ): void {
     const statusText = statusLabel(phase, suspicion, objectives);
     this.hud.innerHTML = `
       <div class="hud-left">
         <strong>${level.name}</strong>
         <span>Level ${levelNumber + 1} / ${totalLevels}</span>
+        ${runElapsedMs !== null ? `
+          <span>Time <span class="run-time">${formatRunTime(runElapsedMs)}</span> / Par ${formatRunTime(level.parSeconds * 1000)}</span>
+          <span>Alerts <span class="run-alerts">${runAlertCount}</span></span>
+        ` : ''}
         ${objectives.totalRequired > 0 ? `
           <span>Objectives ${objectives.collectedRequired} / ${objectives.totalRequired}</span>
           <div class="objective-strip" aria-label="Objectives">
@@ -84,8 +92,22 @@ export class GameUi {
     this.bindHud();
   }
 
-  renderOverlay(phase: GamePhase, level: LevelDefinition, levels: readonly LevelDefinition[], levelIndex: number): void {
+  updateRunHud(runElapsedMs: number, runAlertCount: number): void {
+    const time = this.hud.querySelector('.run-time');
+    const alerts = this.hud.querySelector('.run-alerts');
+    if (time) time.textContent = formatRunTime(runElapsedMs);
+    if (alerts) alerts.textContent = String(runAlertCount);
+  }
+
+  renderOverlay(
+    phase: GamePhase,
+    level: LevelDefinition,
+    levels: readonly LevelDefinition[],
+    levelIndex: number,
+    runSummary: RunSummary | null,
+  ): void {
     this.overlay.hidden = phase === 'playing';
+    const isFinalLevel = levelIndex === levels.length - 1;
 
     if (phase === 'menu') {
       this.overlay.innerHTML = `
@@ -182,11 +204,42 @@ export class GameUi {
     } else if (phase === 'complete') {
       this.overlay.innerHTML = `
         <div class="panel">
-          <h1>Exit Reached</h1>
-          <p>${level.briefing}</p>
+          <h1>${isFinalLevel ? 'Game Complete' : 'Exit Reached'}</h1>
+          ${runSummary ? `
+            <div class="run-summary" aria-label="Run summary">
+              <div class="run-grade grade-${runSummary.grade.toLowerCase()}">
+                <span>Grade</span>
+                <strong>${runSummary.grade}</strong>
+              </div>
+              <dl class="run-stat-grid">
+                <div>
+                  <dt>Time</dt>
+                  <dd>${formatRunTime(runSummary.elapsedMs)}</dd>
+                </div>
+                <div>
+                  <dt>Par</dt>
+                  <dd>${formatRunTime(runSummary.parSeconds * 1000)}</dd>
+                </div>
+                <div>
+                  <dt>Alerts</dt>
+                  <dd>${runSummary.alerts}</dd>
+                </div>
+                <div>
+                  <dt>Score</dt>
+                  <dd>${runSummary.score}</dd>
+                </div>
+              </dl>
+            </div>
+            <p class="record-note">${bestTimeLabel(runSummary)}</p>
+          ` : `<p>${level.briefing}</p>`}
           <div class="panel-actions">
-            <button type="button" data-action="next">Next Level</button>
-            <button type="button" data-action="menu">Menu</button>
+            ${isFinalLevel ? `
+              <button type="button" data-action="title">Title</button>
+              <button type="button" data-action="start-over">Start Over</button>
+            ` : `
+              <button type="button" data-action="next">Next Level</button>
+              <button type="button" data-action="menu">Menu</button>
+            `}
           </div>
         </div>
       `;
@@ -217,8 +270,10 @@ export class GameUi {
       button.addEventListener('click', this.callbacks.onSettings),
     );
     this.overlay.querySelector('[data-action="menu"]')?.addEventListener('click', this.callbacks.onMenu);
+    this.overlay.querySelector('[data-action="title"]')?.addEventListener('click', this.callbacks.onTitle);
     this.overlay.querySelector('[data-action="restart"]')?.addEventListener('click', this.callbacks.onRestart);
     this.overlay.querySelector('[data-action="next"]')?.addEventListener('click', this.callbacks.onNextLevel);
+    this.overlay.querySelector('[data-action="start-over"]')?.addEventListener('click', this.callbacks.onStartOver);
     this.overlay.querySelector('[data-setting="quality"]')?.addEventListener('change', (event) => {
       this.callbacks.onSettingsChange({ ...this.settings, quality: (event.target as HTMLSelectElement).value as GameSettings['quality'] });
     });
@@ -253,6 +308,19 @@ function statusLabel(phase: GamePhase, suspicion: SuspicionState, objectives: Ob
 
 function selectedTrack(soundtrackId: GameSettings['soundtrackId']): (typeof soundtrackOptions)[number] {
   return soundtrackOptions.find((track) => track.id === soundtrackId) ?? soundtrackOptions[0];
+}
+
+function formatRunTime(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function bestTimeLabel(summary: RunSummary): string {
+  if (summary.isNewBest) return 'New best time recorded.';
+  if (summary.bestTimeMs === null) return 'First clear recorded.';
+  return `Best time: ${formatRunTime(summary.bestTimeMs)}.`;
 }
 
 function required(root: ParentNode, selector: string): HTMLElement {

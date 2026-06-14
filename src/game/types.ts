@@ -44,6 +44,7 @@ export type LevelDefinition = Readonly<{
   id: string;
   name: string;
   briefing: string;
+  parSeconds: number;
   floorSize: Vec2;
   start: Vec2;
   goal: Vec2;
@@ -99,6 +100,18 @@ export type ObjectiveProgress = Readonly<{
     required: boolean;
     collected: boolean;
   }>[];
+}>;
+
+export type RunGrade = 'S' | 'A' | 'B' | 'C';
+
+export type RunSummary = Readonly<{
+  elapsedMs: number;
+  parSeconds: number;
+  alerts: number;
+  score: number;
+  grade: RunGrade;
+  bestTimeMs: number | null;
+  isNewBest: boolean;
 }>;
 
 export type DebugSample = Readonly<{

@@ -285,6 +285,52 @@ try {
     throw new Error(`Expected objective-gated completion, got ${JSON.stringify(objectiveCompleteState)}`);
   }
 
+  await completeFinalLevel();
+  await expectVisible('text=Game Complete');
+  const finalButtonLabels = await page.locator('[data-testid="overlay"]').getByRole('button').allTextContents();
+  if (
+    finalButtonLabels.includes('Next Level') ||
+    !finalButtonLabels.includes('Title') ||
+    !finalButtonLabels.includes('Start Over')
+  ) {
+    throw new Error(`Expected final completion actions Title and Start Over only, got ${JSON.stringify(finalButtonLabels)}`);
+  }
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Title' }).click();
+  const titleState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        phase: () => string;
+        levelId: () => string;
+      };
+    };
+    return {
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+      levelId: debugWindow.__shadowCircuitDebug?.levelId(),
+    };
+  });
+  if (titleState.phase !== 'menu' || titleState.levelId !== 'dock-blackout') {
+    throw new Error(`Expected Title to return to Dock Blackout menu, got ${JSON.stringify(titleState)}`);
+  }
+
+  await completeFinalLevel();
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Over' }).click();
+  await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 8000 });
+  const startOverState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        phase: () => string;
+        levelId: () => string;
+      };
+    };
+    return {
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+      levelId: debugWindow.__shadowCircuitDebug?.levelId(),
+    };
+  });
+  if (startOverState.phase !== 'playing' || startOverState.levelId !== 'dock-blackout') {
+    throw new Error(`Expected Start Over to begin Dock Blackout, got ${JSON.stringify(startOverState)}`);
+  }
+
   await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { forceCaught: () => void } };
     debugWindow.__shadowCircuitDebug?.forceCaught();
@@ -316,6 +362,21 @@ try {
 
 async function expectVisible(selector: string): Promise<void> {
   await page.locator(selector).waitFor({ state: 'visible', timeout: 8000 });
+}
+
+async function completeFinalLevel(): Promise<void> {
+  await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        selectLevel: (levelIndex: number) => void;
+        movePlayerTo: (point: { x: number; z: number }) => void;
+      };
+    };
+    debugWindow.__shadowCircuitDebug?.selectLevel(4);
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 0.4, z: 5.6 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5.9, z: 5.6 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5.8, z: 4.2 });
+  });
 }
 
 async function assertPlayingPhase(context: string): Promise<void> {

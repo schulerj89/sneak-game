@@ -7,6 +7,7 @@ import { InputController } from './input';
 import { levels } from './levels';
 import { add, clampToRoom, distance, normalize, scale, subtract } from './math';
 import { collectNearbyObjectives, getObjectiveProgress } from './objectives';
+import { createRunSummary, loadBestTime, saveBestTime } from './runStats';
 import { loadSettings, memoryCapMb, qualityProfile, saveSettings } from './settings';
 import { createContactShadowMaterial, createFloorShaderMaterial, createGoalBeaconMaterial, createVisionConeGeometry } from './shaders';
 import type {
@@ -18,6 +19,7 @@ import type {
   LevelDefinition,
   ObjectiveDefinition,
   ObjectiveProgress,
+  RunSummary,
   SuspicionState,
   Vec2,
 } from './types';
@@ -95,6 +97,10 @@ export class Game {
   private debugRays = new THREE.Group();
   private currentDetection: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
   private currentSuspicion: SuspicionState = emptySuspicion();
+  private runStartedAt = 0;
+  private runAlertCount = 0;
+  private runSummary: RunSummary | null = null;
+  private lastHudSecond = -1;
   private latestDebugSample: DebugSample | null = null;
   private qualityMemoryReserve: Float32Array | null = null;
   private reservedMemoryMb = 0;
@@ -106,11 +112,13 @@ export class Game {
       onResume: () => this.setPhase(this.settingsReturnPhase),
       onSettings: () => this.openSettings(),
       onMenu: () => this.setPhase('menu'),
+      onTitle: () => this.returnToTitle(),
       onLevelSelect: () => this.openLevelSelect(),
       onLevelSelectBack: () => this.setPhase(this.levelSelectReturnPhase),
       onSelectLevel: (levelIndex) => this.selectLevel(levelIndex),
       onRestart: () => this.retryLevel(),
       onNextLevel: () => this.nextLevel(),
+      onStartOver: () => this.startOver(),
       onSettingsChange: (settings) => void this.applySettings(settings),
     });
     this.debugPanel = new DebugPanel(this.ui.debug);
@@ -145,6 +153,7 @@ export class Game {
 
   private async start(): Promise<void> {
     this.restartLevel();
+    this.beginRun();
     this.setPhase('playing');
     await this.music.sync(this.settings);
   }
@@ -188,6 +197,10 @@ export class Game {
     });
     this.currentDetection = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
     this.currentSuspicion = emptySuspicion();
+    this.runStartedAt = 0;
+    this.runAlertCount = 0;
+    this.runSummary = null;
+    this.lastHudSecond = -1;
     this.collectedObjectiveIds.clear();
     this.objectiveNotice = '';
     this.objectiveNoticeUntil = 0;
@@ -197,16 +210,35 @@ export class Game {
 
   private retryLevel(): void {
     this.restartLevel();
+    this.beginRun();
     this.setPhase('playing');
   }
 
   private nextLevel(): void {
-    this.loadLevel((this.levelIndex + 1) % levels.length);
+    if (this.levelIndex >= levels.length - 1) {
+      this.returnToTitle();
+      return;
+    }
+
+    this.loadLevel(this.levelIndex + 1);
+    this.beginRun();
+    this.setPhase('playing');
+  }
+
+  private returnToTitle(): void {
+    this.loadLevel(0);
+    this.setPhase('menu');
+  }
+
+  private startOver(): void {
+    this.loadLevel(0);
+    this.beginRun();
     this.setPhase('playing');
   }
 
   private selectLevel(levelIndex: number): void {
     this.loadLevel(levelIndex);
+    this.beginRun();
     this.setPhase('playing');
   }
 
@@ -476,7 +508,7 @@ export class Game {
     this.collectObjectives();
 
     if (distance(this.playerPosition, this.level.goal) <= this.level.goalRadius + playerRadius && this.objectiveProgress().exitUnlocked) {
-      this.setPhase('complete');
+      this.completeLevel();
     }
   }
 
@@ -511,6 +543,8 @@ export class Game {
   }
 
   private updateDetection(delta: number): void {
+    if (this.phase !== 'playing') return;
+
     let nearest: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
 
     for (const enemy of this.enemies) {
@@ -526,7 +560,9 @@ export class Game {
     }
 
     this.currentDetection = nearest;
+    const previousStatus = this.currentSuspicion.status;
     this.currentSuspicion = advanceSuspicion(this.currentSuspicion, nearest, delta, this.settings.detectionLeniency);
+    this.recordAlertTransition(previousStatus, this.currentSuspicion.status);
     if (this.currentSuspicion.status === 'detected' && this.phase === 'playing') {
       this.setPhase('caught');
       console.warn(`[detection] player detected by ${this.currentSuspicion.enemyId}`);
@@ -535,6 +571,7 @@ export class Game {
     const collision = collidesWithEnemies(this.playerPosition, this.enemyBodies(), playerRadius);
     if (collision && this.phase === 'playing') {
       this.currentDetection = { spotted: true, enemyId: collision.id, rayBlocked: false, distance: 0 };
+      this.recordAlertTransition(this.currentSuspicion.status, 'detected');
       this.currentSuspicion = { value: 1, status: 'detected', enemyId: collision.id };
       this.setPhase('caught');
       console.warn(`[collision] player collided with ${collision.id}`);
@@ -636,6 +673,13 @@ export class Game {
       this.objectiveNotice = '';
       this.renderUi();
     }
+    if (this.phase === 'playing') {
+      const hudSecond = Math.floor(this.currentRunElapsedMs() / 1000);
+      if (hudSecond !== this.lastHudSecond) {
+        this.lastHudSecond = hudSecond;
+        this.ui.updateRunHud(this.currentRunElapsedMs(), this.runAlertCount);
+      }
+    }
     this.goalMesh.rotation.y += delta * 0.9;
     this.renderer.render(this.scene, this.camera);
 
@@ -732,6 +776,10 @@ export class Game {
   }
 
   private renderUi(): void {
+    const runElapsedMs =
+      this.runStartedAt > 0 && this.phase !== 'menu'
+        ? this.runSummary?.elapsedMs ?? this.currentRunElapsedMs()
+        : null;
     this.ui.renderHud(
       this.level,
       this.levelIndex,
@@ -740,8 +788,10 @@ export class Game {
       this.currentSuspicion,
       this.objectiveProgress(),
       this.objectiveNotice,
+      runElapsedMs,
+      this.runAlertCount,
     );
-    this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex);
+    this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex, this.runSummary);
   }
 
   private enemyBodies(): { id: string; position: Vec2; radius: number }[] {
@@ -754,6 +804,43 @@ export class Game {
 
   private objectiveProgress(): ObjectiveProgress {
     return getObjectiveProgress(this.level, this.collectedObjectiveIds);
+  }
+
+  private beginRun(): void {
+    this.runStartedAt = performance.now();
+    this.runAlertCount = 0;
+    this.runSummary = null;
+    this.lastHudSecond = -1;
+  }
+
+  private currentRunElapsedMs(): number {
+    return this.runStartedAt > 0 ? performance.now() - this.runStartedAt : 0;
+  }
+
+  private completeLevel(): void {
+    const previousBestTimeMs = loadBestTime(this.level.id);
+    const summary = createRunSummary({
+      elapsedMs: this.currentRunElapsedMs(),
+      parSeconds: this.level.parSeconds,
+      alerts: this.runAlertCount,
+      previousBestTimeMs,
+    });
+
+    if (summary.isNewBest) {
+      saveBestTime(this.level.id, summary.elapsedMs);
+    }
+
+    this.runSummary = summary;
+    this.objectiveNotice = '';
+    this.objectiveNoticeUntil = 0;
+    this.setPhase('complete');
+  }
+
+  private recordAlertTransition(previous: SuspicionState['status'], next: SuspicionState['status']): void {
+    if (this.phase === 'playing' && previous === 'hidden' && next !== 'hidden') {
+      this.runAlertCount += 1;
+      this.ui.updateRunHud(this.currentRunElapsedMs(), this.runAlertCount);
+    }
   }
 }
 

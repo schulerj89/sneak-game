@@ -94,6 +94,14 @@ button:hover {
   font-size: 13px;
 }
 
+.hud-left .run-time,
+.hud-left .run-alerts {
+  display: inline;
+  margin-top: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
 .objective-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(138px, 1fr));
@@ -296,6 +304,79 @@ button:hover {
   color: #eff8ff;
 }
 
+.run-summary {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 18px;
+  align-items: stretch;
+  margin: 18px 0 10px;
+  border-top: 1px solid rgba(127, 160, 190, 0.24);
+  border-bottom: 1px solid rgba(127, 160, 190, 0.24);
+  padding: 16px 0;
+}
+
+.run-grade {
+  display: grid;
+  place-items: center;
+  border-right: 1px solid rgba(127, 160, 190, 0.24);
+  color: #7dfcc6;
+  text-transform: uppercase;
+}
+
+.run-grade span {
+  color: #9fb2c2;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.run-grade strong {
+  font-size: 54px;
+  line-height: 1;
+}
+
+.grade-a {
+  color: #8eff81;
+}
+
+.grade-b {
+  color: #ffd45a;
+}
+
+.grade-c {
+  color: #ff8b72;
+}
+
+.run-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.run-stat-grid div {
+  min-width: 0;
+}
+
+.run-stat-grid dt {
+  color: #9fb2c2;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.run-stat-grid dd {
+  margin: 2px 0 0;
+  color: #eff8ff;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.record-note {
+  margin: 0 0 18px;
+  color: #7dfcc6;
+  font-weight: 800;
+}
+
 .panel-actions {
   display: flex;
   flex-wrap: wrap;
@@ -434,5 +515,15 @@ button:hover {
   .level-select-panel {
     width: 100%;
     margin: 0;
+  }
+
+  .run-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .run-grade {
+    border-right: 0;
+    border-bottom: 1px solid rgba(127, 160, 190, 0.24);
+    padding-bottom: 12px;
   }
 }
