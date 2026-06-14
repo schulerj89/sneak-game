@@ -257,6 +257,11 @@ button:hover {
   background: #000;
 }
 
+.overlay.is-title {
+  justify-content: flex-start;
+  background: linear-gradient(90deg, #000 0%, #000 35%, rgba(0, 0, 0, 0.42) 56%, rgba(0, 0, 0, 0.08) 100%);
+}
+
 .overlay[hidden],
 .debug[hidden] {
   display: none;
@@ -273,6 +278,24 @@ button:hover {
 
 .menu-panel {
   width: min(620px, 100%);
+}
+
+.overlay.is-title .menu-panel {
+  width: min(520px, calc(100vw - 40px));
+  margin-left: clamp(8px, 5vw, 78px);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.overlay.is-title .logo svg {
+  width: min(430px, 100%);
+}
+
+.overlay.is-title .panel p {
+  max-width: 420px;
+  color: #aebdca;
 }
 
 .loading-panel {

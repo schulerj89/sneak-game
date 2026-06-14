@@ -6,6 +6,7 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 
 - Twelve playable levels from Dock Blackout through Blackout Crown, with easy, medium, hard, and final challenge layouts.
 - Menu, settings, retry, and level-complete flows.
+- Black title screen with the cinematic hero GLB idling beside the logo.
 - First-level mission briefing that explains keycards, terminals, sentries, vision cones, and the locked exit.
 - Clear SC circuit-lock logo and branded menu presentation.
 - Level select menu with generated level preview images.
@@ -13,11 +14,11 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Suspicion meter with alert recovery and detection leniency settings.
 - Guard collision: touching a guard now triggers detection.
 - Objective-gated exits across all levels with keycards, terminals, color-swatch HUD chips, collection notices, pickup chimes, and cinematic 3D objective props.
-- Cinematic hero and sentry character GLBs with code-side idle/patrol animation and procedural mesh fallback for lower quality modes.
+- Cinematic hero idle/run GLBs plus a supplied enemy sentry GLB with code-driven hover, front spotlight, and procedural mesh fallback for lower quality modes.
 - Dark-room lighting, dim locked exits, unlock-only goal beacons, shadows by quality setting, and simple custom assets.
 - Shader-based floor detail, goal beacons, and contact shadows.
 - Downloaded external soundtrack choices with auditable license metadata.
-- Balanced default rendering with a 224 MB advisory browser heap cap.
+- Cinematic default rendering with a 224 MB advisory browser heap cap.
 - On-screen debug panel with FPS, memory, draw calls, player position, and detection state.
 - Console logs for game phase, level loads, settings, audio, and detection events.
 - Unit tests, level route validation, and browser smoke coverage.
@@ -49,6 +50,8 @@ npm run build        # Type-check and build production assets
 npm run test:run     # Run Vitest unit tests
 npm run test:levels  # Validate authored level routes
 npm run test:browser # Run Playwright smoke test against the local dev server
+npm run debug:hero-animation # Capture close-up hero idle/run/yaw debug screenshots
+npm run debug:enemy-sentry # Capture close-up sentry hover/light debug screenshots
 npm run assets:meshy-objectives # Generate Meshy objective GLBs when MESHY_API_KEY is set
 npm run assets:meshy-characters # Generate Meshy or fallback character GLBs
 npm run screenshots   # Capture README screenshots into docs/images
@@ -89,6 +92,14 @@ Then commit and push the checkpoint.
 
 ![Cinematic Hero and Sentry](docs/images/shadow-circuit-characters.png)
 
+![Hero Reference](src/assets/characters/reference/shadow-circuit-hero-reference.png)
+
+![Sentry Reference](src/assets/characters/reference/shadow-circuit-sentry-reference.png)
+
+![Meshy Hero Model](docs/images/shadow-circuit-hero-meshy-model.png)
+
+![Enemy Sentry Debug](docs/images/shadow-circuit-enemy-sentry-debug.png)
+
 ### Levels
 
 ![Dock Blackout](docs/images/shadow-circuit-level-1-dock-blackout.png)
@@ -126,6 +137,7 @@ Then commit and push the checkpoint.
 - `docs/shadow-circuit-soundtrack.md`
 - `docs/shadow-circuit-meshy.md`
 - `docs/shadow-circuit-06-14-2026-levels-characters-decision.md`
+- `docs/shadow-circuit-06-14-2026-character-asset-refresh.md`
 - `docs/shadow-circuit-memory-budget.md`
 - `docs/shadow-circuit-shaders.md`
 - `docs/shadow-circuit-06-12-2026-improve-decision.md`

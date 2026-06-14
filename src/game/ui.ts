@@ -60,7 +60,7 @@ export class GameUi {
     runElapsedMs: number | null,
     runAlertCount: number,
   ): void {
-    if (isLoadingPhase(phase)) {
+    if (!isPlayingPhase(phase)) {
       this.hud.innerHTML = '';
       return;
     }
@@ -119,6 +119,7 @@ export class GameUi {
     loadingProgress: LoadingProgress,
   ): void {
     this.overlay.classList.toggle('is-loading', isLoadingPhase(phase));
+    this.overlay.classList.toggle('is-title', phase === 'menu');
     this.overlay.hidden = isPlayingPhase(phase);
     if (isPlayingPhase(phase)) return;
 
@@ -140,13 +141,7 @@ export class GameUi {
       this.overlay.innerHTML = `
         <div class="panel menu-panel">
           <div class="logo">${logoSvg()}</div>
-          <p>${level.briefing}</p>
-          ${level.objectives?.length ? `
-            <div class="objective-brief">
-              <strong>Objectives</strong>
-              <span>Collect yellow keycards and blue terminals to unlock the green exit.</span>
-            </div>
-          ` : ''}
+          <p>Move unseen through the facility, read patrol lights, and break the circuit before the sentries close in.</p>
           <div class="panel-actions">
             <button type="button" data-action="start">Start Run</button>
             <button type="button" data-action="level-select">Level Select</button>

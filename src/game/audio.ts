@@ -109,6 +109,7 @@ export class MusicDirector {
       this.audio.src = track.url;
       this.audio.currentTime = 0;
       this.activeTrackId = track.id;
+      this.audio.load();
     }
 
     if (!settings.musicEnabled) {
@@ -116,7 +117,7 @@ export class MusicDirector {
       return;
     }
 
-    this.audio.volume = settings.masterVolume * 0.62;
+    this.audio.volume = Math.min(1, settings.masterVolume * 0.86);
     try {
       await this.audio.play();
       console.info(`[audio] soundtrack playing ${track.name}`);
@@ -197,6 +198,22 @@ export class MusicDirector {
 
   currentTrack(): GameSettings['soundtrackId'] | null {
     return this.activeTrackId;
+  }
+
+  playbackState(): {
+    activeTrackId: GameSettings['soundtrackId'] | null;
+    paused: boolean;
+    readyState: number;
+    errorCode: number | null;
+    volume: number;
+  } {
+    return {
+      activeTrackId: this.activeTrackId,
+      paused: this.audio.paused,
+      readyState: this.audio.readyState,
+      errorCode: this.audio.error?.code ?? null,
+      volume: this.audio.volume,
+    };
   }
 
   private preparePickupSamples(): Float32Array {

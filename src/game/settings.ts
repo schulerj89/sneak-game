@@ -5,7 +5,7 @@ export const memoryCapMb = 224;
 export const targetFps = 60;
 
 export const defaultSettings: GameSettings = {
-  quality: 'balanced',
+  quality: 'cinematic',
   musicEnabled: true,
   debugEnabled: true,
   masterVolume: 0.36,

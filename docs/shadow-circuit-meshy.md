@@ -16,7 +16,7 @@ npm run assets:meshy-objectives
 npm run assets:meshy-characters
 ```
 
-The script uses Meshy's Text to 3D v2 two-step workflow:
+The objective script uses Meshy's Text to 3D v2 two-step workflow:
 
 - Create preview tasks with `mode: "preview"`, `should_remesh: true`, `topology: "triangle"`, low `target_polycount`, and `target_formats: ["glb"]`.
 - Optionally pass `--refine` to create textured refine tasks with `mode: "refine"` and `target_formats: ["glb"]`.
@@ -26,20 +26,27 @@ Default runtime assets:
 
 - `src/assets/objectives/keycard-cinematic.glb`
 - `src/assets/objectives/terminal-cinematic.glb`
-- `src/assets/characters/hero-cinematic.glb`
-- `src/assets/characters/sentry-cinematic.glb`
+- `src/assets/hero/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Idle_3_withSkin.glb`
+- `src/assets/hero/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Run_02_withSkin.glb`
+- `src/assets/characters/sentry/enemy_sentry.glb`
 
 Memory first and Balanced quality use the existing lightweight runtime geometry. Cinematic quality preloads the GLBs during the level loading screen and reuses the same assets across every stage.
 
 ## Character Generation
 
-`npm run assets:meshy-characters` targets Meshy's Text to 3D, Rigging, and Animation APIs:
+`npm run assets:meshy-characters` targets Meshy's Image to 3D, Rigging, and Animation APIs:
 
-- Hero prompt: low-poly humanoid stealth infiltrator with clear limbs, teal suit, and cyan visor.
-- Sentry prompt: low-poly humanoid security sentry with red armor and amber visor.
+- Hero reference: `src/assets/characters/reference/shadow-circuit-hero-reference.png`.
+- Sentry reference: `src/assets/characters/reference/shadow-circuit-sentry-reference.png`.
+- Image to 3D uses `ai_model: "meshy-6"`, `model_type: "standard"`, `should_texture: true`, PBR enabled, 4K base texture, A-pose, quad remesh, and `target_formats: ["glb"]`.
 - Rigging requests basic walking/running animations where Meshy can provide them.
-- Animation library action IDs are documented by Meshy. The script targets `30` (`Casual_Walk`) for the hero fallback action and `2` (`Alert`) for the sentry.
+- Animation library action IDs are documented by Meshy. The script targets `30` (`Casual_Walk`) for generated hero experiments and `2` (`Alert`) for the sentry.
 - Generated assets must remain below `MESHY_MAX_CHARACTER_BYTES` before they are written.
+- `--only=hero` or `--only=sentry` can regenerate a single character without rerunning both.
+
+The active hero runtime asset currently comes from the supplied extracted GLBs in `src/assets/hero/`, not the generated `hero-cinematic.glb` output. The runtime loads only the idle and Run_02 clips and ignores walking/run_03 variants.
+
+The active sentry runtime asset is the supplied static `src/assets/characters/sentry/enemy_sentry.glb`. It does not include animation clips; the game applies hover, patrol yaw, and the front spotlight in code.
 
 If `MESHY_API_KEY` is not available, use the local fallback writer:
 
@@ -48,7 +55,7 @@ $env:MESHY_CHARACTER_FALLBACK = "true"
 npm run assets:meshy-characters
 ```
 
-The fallback GLBs are intentionally small, deterministic, and replaceable. They keep the runtime path testable until a real keyed Meshy run can generate and download production outputs.
+The fallback GLBs are intentionally small, deterministic, and replaceable. They keep the runtime path testable if Meshy is unavailable, but the production character assets are the larger Meshy Image-to-3D outputs with embedded animation clips.
 
 Use test mode only to verify API plumbing without overwriting runtime assets:
 

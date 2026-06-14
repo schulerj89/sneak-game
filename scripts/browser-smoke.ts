@@ -26,7 +26,20 @@ try {
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await expectVisible('[data-testid="overlay"]');
-  await expectVisible('text=Collect yellow keycards and blue terminals');
+  await expectVisible('text=Move unseen through the facility');
+  const titleObjectiveTextCount = await page.getByText('Collect yellow keycards and blue terminals').count();
+  if (titleObjectiveTextCount !== 0) {
+    throw new Error('Title screen should not show objective briefing text');
+  }
+  await page.waitForFunction(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null; clipNames: readonly string[] };
+      };
+    };
+    const state = debugWindow.__shadowCircuitDebug?.titleHero();
+    return Boolean(state?.visible && state.cinematic && state.activeState === 'idle' && state.clipNames.some((name) => /idle/i.test(name)));
+  }, null, { timeout: 12000 });
   const initialLoadingCount = await page.locator('[data-testid="loading-panel"]').count();
   if (initialLoadingCount !== 0) {
     throw new Error(`Expected title screen without preload, found ${initialLoadingCount} loading panels`);
@@ -136,11 +149,41 @@ try {
       throw new Error(`Missing soundtrack option ${track}: ${JSON.stringify(soundtrackLabels)}`);
     }
   }
+  for (const trackId of ['ghost-steps', 'cyberpunk-moonlight', 'dark-sci-fi-sector', 'dark-sci-fi-pulse', 'dark-sci-fi-urgent'] as const) {
+    await page.selectOption('[data-setting="soundtrack"]', trackId);
+    await page.waitForFunction((expectedTrackId) => {
+      const debugWindow = window as Window & {
+        __shadowCircuitDebug?: {
+          musicPlayback: () => {
+            activeTrackId: string | null;
+            paused: boolean;
+            readyState: number;
+            errorCode: number | null;
+            volume: number;
+          };
+        };
+      };
+      const state = debugWindow.__shadowCircuitDebug?.musicPlayback();
+      return Boolean(
+        state?.activeTrackId === expectedTrackId &&
+          state.paused === false &&
+          state.readyState >= 2 &&
+          state.errorCode === null &&
+          state.volume > 0.25,
+      );
+    }, trackId, { timeout: 8000 });
+  }
   await page.selectOption('[data-setting="soundtrack"]', 'cyberpunk-moonlight');
   await expectVisible('text=Cyberpunk Moonlight Sonata v2');
   await page.selectOption('[data-setting="detection-leniency"]', 'standard');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
+  const briefingVisible = await page.locator('[data-testid="briefing-panel"]').waitFor({ state: 'visible', timeout: 1200 })
+    .then(() => true)
+    .catch(() => false);
+  if (briefingVisible) {
+    await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
+  }
   await expectLoadingCover('starting run');
   await assertPlayingPhase('after start run');
   const beforeKeyboardMove = await page.evaluate(() => {
@@ -186,8 +229,8 @@ try {
       objectives: debugWindow.__shadowCircuitDebug?.objectives(),
     };
   });
-  if (levelState.levelId !== 'signal-vault' || !levelState.goalVisible || !levelState.playerVisible || levelState.objectives?.totalRequired !== 2) {
-    throw new Error(`Expected visible Signal Vault goal, got ${JSON.stringify(levelState)}`);
+  if (levelState.levelId !== 'dock-blackout' || !levelState.goalVisible || !levelState.playerVisible || levelState.objectives?.totalRequired !== 2) {
+    throw new Error(`Expected visible Dock Blackout goal after title start, got ${JSON.stringify(levelState)}`);
   }
 
   await selectDebugLevel(3);

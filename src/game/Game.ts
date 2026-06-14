@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MusicDirector } from './audio';
-import { CharacterAssetLibrary } from './characterAssets';
+import { CharacterAssetLibrary, type CharacterAnimator } from './characterAssets';
 import { collidesWithEnemies, collidesWithObstacles, enemyRadius, playerRadius } from './collision';
 import { DebugPanel } from './debug';
 import { advanceSuspicion, emptySuspicion, getDetectionState, isSightBlocked } from './detection';
@@ -42,8 +42,10 @@ import { GameUi } from './ui';
 type EnemyRuntime = {
   spec: EnemySpec;
   mesh: THREE.Object3D;
+  animator: CharacterAnimator | null;
   cone: THREE.Mesh;
   light: THREE.SpotLight;
+  lens: THREE.Mesh;
   contactShadow: THREE.Mesh;
   position: Vec2;
   facing: Vec2;
@@ -56,6 +58,10 @@ type ObjectiveRuntime = {
   mesh: THREE.Object3D;
   glow: THREE.PointLight;
 };
+
+const enemyHoverBaseY = 0.72;
+const enemyHoverAmplitude = 0.12;
+const enemyHoverSpeed = 1.45;
 
 declare global {
   interface Window {
@@ -77,7 +83,31 @@ declare global {
       goalLit: () => boolean;
       movePlayerTo: (point: Vec2) => void;
       playerPosition: () => Vec2;
+      heroAnimation: () => { activeState: string | null; clipNames: readonly string[]; yaw: number; debugCamera: boolean };
+      setHeroDebugView: (enabled: boolean) => void;
+      titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null; clipNames: readonly string[] };
+      enemySentry: () => {
+        id: string | null;
+        cinematic: boolean;
+        meshName: string | null;
+        position: Vec2 | null;
+        meshY: number | null;
+        yaw: number | null;
+        facing: Vec2 | null;
+        lightDirection: Vec2 | null;
+        lightFrontOffset: number | null;
+        lightHeightOffset: number | null;
+        debugCamera: boolean;
+      };
+      setEnemyDebugView: (enabled: boolean) => void;
       activeTrackId: () => GameSettings['soundtrackId'] | null;
+      musicPlayback: () => {
+        activeTrackId: GameSettings['soundtrackId'] | null;
+        paused: boolean;
+        readyState: number;
+        errorCode: number | null;
+        volume: number;
+      };
       musicEnabled: () => boolean;
     };
   }
@@ -102,8 +132,13 @@ export class Game {
   private loadingProgress: LoadingProgress = { value: 0, label: 'Starting systems' };
   private levelIndex = 0;
   private playerPosition: Vec2 = { ...levels[0].start };
+  private readonly titlePreview = new THREE.Group();
+  private titleHeroVisual: THREE.Object3D | null = null;
+  private titleHeroAnimator: CharacterAnimator | null = null;
+  private titlePreviewPromise: Promise<void> | null = null;
   private readonly playerMesh = new THREE.Group();
   private playerVisual: THREE.Object3D | null = null;
+  private playerAnimator: CharacterAnimator | null = null;
   private readonly playerContactShadow = createContactShadow(0.8, 0.52, 0.28);
   private goalMesh = new THREE.Mesh();
   private goalBeaconMesh = new THREE.Mesh();
@@ -127,6 +162,8 @@ export class Game {
   private reservedMemoryMb = 0;
   private memoryPressureWarned = false;
   private firstLevelBriefingSeen = false;
+  private heroDebugView = false;
+  private enemyDebugView = false;
   private animationId = 0;
   private disposed = false;
 
@@ -136,7 +173,7 @@ export class Game {
       onBeginBriefing: () => void this.beginBriefedRun(),
       onResume: () => this.setPhase(this.settingsReturnPhase),
       onSettings: () => this.openSettings(),
-      onMenu: () => this.setPhase('menu'),
+      onMenu: () => this.openMenu(),
       onTitle: () => this.returnToTitle(),
       onLevelSelect: () => this.openLevelSelect(),
       onLevelSelectBack: () => this.setPhase(this.levelSelectReturnPhase),
@@ -153,7 +190,7 @@ export class Game {
     this.applyRendererQuality();
 
     this.setupScene();
-    this.loadLevel(0);
+    this.showTitleScene();
     this.resize();
     window.addEventListener('resize', this.resize);
     window.addEventListener('keydown', this.handleHotkeys);
@@ -207,6 +244,13 @@ export class Game {
     this.setPhase('settings');
   }
 
+  private openMenu(): void {
+    if (this.isTransitioning()) return;
+
+    this.showTitleScene();
+    this.setPhase('menu');
+  }
+
   private openLevelSelect(): void {
     if (this.isTransitioning()) return;
 
@@ -258,6 +302,8 @@ export class Game {
     });
     this.currentDetection = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
     this.currentSuspicion = emptySuspicion();
+    this.heroDebugView = false;
+    this.enemyDebugView = false;
     this.runStartedAt = 0;
     this.runAlertCount = 0;
     this.runSummary = null;
@@ -287,7 +333,7 @@ export class Game {
   private returnToTitle(): void {
     if (this.isTransitioning()) return;
 
-    this.loadLevel(0);
+    this.showTitleScene();
     this.setPhase('menu');
   }
 
@@ -340,7 +386,85 @@ export class Game {
     ];
   }
 
+  private showTitleScene(): void {
+    this.levelIndex = 0;
+    this.clearLevelObjects();
+    this.scene.background = new THREE.Color('#000000');
+    this.scene.fog = null;
+    this.titlePreview.visible = true;
+    if (!this.scene.children.includes(this.titlePreview)) {
+      this.scene.add(this.titlePreview);
+    }
+    this.playerPosition = { ...this.level.start };
+    this.collectedObjectiveIds.clear();
+    this.currentDetection = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
+    this.currentSuspicion = emptySuspicion();
+    this.runStartedAt = 0;
+    this.runAlertCount = 0;
+    this.runSummary = null;
+    this.objectiveNotice = '';
+    this.objectiveNoticeUntil = 0;
+    this.fitCameraToTitle();
+    void this.prepareTitlePreview();
+    this.renderUi();
+  }
+
+  private async prepareTitlePreview(): Promise<void> {
+    if (this.titleHeroVisual) return;
+
+    this.titlePreviewPromise ??= this.characterAssets.preloadHero()
+      .then(() => {
+        if (this.disposed) return;
+        this.installTitleHeroPreview();
+        if (this.phase === 'menu') {
+          this.fitCameraToTitle();
+        }
+      })
+      .catch((error: unknown) => {
+        this.titlePreviewPromise = null;
+        console.warn(`[title] hero preview unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    await this.titlePreviewPromise;
+  }
+
+  private installTitleHeroPreview(): void {
+    this.titlePreview.clear();
+    this.titlePreview.name = 'title-preview';
+
+    const platformMaterial = new THREE.MeshBasicMaterial({ color: '#020405', transparent: true, opacity: 0.64 });
+    const platform = new THREE.Mesh(new THREE.CircleGeometry(1.04, 48), platformMaterial);
+    platform.rotation.x = -Math.PI / 2;
+    platform.position.set(1.45, -0.02, 0);
+    platform.name = 'title-hero-platform';
+
+    const key = new THREE.DirectionalLight('#e7fbff', 5.2);
+    key.position.set(2.7, 3.6, 3.2);
+    key.name = 'title-hero-key-light';
+
+    const rim = new THREE.PointLight('#53ffe2', 5.6, 4.8);
+    rim.position.set(0.55, 1.35, 1.35);
+    rim.name = 'title-hero-rim-light';
+
+    const fill = new THREE.PointLight('#fff2d0', 4.6, 4.4);
+    fill.position.set(1.35, 1.15, 2.15);
+    fill.name = 'title-hero-fill-light';
+
+    const character = this.characterAssets.createHero('cinematic');
+    this.titleHeroVisual = character.object;
+    this.titleHeroAnimator = character.animator;
+    this.titleHeroAnimator?.setMotionState('idle', 0);
+    this.titleHeroVisual.name = 'title-hero:cinematic';
+    this.titleHeroVisual.position.set(1.45, 0, 0);
+    this.titleHeroVisual.rotation.y = -0.26;
+
+    this.titlePreview.add(platform, key, rim, fill, this.titleHeroVisual);
+  }
+
   private loadLevel(index: number): void {
+    this.titlePreview.visible = false;
+    this.scene.remove(this.titlePreview);
+    this.scene.background = new THREE.Color('#03050a');
+    this.scene.fog = new THREE.Fog('#03050a', 8, 22);
     this.levelIndex = index;
     this.clearLevelObjects();
     const level = this.level;
@@ -431,7 +555,7 @@ export class Game {
 
     this.enemies = level.enemies.map((enemy) => this.createEnemy(enemy));
     this.enemies.forEach((enemy) => {
-      this.scene.add(enemy.mesh, enemy.cone, enemy.light, enemy.contactShadow);
+      this.scene.add(enemy.mesh, enemy.cone, enemy.light, enemy.lens, enemy.contactShadow);
       this.placeEnemy(enemy);
     });
 
@@ -609,7 +733,8 @@ export class Game {
   }
 
   private createEnemy(spec: EnemySpec): EnemyRuntime {
-    const mesh = this.characterAssets.createEnemy(spec.id, this.settings.quality);
+    const character = this.characterAssets.createEnemy(spec.id, this.settings.quality);
+    const mesh = character.object;
 
     const cone = new THREE.Mesh(
       createVisionConeGeometry(spec.visionRange, spec.visionAngleDegrees),
@@ -624,17 +749,24 @@ export class Game {
     cone.position.y = 0.035;
     cone.name = `vision:${spec.id}`;
 
-    const light = new THREE.SpotLight('#ffcf5a', 24, spec.visionRange, (spec.visionAngleDegrees * Math.PI) / 360, 0.55, 1.8);
+    const light = new THREE.SpotLight('#ffcf5a', 42, spec.visionRange, (spec.visionAngleDegrees * Math.PI) / 360, 0.55, 1.65);
     light.castShadow = this.settings.quality !== 'memory';
     light.shadow.mapSize.setScalar(qualityProfile(this.settings.quality).shadowMapSize);
     light.name = `vision-light:${spec.id}`;
+    const lens = new THREE.Mesh(
+      new THREE.SphereGeometry(0.045, 16, 8),
+      new THREE.MeshBasicMaterial({ color: '#ffe08a' }),
+    );
+    lens.name = `vision-lens:${spec.id}`;
     const contactShadow = createContactShadow(0.82, 0.62, 0.25);
 
     return {
       spec,
       mesh,
+      animator: character.animator,
       cone,
       light,
+      lens,
       contactShadow,
       position: { ...spec.start },
       facing: normalize(subtract(spec.patrol[1] ?? spec.start, spec.start)),
@@ -672,7 +804,9 @@ export class Game {
 
     for (const enemy of this.enemies) {
       this.scene.remove(enemy.mesh);
-      enemy.mesh = this.characterAssets.createEnemy(enemy.spec.id, this.settings.quality);
+      const character = this.characterAssets.createEnemy(enemy.spec.id, this.settings.quality);
+      enemy.mesh = character.object;
+      enemy.animator = character.animator;
       this.scene.add(enemy.mesh);
       this.placeEnemy(enemy);
     }
@@ -680,7 +814,9 @@ export class Game {
 
   private refreshPlayerVisual(): void {
     this.playerMesh.clear();
-    this.playerVisual = this.characterAssets.createHero(this.settings.quality);
+    const character = this.characterAssets.createHero(this.settings.quality);
+    this.playerVisual = character.object;
+    this.playerAnimator = character.animator;
     this.playerMesh.add(this.playerVisual);
   }
 
@@ -688,6 +824,7 @@ export class Game {
     if (!this.canUpdateRun()) return;
 
     const movement = this.input.movement();
+    this.facePlayerTowardMovement(movement, delta);
     const next = add(this.playerPosition, scale(movement, delta * 2.4));
     const clamped = clampToRoom(next, this.level.floorSize, playerRadius);
     const enemyHit = collidesWithEnemies(clamped, this.enemyBodies(), playerRadius);
@@ -871,14 +1008,20 @@ export class Game {
   }
 
   private placeEnemy(enemy: EnemyRuntime): void {
-    enemy.mesh.position.set(enemy.position.x, 0.55, enemy.position.z);
+    enemy.mesh.position.set(enemy.position.x, enemyHoverBaseY, enemy.position.z);
     enemy.mesh.rotation.y = Math.atan2(enemy.facing.x, enemy.facing.z);
     enemy.cone.position.set(enemy.position.x, 0.035, enemy.position.z);
     enemy.cone.rotation.y = Math.atan2(enemy.facing.x, enemy.facing.z);
     enemy.contactShadow.position.set(enemy.position.x, 0.018, enemy.position.z);
-    enemy.light.position.set(enemy.position.x, 1.1, enemy.position.z);
-    enemy.light.target.position.set(enemy.position.x + enemy.facing.x, 0.25, enemy.position.z + enemy.facing.z);
+    this.placeEnemySpotlight(enemy, enemy.mesh.position.y);
     this.scene.add(enemy.light.target);
+  }
+
+  private placeEnemySpotlight(enemy: EnemyRuntime, meshY: number): void {
+    const frontOffset = 0.32;
+    enemy.light.position.set(enemy.position.x + enemy.facing.x * frontOffset, meshY + 1.14, enemy.position.z + enemy.facing.z * frontOffset);
+    enemy.light.target.position.set(enemy.position.x + enemy.facing.x * 1.35, meshY + 0.24, enemy.position.z + enemy.facing.z * 1.35);
+    enemy.lens.position.copy(enemy.light.position);
   }
 
   private clearLevelObjects(): void {
@@ -892,21 +1035,36 @@ export class Game {
     this.objectives = [];
   }
 
-  private updateCharacterAnimations(now: number): void {
+  private updateCharacterAnimations(now: number, delta: number): void {
+    if (this.phase === 'menu') {
+      this.titleHeroAnimator?.setMotionState('idle');
+      this.titleHeroAnimator?.update(delta);
+      if (this.titleHeroVisual) {
+        const time = now / 1000;
+        this.titleHeroVisual.position.y = Math.sin(time * 2.2) * 0.015;
+      }
+      return;
+    }
+
     if (this.settings.quality !== 'cinematic') return;
 
     const time = now / 1000;
+    this.playerAnimator?.update(delta);
     if (this.playerVisual) {
       const movement = this.canUpdateRun() ? this.input.movement() : { x: 0, z: 0 };
       const moving = Math.hypot(movement.x, movement.z) > 0.01;
+      this.playerAnimator?.setMotionState(moving ? 'run' : 'idle');
       this.playerVisual.position.y = moving ? Math.sin(time * 12) * 0.035 : Math.sin(time * 3) * 0.012;
       this.playerVisual.rotation.z = moving ? Math.sin(time * 12) * 0.045 : 0;
       this.playerVisual.rotation.x = moving ? Math.cos(time * 9) * 0.028 : 0;
     }
 
     this.enemies.forEach((enemy, index) => {
-      enemy.mesh.position.y = 0.55 + Math.sin(time * 5 + index * 0.8) * 0.035;
-      enemy.mesh.rotation.z = Math.sin(time * 3.5 + index) * 0.035;
+      enemy.animator?.update(delta);
+      const hoverY = enemyHoverBaseY + Math.sin(time * enemyHoverSpeed + index * 0.9) * enemyHoverAmplitude;
+      enemy.mesh.position.y = hoverY;
+      enemy.mesh.rotation.z = Math.sin(time * enemyHoverSpeed * 0.7 + index) * 0.018;
+      this.placeEnemySpotlight(enemy, hoverY);
     });
   }
 
@@ -918,7 +1076,7 @@ export class Game {
     this.updateEnemies(delta);
     this.updateDetection(delta);
     this.updateDebugRays();
-    this.updateCharacterAnimations(now);
+    this.updateCharacterAnimations(now, delta);
     if (this.objectiveNotice && now > this.objectiveNoticeUntil) {
       this.objectiveNotice = '';
       this.renderUi();
@@ -931,6 +1089,8 @@ export class Game {
       }
     }
     this.goalMesh.rotation.y += delta * 0.9;
+    this.updateHeroDebugCamera();
+    this.updateEnemyDebugCamera();
     this.renderer.render(this.scene, this.camera);
 
     const sample = this.debugPanel.sample(now, this.renderer.info.render.calls, this.renderer.info.render.triangles, this.reservedMemoryMb);
@@ -970,7 +1130,7 @@ export class Game {
     if (event.code === 'Escape') {
       event.preventDefault();
       if (this.canUpdateRun()) {
-        this.setPhase('menu');
+        this.openMenu();
       } else if (this.phase === 'settings') {
         this.setPhase(this.settingsReturnPhase);
       } else if (this.phase === 'level-select') {
@@ -1004,7 +1164,13 @@ export class Game {
       goalLit: () => this.goalBeaconMesh.visible,
       movePlayerTo: (point: Vec2) => this.movePlayerTo(point),
       playerPosition: () => this.playerPosition,
+      heroAnimation: () => this.heroAnimationDebugState(),
+      setHeroDebugView: (enabled: boolean) => this.setHeroDebugView(enabled),
+      titleHero: () => this.titleHeroDebugState(),
+      enemySentry: () => this.enemySentryDebugState(),
+      setEnemyDebugView: (enabled: boolean) => this.setEnemyDebugView(enabled),
       activeTrackId: () => this.music.currentTrack(),
+      musicPlayback: () => this.music.playbackState(),
       musicEnabled: () => this.settings.musicEnabled,
     };
   }
@@ -1029,6 +1195,136 @@ export class Game {
     this.collectObjectives();
   }
 
+  private facePlayerTowardMovement(movement: Vec2, delta: number): void {
+    if (Math.hypot(movement.x, movement.z) < 0.01) return;
+
+    const targetYaw = Math.atan2(movement.x, movement.z);
+    this.playerMesh.rotation.y = dampAngle(this.playerMesh.rotation.y, targetYaw, 1 - Math.exp(-18 * delta));
+  }
+
+  private setHeroDebugView(enabled: boolean): void {
+    this.heroDebugView = enabled;
+    if (enabled) this.enemyDebugView = false;
+    if (enabled) {
+      this.updateHeroDebugCamera();
+    } else {
+      this.fitCameraToLevel();
+    }
+  }
+
+  private updateHeroDebugCamera(): void {
+    if (!this.heroDebugView) return;
+
+    const target = new THREE.Vector3(this.playerPosition.x, 0.72, this.playerPosition.z);
+    this.camera.position.set(target.x, target.y + 2.25, target.z + 3.1);
+    this.camera.lookAt(target);
+    if (this.scene.fog instanceof THREE.Fog) {
+      this.scene.fog.near = 4;
+      this.scene.fog.far = 11;
+    }
+  }
+
+  private heroAnimationDebugState(): { activeState: string | null; clipNames: readonly string[]; yaw: number; debugCamera: boolean } {
+    const snapshot = this.playerAnimator?.snapshot();
+    return {
+      activeState: snapshot?.activeState ?? null,
+      clipNames: snapshot?.clipNames ?? [],
+      yaw: this.playerMesh.rotation.y,
+      debugCamera: this.heroDebugView,
+    };
+  }
+
+  private titleHeroDebugState(): { visible: boolean; cinematic: boolean; activeState: string | null; clipNames: readonly string[] } {
+    const snapshot = this.titleHeroAnimator?.snapshot();
+    return {
+      visible: this.phase === 'menu' && this.scene.children.includes(this.titlePreview) && Boolean(this.titleHeroVisual),
+      cinematic: this.titleHeroVisual?.name.endsWith(':cinematic') ?? false,
+      activeState: snapshot?.activeState ?? null,
+      clipNames: snapshot?.clipNames ?? [],
+    };
+  }
+
+  private setEnemyDebugView(enabled: boolean): void {
+    this.enemyDebugView = enabled;
+    if (enabled) this.heroDebugView = false;
+    if (enabled) {
+      this.updateEnemyDebugCamera();
+    } else {
+      this.fitCameraToLevel();
+    }
+  }
+
+  private updateEnemyDebugCamera(): void {
+    if (!this.enemyDebugView) return;
+
+    const enemy = this.enemies[0];
+    if (!enemy) return;
+
+    const target = new THREE.Vector3(enemy.position.x, enemy.mesh.position.y + 0.45, enemy.position.z);
+    const side = new THREE.Vector3(enemy.facing.z, 0, -enemy.facing.x);
+    this.camera.position.set(
+      target.x + enemy.facing.x * 1.85 + side.x * 2.85,
+      target.y + 1.75,
+      target.z + enemy.facing.z * 1.85 + side.z * 2.85,
+    );
+    this.camera.lookAt(target.x + enemy.facing.x * 0.18, target.y, target.z + enemy.facing.z * 0.18);
+    if (this.scene.fog instanceof THREE.Fog) {
+      this.scene.fog.near = 4;
+      this.scene.fog.far = 12;
+    }
+  }
+
+  private enemySentryDebugState(): {
+    id: string | null;
+    cinematic: boolean;
+    meshName: string | null;
+    position: Vec2 | null;
+    meshY: number | null;
+    yaw: number | null;
+    facing: Vec2 | null;
+    lightDirection: Vec2 | null;
+    lightFrontOffset: number | null;
+    lightHeightOffset: number | null;
+    debugCamera: boolean;
+  } {
+    const enemy = this.enemies[0];
+    if (!enemy) {
+      return {
+        id: null,
+        cinematic: false,
+        meshName: null,
+        position: null,
+        meshY: null,
+        yaw: null,
+        facing: null,
+        lightDirection: null,
+        lightFrontOffset: null,
+        lightHeightOffset: null,
+        debugCamera: this.enemyDebugView,
+      };
+    }
+
+    const lightDirection = normalize({
+      x: enemy.light.target.position.x - enemy.light.position.x,
+      z: enemy.light.target.position.z - enemy.light.position.z,
+    });
+    const lightFrontOffset =
+      (enemy.light.position.x - enemy.position.x) * enemy.facing.x + (enemy.light.position.z - enemy.position.z) * enemy.facing.z;
+    return {
+      id: enemy.spec.id,
+      cinematic: enemy.mesh.name.endsWith(':cinematic'),
+      meshName: enemy.mesh.name,
+      position: { ...enemy.position },
+      meshY: enemy.mesh.position.y,
+      yaw: enemy.mesh.rotation.y,
+      facing: { ...enemy.facing },
+      lightDirection,
+      lightFrontOffset,
+      lightHeightOffset: enemy.light.position.y - enemy.mesh.position.y,
+      debugCamera: this.enemyDebugView,
+    };
+  }
+
   private isGoalVisibleInCamera(): boolean {
     return this.isObjectVisibleInCamera(this.goalMesh);
   }
@@ -1043,6 +1339,19 @@ export class Game {
   }
 
   private fitCameraToLevel(): void {
+    if (this.phase === 'menu') {
+      this.fitCameraToTitle();
+      return;
+    }
+    if (this.heroDebugView) {
+      this.updateHeroDebugCamera();
+      return;
+    }
+    if (this.enemyDebugView) {
+      this.updateEnemyDebugCamera();
+      return;
+    }
+
     const scale = Math.max(1, this.level.floorSize.x / 16.5, this.level.floorSize.z / 11.8, this.camera.aspect < 1 ? 1.2 : 1);
     this.camera.position.set(0, 10.2 * scale, 10.4 * scale);
     this.camera.lookAt(0, 0, 0);
@@ -1050,6 +1359,16 @@ export class Game {
     if (this.scene.fog instanceof THREE.Fog) {
       this.scene.fog.near = 8 * scale;
       this.scene.fog.far = 22 * scale;
+    }
+  }
+
+  private fitCameraToTitle(): void {
+    const aspectOffset = this.camera.aspect < 1 ? 0.65 : 0;
+    this.camera.position.set(1.15 + aspectOffset, 1.12, 3.15);
+    this.camera.lookAt(1.35, 0.68, 0);
+    if (this.scene.fog instanceof THREE.Fog) {
+      this.scene.fog.near = 6;
+      this.scene.fog.far = 18;
     }
   }
 
@@ -1151,4 +1470,9 @@ function createContactShadow(width: number, depth: number, opacity: number): THR
   shadow.scale.set(width, depth, 1);
   shadow.name = 'contact-shadow';
   return shadow;
+}
+
+function dampAngle(current: number, target: number, factor: number): number {
+  const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
+  return current + delta * factor;
 }

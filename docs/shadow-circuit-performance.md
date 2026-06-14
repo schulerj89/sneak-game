@@ -1,6 +1,6 @@
 # Shadow Circuit Performance
 
-The project targets crisp rendering while staying under a `224 MB` advisory browser heap budget when browser memory reporting is available. Settings persist in local storage and start in `Balanced` mode.
+The project targets crisp rendering while staying under a `224 MB` advisory browser heap budget when browser memory reporting is available. Settings persist in local storage and fresh sessions start in `Cinematic` mode.
 
 ## Quality Profiles
 

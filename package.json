@@ -11,6 +11,8 @@
     "test:run": "vitest run",
     "test:levels": "tsx scripts/level-walkthrough.ts",
     "test:browser": "tsx scripts/browser-smoke.ts",
+    "debug:hero-animation": "tsx scripts/hero-animation-debug.ts",
+    "debug:enemy-sentry": "tsx scripts/enemy-sentry-debug.ts",
     "assets:meshy-objectives": "tsx scripts/generate-meshy-objectives.ts",
     "assets:meshy-characters": "tsx scripts/generate-meshy-characters.ts",
     "screenshots": "tsx scripts/capture-screenshots.ts",

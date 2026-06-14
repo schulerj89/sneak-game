@@ -10,7 +10,7 @@ Shadow Circuit ships downloaded external tracks only:
 
 The settings menu exposes a soundtrack selector. Runtime playback uses one `HTMLAudioElement` and swaps the source when the selected track changes, which avoids keeping multiple decoded tracks active in memory.
 
-`Ghost Steps` is the default mix. It is an external CC-BY 4.0 track from OpenGameArt with cyberpunk, stealth, ambient, and loop tags. `Cyberpunk Moonlight` is a CC0 external track from OpenGameArt with a slower synth pulse. `Dark Sci-Fi: Sector`, `Dark Sci-Fi: Pulse`, and `Dark Sci-Fi: Urgent` come from SRG774's CC0 loopable sci-fi pack and add calmer, pulsing, and tense options. The game imports runtime music as MP3 so the payload stays smaller than full WAV loops.
+`Ghost Steps` is the default mix. It is an external CC-BY 4.0 track from OpenGameArt with cyberpunk, stealth, ambient, and loop tags. `Cyberpunk Moonlight` is a CC0 external track from OpenGameArt with a slower synth pulse. `Dark Sci-Fi: Sector`, `Dark Sci-Fi: Pulse`, and `Dark Sci-Fi: Urgent` come from SRG774's CC0 loopable sci-fi pack and add calmer, pulsing, and tense options. The dark sci-fi MP3s are normalized in-repo because the source files were much quieter than the rest of the soundtrack. The game imports runtime music as MP3 so the payload stays smaller than full WAV loops.
 
 ## License Manifest
 
@@ -35,4 +35,4 @@ When external royalty-free tracks are added, each track must include:
 
 ## Coverage
 
-`npm run test:browser` switches to `Cyberpunk Moonlight`, starts the game, verifies the selected soundtrack log appears, and checks the debug hook reports `cyberpunk-moonlight` as the active track.
+`npm run test:browser` switches through every soundtrack option, verifies the debug hook reports the selected track, and checks the shared `HTMLAudioElement` is loaded, unpaused, error-free, and audible by volume setting before starting the game with `Cyberpunk Moonlight`.

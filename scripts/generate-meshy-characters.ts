@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 
@@ -24,10 +24,17 @@ type MeshyCreateResponse = {
 
 type MeshyModelTask = {
   id: string;
-  status: 'PENDING' | 'IN_PROGRESS' | 'SUCCEEDED' | 'FAILED' | 'EXPIRED' | 'CANCELED';
+  status: MeshyTaskStatus;
   progress?: number;
   model_urls?: {
     glb?: string;
+  };
+  thumbnail_url?: string;
+  thumbnail_urls?: {
+    front?: string;
+    back?: string;
+    left?: string;
+    right?: string;
   };
   task_error?: {
     message?: string;
@@ -36,7 +43,7 @@ type MeshyModelTask = {
 
 type MeshyRigTask = {
   id: string;
-  status: 'PENDING' | 'IN_PROGRESS' | 'SUCCEEDED' | 'FAILED' | 'CANCELED';
+  status: MeshyTaskStatus;
   progress?: number;
   result?: {
     rigged_character_glb_url?: string;
@@ -52,7 +59,7 @@ type MeshyRigTask = {
 
 type MeshyAnimationTask = {
   id: string;
-  status: 'PENDING' | 'IN_PROGRESS' | 'SUCCEEDED' | 'FAILED' | 'CANCELED';
+  status: MeshyTaskStatus;
   progress?: number;
   result?: {
     animation_glb_url?: string;
@@ -65,13 +72,15 @@ type MeshyAnimationTask = {
 type CharacterPlan = Readonly<{
   id: 'hero' | 'sentry';
   fileName: string;
+  referencePath: string;
   targetPolycount: number;
-  prompt: string;
   texturePrompt: string;
   animationActionId: number;
 }>;
 
-const textTo3dBaseUrl = 'https://api.meshy.ai/openapi/v2/text-to-3d';
+type MeshyTaskStatus = 'PENDING' | 'IN_PROGRESS' | 'SUCCEEDED' | 'FAILED' | 'EXPIRED' | 'CANCELED';
+
+const imageTo3dBaseUrl = 'https://api.meshy.ai/openapi/v1/image-to-3d';
 const riggingBaseUrl = 'https://api.meshy.ai/openapi/v1/rigging';
 const animationBaseUrl = 'https://api.meshy.ai/openapi/v1/animations';
 const args = new Set(process.argv.slice(2));
@@ -79,36 +88,46 @@ const fallback =
   args.has('--fallback') ||
   process.env.MESHY_CHARACTER_FALLBACK === 'true' ||
   process.env.npm_config_fallback === 'true';
-const refine = args.has('--refine');
-const skipAnimation = args.has('--skip-animation');
+const skipRigging = args.has('--skip-rigging') || process.env.npm_config_skip_rigging === 'true';
+const skipAnimation = args.has('--skip-animation') || process.env.npm_config_skip_animation === 'true';
 const apiKey = process.env.MESHY_API_KEY ?? '';
-const maxAssetBytes = Number(process.env.MESHY_MAX_CHARACTER_BYTES ?? 180_000);
+const maxAssetBytes = Number(process.env.MESHY_MAX_CHARACTER_BYTES ?? 90_000_000);
 const outputDir = 'src/assets/characters';
+const referenceDir = join(outputDir, 'reference');
+const previewOutputDir = 'docs/images';
+const onlyCharacter = process.env.npm_config_only ?? process.argv
+  .slice(2)
+  .find((arg) => arg.startsWith('--only='))
+  ?.split('=')[1];
 
 const plans: readonly CharacterPlan[] = [
   {
     id: 'hero',
     fileName: 'hero-cinematic.glb',
-    targetPolycount: 1800,
-    prompt:
-      'low-poly humanoid stealth infiltrator hero for top-down cyberpunk game, teal sneaking suit, clear limbs, visor, compact backpack, face toward positive Z, isolated character, no weapon, no text',
+    referencePath: join(referenceDir, 'shadow-circuit-hero-reference.png'),
+    targetPolycount: 80_000,
     texturePrompt:
-      'dark teal stealth suit with cyan visor, subtle green circuit seams, readable compact game character, no logos or text',
+      'Preserve the teal-black stealth armor, cyan visor, utility pouches, glowing circuit accents, and clean humanoid silhouette from the reference image. Keep it game-ready, front-oriented, and readable from a top-down camera.',
     animationActionId: 30,
   },
   {
     id: 'sentry',
     fileName: 'sentry-cinematic.glb',
-    targetPolycount: 1700,
-    prompt:
-      'low-poly humanoid security sentry enemy for top-down cyberpunk stealth game, red armor, helmet visor, clear arms and legs, face toward positive Z, isolated character, no weapon, no text',
+    referencePath: join(referenceDir, 'shadow-circuit-sentry-reference.png'),
+    targetPolycount: 80_000,
     texturePrompt:
-      'red security armor with amber visor and black metal joints, readable compact game enemy, no logos or text',
+      'Preserve the red-black sentry armor, amber visor, chest warning light, antenna, heavy boots, and clean humanoid silhouette from the reference image. Keep it game-ready, front-oriented, and readable from a top-down camera.',
     animationActionId: 2,
   },
 ];
+const selectedPlans = plans.filter((plan) => !onlyCharacter || plan.id === onlyCharacter);
+
+if (!selectedPlans.length) {
+  throw new Error(`No character matched --only=${onlyCharacter}`);
+}
 
 await mkdir(outputDir, { recursive: true });
+await mkdir(previewOutputDir, { recursive: true });
 
 if (fallback) {
   await writeFallbackAssets();
@@ -120,27 +139,30 @@ if (fallback) {
 }
 
 async function writeMeshyAssets(): Promise<void> {
-  for (const plan of plans) {
-    console.info(`[meshy] creating character preview ${plan.id}`);
-    const previewTaskId = await createTask(textTo3dBaseUrl, {
-      mode: 'preview',
-      prompt: plan.prompt,
+  for (const plan of selectedPlans) {
+    console.info(`[meshy] creating image-to-3d character ${plan.id} from ${basename(plan.referencePath)}`);
+    const imageDataUri = await readImageDataUri(plan.referencePath);
+    const modelTaskId = await createTask(imageTo3dBaseUrl, {
+      image_url: imageDataUri,
       ai_model: 'meshy-6',
+      model_type: 'standard',
+      should_texture: true,
+      texture_image_url: imageDataUri,
+      texture_prompt: plan.texturePrompt,
+      enable_pbr: true,
+      hd_texture: true,
       should_remesh: true,
       topology: 'quad',
       target_polycount: plan.targetPolycount,
+      save_pre_remeshed_model: false,
+      pose_mode: 'a-pose',
       target_formats: ['glb'],
-      moderation: true,
-      auto_size: true,
-      origin_at: 'bottom',
     });
-    const previewTask = await waitForModelTask(previewTaskId, `preview ${plan.id}`);
-    const modelTask = refine ? await createRefinedTask(plan, previewTask.id) : previewTask;
+    console.info(`[meshy] ${plan.id} image-to-3d task ${modelTaskId}`);
+    const modelTask = await waitForModelTask(modelTaskId, `image-to-3d ${plan.id}`);
+    await writeTaskThumbnail(plan, modelTask);
 
-    const rigTask = await createRigTask(modelTask.id, plan.id);
-    const outputUrl = skipAnimation
-      ? rigTask.result?.rigged_character_glb_url
-      : await animatedCharacterUrl(plan, rigTask);
+    const outputUrl = await animatedOrModelUrl(plan, modelTask);
     if (!outputUrl) {
       throw new Error(`Meshy ${plan.id} task did not return a downloadable GLB URL`);
     }
@@ -149,22 +171,17 @@ async function writeMeshyAssets(): Promise<void> {
   }
 }
 
-async function createRefinedTask(plan: CharacterPlan, previewTaskId: string): Promise<MeshyModelTask> {
-  console.info(`[meshy] refining character ${plan.id}`);
-  const refineTaskId = await createTask(textTo3dBaseUrl, {
-    mode: 'refine',
-    preview_task_id: previewTaskId,
-    ai_model: 'meshy-6',
-    target_formats: ['glb'],
-    texture_prompt: plan.texturePrompt,
-    enable_pbr: false,
-    hd_texture: false,
-    remove_lighting: true,
-    moderation: true,
-    auto_size: true,
-    origin_at: 'bottom',
-  });
-  return waitForModelTask(refineTaskId, `refine ${plan.id}`);
+async function animatedOrModelUrl(plan: CharacterPlan, modelTask: MeshyModelTask): Promise<string | undefined> {
+  if (skipRigging) return modelTask.model_urls?.glb;
+
+  try {
+    const rigTask = await createRigTask(modelTask.id, plan.id);
+    if (skipAnimation) return rigTask.result?.rigged_character_glb_url ?? modelTask.model_urls?.glb;
+    return (await animatedCharacterUrl(plan, rigTask)) ?? rigTask.result?.rigged_character_glb_url ?? modelTask.model_urls?.glb;
+  } catch (error: unknown) {
+    console.warn(`[meshy] ${plan.id} rigging/animation failed; using image-to-3d GLB: ${error instanceof Error ? error.message : String(error)}`);
+    return modelTask.model_urls?.glb;
+  }
 }
 
 async function createRigTask(inputTaskId: string, label: string): Promise<MeshyRigTask> {
@@ -173,6 +190,7 @@ async function createRigTask(inputTaskId: string, label: string): Promise<MeshyR
     input_task_id: inputTaskId,
     generate_basic_animations: true,
   });
+  console.info(`[meshy] ${label} rig task ${rigTaskId}`);
   return waitForRigTask(rigTaskId, `rig ${label}`);
 }
 
@@ -190,6 +208,7 @@ async function animatedCharacterUrl(plan: CharacterPlan, rigTask: MeshyRigTask):
       fps: 30,
     },
   });
+  console.info(`[meshy] ${plan.id} animation task ${animationTaskId}`);
   const animationTask = await waitForAnimationTask(animationTaskId, `animate ${plan.id}`);
   return animationTask.result?.animation_glb_url ?? rigTask.result?.rigged_character_glb_url;
 }
@@ -211,7 +230,7 @@ async function createTask(url: string, payload: Record<string, unknown>): Promis
 }
 
 async function waitForModelTask(taskId: string, label: string): Promise<MeshyModelTask> {
-  return waitForTask(`${textTo3dBaseUrl}/${taskId}`, label) as Promise<MeshyModelTask>;
+  return waitForTask(`${imageTo3dBaseUrl}/${taskId}`, label) as Promise<MeshyModelTask>;
 }
 
 async function waitForRigTask(taskId: string, label: string): Promise<MeshyRigTask> {
@@ -244,23 +263,42 @@ async function waitForTask(url: string, label: string): Promise<MeshyModelTask |
   throw new Error(`Timed out waiting for Meshy ${label}`);
 }
 
+async function readImageDataUri(filePath: string): Promise<string> {
+  const bytes = await readFile(filePath);
+  return `data:image/png;base64,${bytes.toString('base64')}`;
+}
+
+async function writeTaskThumbnail(plan: CharacterPlan, task: MeshyModelTask): Promise<void> {
+  const thumbnailUrl = task.thumbnail_urls?.front ?? task.thumbnail_url;
+  if (!thumbnailUrl) {
+    console.warn(`[meshy] ${plan.id} did not return a thumbnail URL`);
+    return;
+  }
+
+  await writeDownloadedFile(join(previewOutputDir, `shadow-circuit-${plan.id}-meshy-model.png`), thumbnailUrl, 'thumbnail');
+}
+
 async function writeDownloadedAsset(fileName: string, url: string): Promise<void> {
+  const filePath = join(outputDir, fileName);
+  await writeDownloadedFile(filePath, url, fileName);
+}
+
+async function writeDownloadedFile(filePath: string, url: string, label: string): Promise<void> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Download failed ${response.status}: ${url}`);
   }
   const assetBytes = Buffer.from(await response.arrayBuffer());
-  if (assetBytes.byteLength > maxAssetBytes) {
-    throw new Error(`${fileName} is ${assetBytes.byteLength} bytes, over budget ${maxAssetBytes} bytes`);
+  if (filePath.endsWith('.glb') && assetBytes.byteLength > maxAssetBytes) {
+    throw new Error(`${label} is ${assetBytes.byteLength} bytes, over budget ${maxAssetBytes} bytes`);
   }
 
-  const filePath = join(outputDir, fileName);
   await writeFile(filePath, assetBytes);
   console.info(`[meshy] wrote ${filePath} ${assetBytes.byteLength} bytes`);
 }
 
 async function writeFallbackAssets(): Promise<void> {
-  for (const plan of plans) {
+  for (const plan of selectedPlans) {
     const group = plan.id === 'hero' ? createFallbackHero() : createFallbackSentry();
     const filePath = join(outputDir, plan.fileName);
     const bytes = await exportGlb(group);
