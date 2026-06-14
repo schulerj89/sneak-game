@@ -4,10 +4,10 @@ import type {
   GameSettings,
   LevelDefinition,
   ObjectiveProgress,
-  PickupDebugSample,
   SuspicionState,
   Vec2,
 } from './types';
+import type { PickupDebugSample } from './pickupDiagnostics';
 import { memoryCapMb, targetFps } from './settings';
 
 type MemoryPerformance = Performance & {

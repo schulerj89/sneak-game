@@ -78,17 +78,6 @@ export type LoadingProgress = Readonly<{
   label: string;
 }>;
 
-export type PickupAudioDebug = Readonly<{
-  status: 'idle' | 'muted' | 'played' | 'error';
-  setupMs: number;
-  contextState: string;
-  samplesReady: boolean;
-  bufferReady: boolean;
-  bufferCreated: boolean;
-  effectsPrimed: boolean;
-  gain: number;
-}>;
-
 export type DetectionState = Readonly<{
   spotted: boolean;
   enemyId: string | null;
@@ -139,18 +128,4 @@ export type DebugSample = Readonly<{
   memoryPressure: 'unknown' | 'ok' | 'over-cap';
   drawCalls: number;
   triangles: number;
-}>;
-
-export type PickupDebugSample = Readonly<{
-  id: string | null;
-  label: string;
-  collectedAtMs: number | null;
-  totalMs: number;
-  collectMs: number;
-  meshMs: number;
-  audioMs: number;
-  uiMs: number;
-  frameSpikeMs: number;
-  framesObserved: number;
-  audio: PickupAudioDebug;
 }>;

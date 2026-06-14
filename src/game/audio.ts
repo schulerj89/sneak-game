@@ -1,4 +1,5 @@
-import type { GameSettings, PickupAudioDebug } from './types';
+import type { PickupAudioDebug } from './pickupDiagnostics';
+import type { GameSettings } from './types';
 import ghostStepsUrl from '../assets/ghost-steps.mp3?url';
 import nightOpsUrl from '../assets/night-ops.mp3?url';
 import themeUrl from '../assets/shadow-circuit-theme.wav?url';

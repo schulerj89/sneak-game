@@ -5,8 +5,18 @@ import { DebugPanel } from './debug';
 import { advanceSuspicion, emptySuspicion, getDetectionState, isSightBlocked } from './detection';
 import { InputController } from './input';
 import { levels } from './levels';
+import { runLoadingSequence, type LoadingTask } from './loading';
 import { add, clampToRoom, distance, normalize, scale, subtract } from './math';
 import { collectNearbyObjectives, getObjectiveProgress } from './objectives';
+import { isLoadingPhase, isPlayingPhase } from './phase';
+import {
+  beginPickupFrameProbe,
+  createPickupDebugSample,
+  emptyPickupDebugSample,
+  updatePickupFrameProbe,
+  type PickupDebugSample,
+  type PickupFrameProbe,
+} from './pickupDiagnostics';
 import { createRunSummary, loadBestTime, saveBestTime } from './runStats';
 import { loadSettings, memoryCapMb, qualityProfile, saveSettings } from './settings';
 import { createContactShadowMaterial, createFloorShaderMaterial, createGoalBeaconMaterial, createVisionConeGeometry } from './shaders';
@@ -21,7 +31,6 @@ import type {
   ObjectiveProgress,
   LightSpec,
   LoadingProgress,
-  PickupDebugSample,
   RunSummary,
   SuspicionState,
   Vec2,
@@ -111,7 +120,7 @@ export class Game {
   private lastHudSecond = -1;
   private latestDebugSample: DebugSample | null = null;
   private pickupDebug: PickupDebugSample = emptyPickupDebugSample();
-  private pickupFrameProbe: { collectedAtMs: number; maxFrameMs: number; framesObserved: number } | null = null;
+  private pickupFrameProbe: PickupFrameProbe | null = null;
   private qualityMemoryReserve: Float32Array | null = null;
   private reservedMemoryMb = 0;
   private animationId = 0;
@@ -166,7 +175,7 @@ export class Game {
   }
 
   private async start(): Promise<void> {
-    if (this.phase === 'loading') return;
+    if (isLoadingPhase(this.phase)) return;
 
     this.restartLevel();
     this.beginRun();
@@ -182,14 +191,14 @@ export class Game {
   }
 
   private openSettings(): void {
-    if (this.phase === 'loading') return;
+    if (isLoadingPhase(this.phase)) return;
 
     this.settingsReturnPhase = this.phase === 'settings' ? this.settingsReturnPhase : this.phase;
     this.setPhase('settings');
   }
 
   private openLevelSelect(): void {
-    if (this.phase === 'loading') return;
+    if (isLoadingPhase(this.phase)) return;
 
     this.levelSelectReturnPhase = this.phase === 'level-select' ? this.levelSelectReturnPhase : this.phase;
     this.setPhase('level-select');
@@ -235,7 +244,7 @@ export class Game {
   }
 
   private async retryLevel(): Promise<void> {
-    if (this.phase === 'loading') return;
+    if (isLoadingPhase(this.phase)) return;
 
     this.restartLevel();
     this.beginRun();
@@ -245,7 +254,7 @@ export class Game {
   }
 
   private async nextLevel(): Promise<void> {
-    if (this.phase === 'loading') return;
+    if (isLoadingPhase(this.phase)) return;
 
     if (this.levelIndex >= levels.length - 1) {
       this.returnToTitle();
@@ -260,14 +269,14 @@ export class Game {
   }
 
   private returnToTitle(): void {
-    if (this.phase === 'loading') return;
+    if (isLoadingPhase(this.phase)) return;
 
     this.loadLevel(0);
     this.setPhase('menu');
   }
 
   private async startOver(): Promise<void> {
-    if (this.phase === 'loading') return;
+    if (isLoadingPhase(this.phase)) return;
 
     this.loadLevel(0);
     this.beginRun();
@@ -277,7 +286,7 @@ export class Game {
   }
 
   private async selectLevel(levelIndex: number): Promise<void> {
-    if (this.phase === 'loading') return;
+    if (isLoadingPhase(this.phase)) return;
 
     this.loadLevel(levelIndex);
     this.beginRun();
@@ -436,48 +445,26 @@ export class Game {
   }
 
   private async preloadBeforeTitle(): Promise<void> {
-    const startedAt = performance.now();
-    const tasks: readonly { label: string; run: () => void | Promise<void> }[] = [
+    const tasks: readonly LoadingTask[] = [
       { label: 'Loading soundtrack', run: () => this.music.preload(this.settings) },
       { label: 'Preparing pickup audio', run: () => this.music.preloadPickupCue() },
       { label: 'Compiling level materials', run: () => this.warmupRenderStates() },
       { label: 'Priming objective states', run: () => this.warmupObjectiveStates() },
     ];
 
-    for (let index = 0; index < tasks.length; index += 1) {
-      if (this.disposed) return;
-
-      const task = tasks[index];
-      this.updateLoadingProgress(index / tasks.length, task.label);
-      await nextFrame();
-      const taskStartedAt = performance.now();
-      await task.run();
-      const taskRemainingMs = 260 - (performance.now() - taskStartedAt);
-      if (taskRemainingMs > 0) {
-        await delay(taskRemainingMs);
-      }
-      if (this.disposed) return;
-
-      this.updateLoadingProgress((index + 1) / tasks.length, task.label);
-      await nextFrame();
-    }
-
-    const remainingMs = 1800 - (performance.now() - startedAt);
-    if (remainingMs > 0) {
-      await delay(remainingMs);
-    }
-    if (this.disposed) return;
-
-    this.updateLoadingProgress(1, 'Ready');
-    await delay(260);
+    await runLoadingSequence({
+      tasks,
+      onProgress: (progress) => this.updateLoadingProgress(progress),
+      shouldCancel: () => this.disposed,
+    });
     if (this.disposed) return;
 
     this.setPhase('menu');
     console.info('[loading] complete');
   }
 
-  private updateLoadingProgress(value: number, label: string): void {
-    this.loadingProgress = { value, label };
+  private updateLoadingProgress(progress: LoadingProgress): void {
+    this.loadingProgress = progress;
     this.renderUi();
   }
 
@@ -659,7 +646,7 @@ export class Game {
   }
 
   private updatePlayer(delta: number): void {
-    if (this.phase !== 'playing') return;
+    if (!isPlayingPhase(this.phase)) return;
 
     const movement = this.input.movement();
     const next = add(this.playerPosition, scale(movement, delta * 2.4));
@@ -686,7 +673,7 @@ export class Game {
   }
 
   private updateEnemies(delta: number): void {
-    if (this.phase !== 'playing') return;
+    if (!isPlayingPhase(this.phase)) return;
 
     for (const enemy of this.enemies) {
       if (enemy.pauseRemaining > 0) {
@@ -716,7 +703,7 @@ export class Game {
   }
 
   private updateDetection(delta: number): void {
-    if (this.phase !== 'playing') return;
+    if (!isPlayingPhase(this.phase)) return;
 
     let nearest: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
 
@@ -736,13 +723,13 @@ export class Game {
     const previousStatus = this.currentSuspicion.status;
     this.currentSuspicion = advanceSuspicion(this.currentSuspicion, nearest, delta, this.settings.detectionLeniency);
     this.recordAlertTransition(previousStatus, this.currentSuspicion.status);
-    if (this.currentSuspicion.status === 'detected' && this.phase === 'playing') {
+    if (this.currentSuspicion.status === 'detected' && isPlayingPhase(this.phase)) {
       this.setPhase('caught');
       console.warn(`[detection] player detected by ${this.currentSuspicion.enemyId}`);
     }
 
     const collision = collidesWithEnemies(this.playerPosition, this.enemyBodies(), playerRadius);
-    if (collision && this.phase === 'playing') {
+    if (collision && isPlayingPhase(this.phase)) {
       this.currentDetection = { spotted: true, enemyId: collision.id, rayBlocked: false, distance: 0 };
       this.recordAlertTransition(this.currentSuspicion.status, 'detected');
       this.currentSuspicion = { value: 1, status: 'detected', enemyId: collision.id };
@@ -776,7 +763,7 @@ export class Game {
     this.renderUi();
     const uiMs = performance.now() - uiStartedAt;
     const totalMs = performance.now() - startedAt;
-    this.pickupDebug = {
+    this.pickupDebug = createPickupDebugSample({
       id: objective?.id ?? collectedNow[0] ?? null,
       label: objective?.label ?? 'objective',
       collectedAtMs: startedAt,
@@ -785,11 +772,9 @@ export class Game {
       meshMs,
       audioMs,
       uiMs,
-      frameSpikeMs: 0,
-      framesObserved: 0,
       audio: audioDebug,
-    };
-    this.pickupFrameProbe = { collectedAtMs: startedAt, maxFrameMs: 0, framesObserved: 0 };
+    });
+    this.pickupFrameProbe = beginPickupFrameProbe(startedAt);
     console.info(
       `[objective] collected=${[...this.collectedObjectiveIds].join(',')} pickupMs=${totalMs.toFixed(1)} audioMs=${audioMs.toFixed(1)} uiMs=${uiMs.toFixed(1)}`,
     );
@@ -872,7 +857,7 @@ export class Game {
       this.objectiveNotice = '';
       this.renderUi();
     }
-    if (this.phase === 'playing') {
+    if (isPlayingPhase(this.phase)) {
       const hudSecond = Math.floor(this.currentRunElapsedMs() / 1000);
       if (hudSecond !== this.lastHudSecond) {
         this.lastHudSecond = hudSecond;
@@ -883,7 +868,9 @@ export class Game {
     this.renderer.render(this.scene, this.camera);
 
     const sample = this.debugPanel.sample(now, this.renderer.info.render.calls, this.renderer.info.render.triangles, this.reservedMemoryMb);
-    this.updatePickupFrameProbe(sample.frameMs, now);
+    const pickupProbeResult = updatePickupFrameProbe(this.pickupDebug, this.pickupFrameProbe, sample.frameMs, now);
+    this.pickupDebug = pickupProbeResult.debug;
+    this.pickupFrameProbe = pickupProbeResult.probe;
     this.latestDebugSample = sample;
     this.enforceMemoryCap(sample.usedMemoryMb);
     this.debugPanel.render(
@@ -912,10 +899,10 @@ export class Game {
   };
 
   private readonly handleHotkeys = (event: KeyboardEvent): void => {
-    if (this.phase === 'loading') return;
+    if (isLoadingPhase(this.phase)) return;
 
     if (event.code === 'Escape') {
-      this.setPhase(this.phase === 'playing' ? 'menu' : 'playing');
+      this.setPhase(isPlayingPhase(this.phase) ? 'menu' : 'playing');
     }
     if (event.code === 'F1') {
       event.preventDefault();
@@ -1000,24 +987,6 @@ export class Game {
     return position.x >= -1 && position.x <= 1 && position.y >= -1 && position.y <= 1 && position.z >= -1 && position.z <= 1;
   }
 
-  private updatePickupFrameProbe(frameMs: number, now: number): void {
-    if (!this.pickupFrameProbe) return;
-    if (now - this.pickupFrameProbe.collectedAtMs < 8) return;
-
-    const framesObserved = this.pickupFrameProbe.framesObserved + 1;
-    const maxFrameMs = Math.max(this.pickupFrameProbe.maxFrameMs, frameMs);
-    this.pickupFrameProbe = { ...this.pickupFrameProbe, framesObserved, maxFrameMs };
-    this.pickupDebug = {
-      ...this.pickupDebug,
-      frameSpikeMs: maxFrameMs,
-      framesObserved,
-    };
-
-    if (framesObserved >= 12 || now - this.pickupFrameProbe.collectedAtMs > 500) {
-      this.pickupFrameProbe = null;
-    }
-  }
-
   private enforceMemoryCap(usedMemoryMb: number | null): void {
     if (usedMemoryMb === null || usedMemoryMb <= memoryCapMb || this.settings.quality === 'memory') return;
 
@@ -1087,7 +1056,7 @@ export class Game {
   }
 
   private recordAlertTransition(previous: SuspicionState['status'], next: SuspicionState['status']): void {
-    if (this.phase === 'playing' && previous === 'hidden' && next !== 'hidden') {
+    if (isPlayingPhase(this.phase) && previous === 'hidden' && next !== 'hidden') {
       this.runAlertCount += 1;
       this.ui.updateRunHud(this.currentRunElapsedMs(), this.runAlertCount);
     }
@@ -1102,48 +1071,4 @@ function createContactShadow(width: number, depth: number, opacity: number): THR
   shadow.scale.set(width, depth, 1);
   shadow.name = 'contact-shadow';
   return shadow;
-}
-
-function emptyPickupDebugSample(): PickupDebugSample {
-  return {
-    id: null,
-    label: 'none',
-    collectedAtMs: null,
-    totalMs: 0,
-    collectMs: 0,
-    meshMs: 0,
-    audioMs: 0,
-    uiMs: 0,
-    frameSpikeMs: 0,
-    framesObserved: 0,
-    audio: {
-      status: 'idle',
-      setupMs: 0,
-      contextState: 'none',
-      samplesReady: false,
-      bufferReady: false,
-      bufferCreated: false,
-      effectsPrimed: false,
-      gain: 0,
-    },
-  };
-}
-
-function nextFrame(): Promise<void> {
-  return new Promise((resolve) => {
-    let resolved = false;
-    const finish = (): void => {
-      if (resolved) return;
-      resolved = true;
-      resolve();
-    };
-    requestAnimationFrame(finish);
-    window.setTimeout(finish, 80);
-  });
-}
-
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, milliseconds);
-  });
 }

@@ -1,5 +1,6 @@
 import { soundtrackOptions } from './audio';
 import { levelThumbnailSvg, logoSvg } from './assets';
+import { isLoadingPhase, isPlayingPhase } from './phase';
 import type { GamePhase, GameSettings, LevelDefinition, LoadingProgress, ObjectiveProgress, RunSummary, SuspicionState } from './types';
 
 type UiCallbacks = {
@@ -58,7 +59,7 @@ export class GameUi {
     runElapsedMs: number | null,
     runAlertCount: number,
   ): void {
-    if (phase === 'loading') {
+    if (isLoadingPhase(phase)) {
       this.hud.innerHTML = '';
       return;
     }
@@ -116,12 +117,12 @@ export class GameUi {
     runSummary: RunSummary | null,
     loadingProgress: LoadingProgress,
   ): void {
-    this.overlay.hidden = phase === 'playing';
-    if (phase === 'playing') return;
+    this.overlay.hidden = isPlayingPhase(phase);
+    if (isPlayingPhase(phase)) return;
 
     const isFinalLevel = levelIndex === levels.length - 1;
 
-    if (phase === 'loading') {
+    if (isLoadingPhase(phase)) {
       const percent = Math.round(loadingProgress.value * 100);
       this.overlay.innerHTML = `
         <div class="panel loading-panel" data-testid="loading-panel">
@@ -324,8 +325,8 @@ export class GameUi {
 }
 
 function statusLabel(phase: GamePhase, suspicion: SuspicionState, objectives: ObjectiveProgress): string {
-  if (phase === 'loading') return 'Loading';
-  if (phase !== 'playing') return phase;
+  if (isLoadingPhase(phase)) return 'Loading';
+  if (!isPlayingPhase(phase)) return phase;
   if (suspicion.status === 'detected') return 'Detected';
   if (suspicion.status === 'suspicious') return 'Suspicious';
   if (!objectives.exitUnlocked) return 'Exit locked';
