@@ -400,7 +400,14 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
         selectedHero: () => string;
-        titleHero: () => { visible: boolean; inCamera: boolean; cinematic: boolean; activeState: string | null; x: number | null };
+        titleHero: () => {
+          visible: boolean;
+          inCamera: boolean;
+          cinematic: boolean;
+          activeState: string | null;
+          x: number | null;
+          screen: { x: number; y: number } | null;
+        };
         heroAssetQuality: () => string;
         heroRoster: () => readonly string[];
         loadedHeroAssets: () => readonly string[];
@@ -416,6 +423,9 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
       debug?.selectedHero() === heroId &&
         titleHero?.visible &&
         titleHero.x !== null &&
+        titleHero.screen !== null &&
+        titleHero.screen.y > 185 &&
+        titleHero.screen.y < 250 &&
         loadedRoster &&
         (!expectsCinematic || (titleHero.cinematic && titleHero.activeState === 'idle')),
     );
@@ -475,7 +485,10 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
     (expectedCinematic && state.titleHero.activeState !== 'idle') ||
     (state.memorySafeAssets === true && (state.runtimeQuality !== 'memory' || state.enemyAssetQuality !== 'memory')) ||
     state.titleHero.x === null ||
-    Math.abs(state.titleHero.x - 1.35) > 0.08
+    Math.abs(state.titleHero.x - 1.35) > 0.08 ||
+    state.titleHero.screen === null ||
+    state.titleHero.screen.y < 185 ||
+    state.titleHero.screen.y > 250
   ) {
     throw new Error(`Expected compact character picker for ${expectedHeroId}, got ${JSON.stringify(state)}`);
   }

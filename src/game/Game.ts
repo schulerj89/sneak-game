@@ -173,6 +173,7 @@ export class Game {
   private titleHeroVisual: THREE.Object3D | null = null;
   private titleHeroAnimator: CharacterAnimator | null = null;
   private titlePreviewHeroId: HeroId | null = null;
+  private titleHeroPreviewCompact: boolean | null = null;
   private readonly playerMesh = new THREE.Group();
   private playerVisual: THREE.Object3D | null = null;
   private playerAnimator: CharacterAnimator | null = null;
@@ -314,7 +315,7 @@ export class Game {
       this.input.clearVirtualMovement();
     }
     if (phase === 'menu' || phase === 'character-select') {
-      this.layoutTitleHeroPreview();
+      this.fitCameraToTitle();
     }
     this.renderUi();
     console.info(`[game] phase=${phase} level=${this.level.id}`);
@@ -607,7 +608,7 @@ export class Game {
     key.position.set(2.7, 3.6, 3.2);
     key.name = 'title-hero-key-light';
 
-    const compactPreview = this.phase === 'character-select' && this.isCompactLandscapeViewport();
+    const compactPreview = this.useCompactTitleHeroPreview();
     const ambient = new THREE.HemisphereLight('#e7fbff', '#172331', compactPreview ? 5.6 : 2.2);
     ambient.name = 'title-hero-ambient-light';
 
@@ -625,6 +626,7 @@ export class Game {
     this.titleHeroAnimator?.setMotionState('idle', 0);
     this.titleHeroVisual.name = `title-hero:${heroId}:${this.titleHeroAnimator ? 'cinematic' : 'simple'}`;
     this.titlePreviewHeroId = heroId;
+    this.titleHeroPreviewCompact = compactPreview;
     prepareTitleHeroPreviewMaterials(this.titleHeroVisual, compactPreview);
     this.titleHeroVisual.position.set(titleHeroBaseX, titleHeroBaseY, 0);
     this.titleHeroVisual.rotation.y = -0.26;
@@ -632,6 +634,15 @@ export class Game {
 
     this.titlePreview.add(platform, key, ambient, rim, fill, this.titleHeroVisual);
     this.layoutTitleHeroPreview();
+  }
+
+  private syncTitleHeroPreviewPresentation(): void {
+    if (!this.titleHeroVisual || this.titlePreviewHeroId !== this.selectedHeroId) return;
+
+    const compactPreview = this.useCompactTitleHeroPreview();
+    if (this.titleHeroPreviewCompact !== compactPreview) {
+      this.installTitleHeroPreview(this.selectedHeroId);
+    }
   }
 
   private layoutTitleHeroPreview(): void {
@@ -654,7 +665,11 @@ export class Game {
   }
 
   private titleHeroPreviewY(): number {
-    return this.phase === 'character-select' && this.isCompactLandscapeViewport() ? compactCharacterSelectHeroBaseY : titleHeroBaseY;
+    return this.useCompactTitleHeroPreview() ? compactCharacterSelectHeroBaseY : titleHeroBaseY;
+  }
+
+  private useCompactTitleHeroPreview(): boolean {
+    return this.phase === 'character-select' && this.isCompactLandscapeViewport();
   }
 
   private titleHeroPlatformY(fallbackY: number): number {
@@ -1395,6 +1410,7 @@ export class Game {
     this.titleHeroVisual = null;
     this.titleHeroAnimator = null;
     this.titlePreviewHeroId = null;
+    this.titleHeroPreviewCompact = null;
     this.flushRendererObjectCaches();
   }
 
@@ -1754,9 +1770,10 @@ export class Game {
   }
 
   private fitCameraToTitle(): void {
+    this.syncTitleHeroPreviewPresentation();
     this.layoutTitleHeroPreview();
     const aspectOffset = this.camera.aspect < 1 ? 0.65 : 0;
-    const compactCharacterSelect = this.phase === 'character-select' && this.isCompactLandscapeViewport();
+    const compactCharacterSelect = this.useCompactTitleHeroPreview();
     this.camera.position.set(1.15 + aspectOffset, compactCharacterSelect ? 1.72 : 1.12, 3.15);
     this.camera.lookAt(1.35, compactCharacterSelect ? 1.18 : 0.68, 0);
     if (this.scene.fog instanceof THREE.Fog) {
