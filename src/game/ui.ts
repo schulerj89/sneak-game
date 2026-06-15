@@ -98,13 +98,13 @@ export class GameUi {
     this.hud.innerHTML = `
       <div class="hud-left">
         <strong>${level.name}</strong>
-        <span>Level ${levelNumber + 1} / ${totalLevels}</span>
+        <span class="hud-level-meta">Level ${levelNumber + 1} / ${totalLevels}</span>
         ${runElapsedMs !== null ? `
-          <span>Time <span class="run-time">${formatRunTime(runElapsedMs)}</span> / Par ${formatRunTime(level.parSeconds * 1000)}</span>
-          <span>Alerts <span class="run-alerts">${runAlertCount}</span></span>
+          <span class="hud-run-time-row">Time <span class="run-time">${formatRunTime(runElapsedMs)}</span> / Par ${formatRunTime(level.parSeconds * 1000)}</span>
+          <span class="hud-run-alerts-row">Alerts <span class="run-alerts">${runAlertCount}</span></span>
         ` : ''}
         ${objectives.totalRequired > 0 ? `
-          <span>Objectives ${objectives.collectedRequired} / ${objectives.totalRequired}</span>
+          <span class="hud-objective-count">Objectives ${objectives.collectedRequired} / ${objectives.totalRequired}</span>
           <div class="objective-strip" aria-label="Objectives">
             ${objectives.items.map((objective) => `
               <span class="objective-chip ${objective.collected ? 'is-collected' : ''} objective-${objective.type}">
@@ -116,10 +116,10 @@ export class GameUi {
         ` : ''}
       </div>
       <div class="hud-right">
-        <button type="button" data-action="toggle-mute" title="${soundButtonTitle}" aria-pressed="${!this.settings.musicEnabled}">${soundButtonLabel}</button>
-        <button type="button" data-action="level-select" title="Level Select">Levels</button>
-        <button type="button" data-action="settings" title="Settings">Settings</button>
-        <button type="button" data-action="menu" title="Menu">Menu</button>
+        <button type="button" data-action="toggle-mute" data-mobile-label="${this.settings.musicEnabled ? 'Mute' : 'Sound'}" title="${soundButtonTitle}" aria-pressed="${!this.settings.musicEnabled}">${soundButtonLabel}</button>
+        <button type="button" data-action="level-select" data-mobile-label="Lvls" title="Level Select">Levels</button>
+        <button type="button" data-action="settings" data-mobile-label="Cfg" title="Settings">Settings</button>
+        <button type="button" data-action="menu" data-mobile-label="Menu" title="Menu">Menu</button>
       </div>
       <div class="status-pill status-${suspicion.status}">
         <span>${statusText}</span>

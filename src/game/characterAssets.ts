@@ -29,11 +29,13 @@ type CharacterAnimationClips = {
 const sentryAssetKey = 'sentry';
 
 export class CharacterAnimator {
+  private readonly object: THREE.Object3D;
   private readonly mixer: THREE.AnimationMixer;
   private readonly actions = new Map<CharacterMotionState | 'single', THREE.AnimationAction>();
   private activeState: CharacterMotionState | 'single' | null = null;
 
   constructor(object: THREE.Object3D, clips: CharacterAnimationClips) {
+    this.object = object;
     this.mixer = new THREE.AnimationMixer(object);
     this.addAction('idle', clips.idle);
     this.addAction('run', clips.run);
@@ -74,6 +76,22 @@ export class CharacterAnimator {
       activeState: this.activeState,
       clipNames: [...this.actions.values()].map((action) => action.getClip().name),
     };
+  }
+
+  dispose(): void {
+    this.mixer.stopAllAction();
+    this.mixer.uncacheRoot(this.object);
+    this.actions.clear();
+    this.activeState = null;
+
+    const skeletons = new Set<THREE.Skeleton>();
+    this.object.traverse((child) => {
+      const skinned = child as THREE.SkinnedMesh;
+      if (skinned.isSkinnedMesh && skinned.skeleton) {
+        skeletons.add(skinned.skeleton);
+      }
+    });
+    skeletons.forEach((skeleton) => skeleton.dispose());
   }
 
   private addAction(state: CharacterMotionState | 'single', clip: THREE.AnimationClip | undefined): void {
@@ -150,6 +168,10 @@ export class CharacterAssetLibrary {
     return this.hasAllAssets(heroId);
   }
 
+  hasHeroCinematicAsset(heroId: HeroId = defaultHeroId): boolean {
+    return this.cinematicAssets.has(heroAssetKey(heroId));
+  }
+
   releaseUnselectedHeroes(selectedHeroId: HeroId): void {
     for (const [key, asset] of this.cinematicAssets) {
       if (!key.startsWith('hero:') || key === heroAssetKey(selectedHeroId)) continue;
@@ -174,6 +196,7 @@ export class CharacterAssetLibrary {
     object.name = name;
     object.traverse((child) => {
       if (child instanceof THREE.Mesh) {
+        child.frustumCulled = false;
         child.castShadow = true;
         child.receiveShadow = true;
       }

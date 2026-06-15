@@ -992,29 +992,41 @@ button:hover {
 
 @media (orientation: landscape) and (max-width: 960px) and (max-height: 500px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
   .hud {
-    inset: 8px 8px auto 8px;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 8px;
+    inset: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) auto max(8px, env(safe-area-inset-left));
+    grid-template-columns: minmax(132px, 0.74fr) minmax(78px, auto) auto;
+    gap: 5px;
+    align-items: start;
   }
 
   .hud-left {
-    max-width: min(300px, 35vw);
-    padding: 8px 9px;
+    max-width: min(230px, 30vw);
+    padding: 6px 7px;
   }
 
   .hud-left strong {
-    font-size: 15px;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.08;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .hud-left span,
   .objective-chip {
-    font-size: 11px;
+    font-size: 10px;
   }
 
+  .hud-left .hud-level-meta,
+  .hud-left .hud-run-alerts-row,
   .objective-strip {
-    grid-template-columns: 1fr;
-    gap: 4px;
-    margin-top: 5px;
+    display: none;
+  }
+
+  .hud-run-time-row,
+  .hud-objective-count {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .objective-chip {
@@ -1029,20 +1041,28 @@ button:hover {
   }
 
   .hud-right {
-    gap: 6px;
-    padding: 6px;
+    gap: 4px;
+    padding: 4px;
   }
 
   .hud-right button {
-    min-height: 32px;
-    padding: 0 9px;
-    font-size: 12px;
+    min-width: 35px;
+    min-height: 29px;
+    padding: 0 6px;
+    font-size: 0;
   }
 
   .status-pill {
-    min-width: 112px;
-    padding: 7px 9px;
+    min-width: 84px;
+    padding: 5px 7px;
+    font-size: 9px;
+    gap: 3px;
+  }
+
+  .hud-right button::before {
+    content: attr(data-mobile-label);
     font-size: 10px;
+    font-weight: 800;
   }
 
   .debug {
@@ -1108,8 +1128,9 @@ button:hover {
   }
 
   .panel-actions button {
-    min-height: 34px;
-    padding: 0 12px;
+    min-height: 31px;
+    padding: 0 10px;
+    font-size: 12px;
   }
 
   .overlay.is-title .menu-panel {
@@ -1198,7 +1219,7 @@ button:hover {
   .overlay.is-title.is-character-select {
     justify-content: center;
     align-items: flex-end;
-    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.08) 46%, rgba(0, 0, 0, 0.62) 100%);
+    background: transparent;
   }
 
   .briefing-panel {

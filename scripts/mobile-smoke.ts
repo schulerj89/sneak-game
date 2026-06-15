@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { chromium, webkit, type Page } from 'playwright';
+import { levels } from '../src/game/levels';
 
 const baseUrl = process.env.MOBILE_SMOKE_URL ?? process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
 const screenshotDir = 'artifacts';
@@ -70,6 +71,7 @@ try {
     return debugWindow.__shadowCircuitDebug?.selectedHero() === 'echo-vanguard';
   }, undefined, { timeout: 8000 });
   await assertCharacterPicker(page, 'echo-vanguard');
+  await page.waitForTimeout(500);
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-mobile-character-select.png`, fullPage: true });
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
@@ -114,6 +116,7 @@ try {
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-mobile-touch.png`, fullPage: true });
 
   await completeDockAndAdvance(page);
+  await completeCurrentLevelAndAdvance(page, 1, levels[2]?.id ?? 'reactor-core');
   if (pageErrors.length > 0) {
     throw new Error(`Unexpected page error(s): ${pageErrors.join('\n')}`);
   }
@@ -291,6 +294,25 @@ async function assertActionButtonsFit(page: Page, containerSelector: string): Pr
 }
 
 async function assertCharacterPicker(page: Page, expectedHeroId: string): Promise<void> {
+  await page.waitForFunction((heroId) => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        selectedHero: () => string;
+        titleHero: () => { visible: boolean; inCamera: boolean; cinematic: boolean; activeState: string | null; x: number | null };
+        heroAssetQuality: () => string;
+      };
+    };
+    const debug = debugWindow.__shadowCircuitDebug;
+    const titleHero = debug?.titleHero();
+    const expectsCinematic = debug?.heroAssetQuality() === 'cinematic';
+    return Boolean(
+      debug?.selectedHero() === heroId &&
+        titleHero?.visible &&
+        titleHero.x !== null &&
+        (!expectsCinematic || (titleHero.cinematic && titleHero.activeState === 'idle')),
+    );
+  }, expectedHeroId, { timeout: 22000 });
+
   const state = await page.evaluate(() => {
     const picker = document.querySelector('[data-testid="hero-picker"]');
     const pickerStyle = picker ? window.getComputedStyle(picker) : null;
@@ -299,9 +321,19 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
         selectedHero: () => string;
-        titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null; x: number | null };
+        titleHero: () => {
+          visible: boolean;
+          inCamera: boolean;
+          cinematic: boolean;
+          activeState: string | null;
+          x: number | null;
+          y: number | null;
+          screen: { x: number; y: number } | null;
+        };
         memorySafeAssets: () => boolean;
         runtimeQuality: () => string;
+        heroAssetQuality: () => string;
+        enemyAssetQuality: () => string;
       };
     };
     return {
@@ -312,18 +344,21 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
       titleHero: debugWindow.__shadowCircuitDebug?.titleHero(),
       memorySafeAssets: debugWindow.__shadowCircuitDebug?.memorySafeAssets(),
       runtimeQuality: debugWindow.__shadowCircuitDebug?.runtimeQuality(),
+      heroAssetQuality: debugWindow.__shadowCircuitDebug?.heroAssetQuality(),
+      enemyAssetQuality: debugWindow.__shadowCircuitDebug?.enemyAssetQuality(),
     };
   });
-  const expectedCinematic = state.memorySafeAssets !== true;
+  const expectedCinematic = state.heroAssetQuality === 'cinematic';
 
   if (
     !state.pickerVisible ||
     !state.gridHidden ||
     state.selectedHero !== expectedHeroId ||
     !state.titleHero?.visible ||
+    !state.titleHero.inCamera ||
     state.titleHero.cinematic !== expectedCinematic ||
     (expectedCinematic && state.titleHero.activeState !== 'idle') ||
-    (state.memorySafeAssets === true && state.runtimeQuality !== 'memory') ||
+    (state.memorySafeAssets === true && (state.runtimeQuality !== 'memory' || state.enemyAssetQuality !== 'memory')) ||
     state.titleHero.x === null ||
     Math.abs(state.titleHero.x - 1.35) > 0.08
   ) {
@@ -364,4 +399,58 @@ async function completeDockAndAdvance(page: Page): Promise<void> {
   if (levelState.levelId !== 'archive-lanes' || levelState.phase !== 'playing') {
     throw new Error(`Expected Next Level to enter Archive Lanes without reset, got ${JSON.stringify(levelState)}`);
   }
+}
+
+async function completeCurrentLevelAndAdvance(page: Page, levelIndex: number, expectedNextLevelId: string): Promise<void> {
+  const level = levels[levelIndex];
+  if (!level) {
+    throw new Error(`Missing level ${levelIndex}`);
+  }
+
+  const before = await mobileReloadState(page);
+  await page.evaluate((route) => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        movePlayerTo: (point: { x: number; z: number }) => void;
+      };
+    };
+    route.forEach((point) => debugWindow.__shadowCircuitDebug?.movePlayerTo(point));
+  }, level.validationRoute);
+  await expectVisible(page, 'text=Exit Reached');
+  await assertActionButtonsFit(page, '[data-testid="overlay"]');
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Next Level' }).click();
+  await expectVisible(page, '[data-testid="loading-panel"]');
+  await assertPlayingPhase(page);
+
+  const after = await mobileReloadState(page);
+  if (after.levelId !== expectedNextLevelId || after.phase !== 'playing' || !after.playerVisible) {
+    throw new Error(`Expected second mobile reload to enter ${expectedNextLevelId}, got ${JSON.stringify({ before, after })}`);
+  }
+  if (after.rendererMemory.geometries > before.rendererMemory.geometries + 80 || after.rendererMemory.textures > before.rendererMemory.textures + 20) {
+    throw new Error(`Unexpected renderer resource growth after mobile reload: ${JSON.stringify({ before, after })}`);
+  }
+}
+
+async function mobileReloadState(page: Page): Promise<{
+  levelId: string | undefined;
+  phase: string | undefined;
+  playerVisible: boolean | undefined;
+  rendererMemory: { geometries: number; textures: number };
+}> {
+  return page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        levelId: () => string;
+        phase: () => string;
+        playerVisible: () => boolean;
+        rendererMemory: () => { geometries: number; textures: number };
+      };
+    };
+    return {
+      levelId: debugWindow.__shadowCircuitDebug?.levelId(),
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+      playerVisible: debugWindow.__shadowCircuitDebug?.playerVisible(),
+      rendererMemory: debugWindow.__shadowCircuitDebug?.rendererMemory() ?? { geometries: 0, textures: 0 },
+    };
+  });
 }
