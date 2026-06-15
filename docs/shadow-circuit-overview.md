@@ -10,11 +10,12 @@ Shadow Circuit is a local Three.js stealth game prototype. The first iteration f
 4. Use crates, shelves, pillars, and consoles to block sight rays.
 5. Reach the green exit pad to advance to the next level.
 
-## First Three Levels
+## Level Set
 
 - `Dock Blackout`: cargo cover and a single rectangular patrol.
 - `Archive Lanes`: long aisles with two sweeping guards.
 - `Reactor Core`: two patrols around a brighter central hazard.
+- Later levels add multi-objective routing, tighter patrol timing, and the final `Blackout Crown` challenge.
 
 ## Checkpoints
 
@@ -24,4 +25,4 @@ Every meaningful implementation checkpoint should run:
 npm run verify
 ```
 
-Browser validation should confirm the menu renders, the game starts, debug data updates, settings change quality/music/debug state, and all three levels can be reached.
+Browser validation should confirm the menu renders, the game starts, debug data updates, settings change quality/music/debug state, and all twelve levels can be reached.

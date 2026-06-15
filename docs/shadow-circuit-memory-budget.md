@@ -2,16 +2,16 @@
 
 The current target is:
 
-- Advisory memory cap: `224 MB`
+- Advisory memory cap: `320 MB`
 - Frame target: `60 FPS`
-- Default quality: `Balanced`
+- Default quality: `Cinematic`
 - Highest quality: `Cinematic`
 
 Balanced mode uses more memory than the original memory-first default by enabling antialiasing and shadows with a capped pixel ratio. Cinematic mode uses more memory again through higher pixel ratio, larger shadow maps, a `64 MB` typed-array quality reserve, and small preloaded GLB objective and character props. The cap is advisory so player-selected graphics quality is not silently overwritten.
 
 ## Runtime Guard
 
-When `performance.memory` is available, the game checks JS heap usage each frame. If reported heap usage exceeds `224 MB`, the debug panel reports `over-cap` and the game logs a warning once while keeping the selected render quality.
+When `performance.memory` is available, the game checks JS heap usage each frame. If reported heap usage exceeds `320 MB`, the debug panel reports `over-cap` and the game logs a warning once while keeping the selected render quality.
 
 ## Debug Panel
 

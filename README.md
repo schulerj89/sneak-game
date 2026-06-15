@@ -7,7 +7,7 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Twelve playable levels from Dock Blackout through Blackout Crown, with easy, medium, hard, and final challenge layouts.
 - Menu, settings, retry, and level-complete flows.
 - Black title screen with text-only branding and the cinematic hero GLB idling beside it.
-- Character select flow after Start Run, with a preloaded hero roster and reusable hero definitions for new operatives.
+- Character select flow after Start Run, with four preloaded heroes and reusable hero definitions for new operatives.
 - First-level mission briefing that explains keycards, terminals, sentries, vision cones, and the locked exit.
 - Level select menu with generated level preview images.
 - Guard patrols with visible cones and raycast line-of-sight detection.
@@ -18,7 +18,7 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Dark-room lighting, dim locked exits, unlock-only goal beacons, shadows by quality setting, and simple custom assets.
 - Shader-based floor detail, goal beacons, and contact shadows.
 - Downloaded external soundtrack choices with title-screen music, per-level track assignment, and auditable license metadata.
-- Level loading simulates a first collectible pickup so objective UI, mesh visibility, and pickup audio are warmed before play starts.
+- Level loading simulates the full collectible pickup sequence so objective UI, mesh visibility, unlock states, and pickup audio are warmed before play starts.
 - Cinematic default rendering with a 320 MB advisory browser heap cap.
 - On-screen debug panel with FPS, memory, draw calls, player position, detection state, active track, and pickup timing/audio diagnostics.
 - Console logs for game phase, level loads, settings, audio, and detection events.

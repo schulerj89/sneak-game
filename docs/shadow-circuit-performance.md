@@ -21,7 +21,7 @@ The debug panel displays:
 - Active music track.
 - Pickup timing, frame spike, and pickup audio warmup state.
 
-Each level load primes objective visibility states, warms pickup audio, and then runs a silent simulated first pickup. That dry run exercises objective collection, HUD notice rendering, mesh/light visibility changes, and the Web Audio pickup graph before the player can collect an item.
+Each level load primes objective visibility states, warms pickup audio, and then runs a silent simulated pickup sequence for every objective in that level. That dry run exercises objective collection, HUD notice rendering, mesh/light visibility changes, unlock states, and the Web Audio pickup graph before the player can collect an item.
 
 Run this during checkpoints:
 

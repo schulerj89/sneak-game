@@ -83,7 +83,7 @@ try {
   if (
     characterSelectState.phase !== 'character-select' ||
     characterSelectState.selectedHero !== 'shadow-operative' ||
-    characterSelectState.heroRoster?.length !== 3 ||
+    characterSelectState.heroRoster?.length !== 4 ||
     characterSelectState.activeTrackId !== 'title-on-patrol' ||
     !characterSelectState.titleHero?.visible ||
     characterSelectState.titleHero.x === null ||
@@ -92,7 +92,7 @@ try {
     throw new Error(`Expected loaded character select with shifted hero preview, got ${JSON.stringify(characterSelectState)}`);
   }
   const heroCardLabels = await page.locator('[data-hero-id]').allTextContents();
-  for (const heroName of ['Shadow Operative', 'Echo Vanguard', 'Signal Warden']) {
+  for (const heroName of ['Shadow Operative', 'Echo Vanguard', 'Signal Warden', 'Circuit Nomad']) {
     if (!heroCardLabels.some((label) => label.includes(heroName))) {
       throw new Error(`Missing hero card ${heroName}: ${JSON.stringify(heroCardLabels)}`);
     }
@@ -277,6 +277,13 @@ try {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 8000 });
   await assertPlayingPhase('after returning from in-game settings');
+  const restoredDockTrackId = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
+    return debugWindow.__shadowCircuitDebug?.activeTrackId();
+  });
+  if (restoredDockTrackId !== 'ghost-steps') {
+    throw new Error(`Expected restored Dock Blackout level track after settings, got ${restoredDockTrackId}`);
+  }
 
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Levels' }).click();
   await expectVisible('text=Level Select');
@@ -399,8 +406,8 @@ try {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
     return debugWindow.__shadowCircuitDebug?.activeTrackId();
   });
-  if (activeTrackId !== 'ghost-steps') {
-    throw new Error(`Expected active Dock Blackout level track, got ${activeTrackId}`);
+  if (activeTrackId !== 'cyberpunk-moonlight') {
+    throw new Error(`Expected active Neon Atrium level track, got ${activeTrackId}`);
   }
 
   const visibilityStates: {

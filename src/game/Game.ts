@@ -65,6 +65,7 @@ type CollectObjectiveOptions = Readonly<{
   recordDebug?: boolean;
   startFrameProbe?: boolean;
   log?: boolean;
+  logAudio?: boolean;
 }>;
 
 const enemyHoverBaseY = 0.72;
@@ -289,9 +290,7 @@ export class Game {
 
   private async resumeFromSettings(): Promise<void> {
     this.setPhase(this.settingsReturnPhase);
-    if (this.usesMenuMusic()) {
-      await this.music.playMenu(this.settings);
-    }
+    await this.syncMusicForCurrentPhase();
   }
 
   private openMenu(): void {
@@ -330,7 +329,11 @@ export class Game {
     }
     if (audioChanged) {
       await this.music.warmupEffects(settings);
-      await this.music.sync(settings);
+      if (this.phase === 'settings') {
+        await this.music.sync(settings);
+      } else {
+        await this.syncMusicForCurrentPhase();
+      }
     }
     this.renderUi();
     console.info(`[settings] quality=${settings.quality} music=${settings.musicEnabled} debug=${settings.debugEnabled}`);
@@ -453,7 +456,7 @@ export class Game {
       { label: 'Compiling level materials', run: () => this.warmupRenderStates() },
       { label: 'Priming objective states', run: () => this.warmupObjectiveStates() },
       { label: 'Warming pickup audio', run: () => this.music.warmupEffects(this.settings) },
-      { label: 'Simulating first pickup', run: () => this.warmupPickupCollection() },
+      { label: 'Simulating collectible pickups', run: () => this.warmupPickupCollections() },
     ];
   }
 
@@ -742,9 +745,9 @@ export class Game {
     this.renderUi();
   }
 
-  private warmupPickupCollection(): void {
-    const objective = (this.level.objectives ?? [])[0];
-    if (!objective) return;
+  private warmupPickupCollections(): void {
+    const objectives = this.level.objectives ?? [];
+    if (objectives.length === 0) return;
 
     const previousPhase = this.phase;
     const previousPlayerPosition = { ...this.playerPosition };
@@ -760,16 +763,19 @@ export class Game {
 
     this.phase = 'playing';
     this.runStartedAt = performance.now();
-    this.playerPosition = { ...objective.position };
-    this.playerMesh.position.set(objective.position.x, 0.48, objective.position.z);
-    this.playerContactShadow.position.set(objective.position.x, 0.016, objective.position.z);
-    this.collectObjectives({
-      audioSettings: this.pickupWarmupSettings(),
-      recordDebug: false,
-      startFrameProbe: false,
-      log: false,
-    });
-    this.renderer.render(this.scene, this.camera);
+    for (const objective of objectives) {
+      this.playerPosition = { ...objective.position };
+      this.playerMesh.position.set(objective.position.x, 0.48, objective.position.z);
+      this.playerContactShadow.position.set(objective.position.x, 0.016, objective.position.z);
+      this.collectObjectives({
+        audioSettings: this.pickupWarmupSettings(),
+        recordDebug: false,
+        startFrameProbe: false,
+        log: false,
+        logAudio: false,
+      });
+      this.renderer.render(this.scene, this.camera);
+    }
 
     this.phase = previousPhase;
     this.playerPosition = previousPlayerPosition;
@@ -1053,6 +1059,7 @@ export class Game {
     const recordDebug = options.recordDebug ?? true;
     const startFrameProbe = options.startFrameProbe ?? recordDebug;
     const log = options.log ?? true;
+    const logAudio = options.logAudio ?? log;
     const startedAt = performance.now();
     const collectStartedAt = performance.now();
     const next = collectNearbyObjectives(this.level, this.playerPosition, this.collectedObjectiveIds);
@@ -1071,7 +1078,7 @@ export class Game {
       : `Collected ${objective?.label ?? 'objective'}`;
     this.objectiveNoticeUntil = performance.now() + 2600;
     const audioStartedAt = performance.now();
-    const audioDebug = this.music.playPickup(audioSettings);
+    const audioDebug = this.music.playPickup(audioSettings, { log: logAudio });
     const audioMs = performance.now() - audioStartedAt;
     const uiStartedAt = performance.now();
     this.renderUi();
@@ -1149,6 +1156,21 @@ export class Game {
 
   private usesMenuMusic(): boolean {
     return isMenuMusicPhase(this.phase, this.settingsReturnPhase);
+  }
+
+  private usesLevelMusic(): boolean {
+    return isLevelMusicPhase(this.phase, this.settingsReturnPhase);
+  }
+
+  private async syncMusicForCurrentPhase(): Promise<void> {
+    if (this.usesMenuMusic()) {
+      await this.music.playMenu(this.settings);
+      return;
+    }
+
+    if (this.usesLevelMusic()) {
+      await this.music.sync(this.settings, soundtrackIdForLevel(this.levelIndex));
+    }
   }
 
   private canUpdateRun(): boolean {
@@ -1282,7 +1304,7 @@ export class Game {
       if (this.canUpdateRun()) {
         this.openMenu();
       } else if (this.phase === 'settings') {
-        this.setPhase(this.settingsReturnPhase);
+        void this.resumeFromSettings();
       } else if (this.phase === 'level-select') {
         this.setPhase(this.levelSelectReturnPhase);
       }
@@ -1620,6 +1642,15 @@ function isMenuMusicPhase(phase: GamePhase, settingsReturnPhase: GamePhase): boo
     phase === 'menu' ||
     phase === 'character-select' ||
     (phase === 'settings' && (settingsReturnPhase === 'menu' || settingsReturnPhase === 'character-select'))
+  );
+}
+
+function isLevelMusicPhase(phase: GamePhase, settingsReturnPhase: GamePhase): boolean {
+  return (
+    phase === 'playing' ||
+    phase === 'caught' ||
+    phase === 'complete' ||
+    (phase === 'level-select' && settingsReturnPhase !== 'menu' && settingsReturnPhase !== 'character-select')
   );
 }
 

@@ -4,6 +4,8 @@ import echoVanguardIdleUrl from '../assets/hero/hero_2/Meshy_AI_a_small_tactical
 import echoVanguardRunUrl from '../assets/hero/hero_2/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Run_02_withSkin.glb?url';
 import signalWardenIdleUrl from '../assets/hero/hero_3/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Idle_3_withSkin.glb?url';
 import signalWardenRunUrl from '../assets/hero/hero_3/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Run_02_withSkin.glb?url';
+import circuitNomadIdleUrl from '../assets/hero/hero_4/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Idle_3_withSkin.glb?url';
+import circuitNomadRunUrl from '../assets/hero/hero_4/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Run_02_withSkin.glb?url';
 
 export const heroOptions = [
   {
@@ -32,6 +34,15 @@ export const heroOptions = [
     accentColor: '#5ad7ff',
     idleUrl: signalWardenIdleUrl,
     runUrl: signalWardenRunUrl,
+  },
+  {
+    id: 'circuit-nomad',
+    name: 'Circuit Nomad',
+    role: 'Adaptive scout',
+    description: 'Newest field suit with a sharp silhouette and the same tuned animations.',
+    accentColor: '#ffd45a',
+    idleUrl: circuitNomadIdleUrl,
+    runUrl: circuitNomadRunUrl,
   },
 ] as const;
 

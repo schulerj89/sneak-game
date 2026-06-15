@@ -201,6 +201,10 @@ export function soundtrackIdForLevel(levelIndex: number): GameSettings['soundtra
   return levelSoundtrackIds[levelIndex % levelSoundtrackIds.length] ?? soundtrackOptions[0].id;
 }
 
+type PickupPlaybackOptions = Readonly<{
+  log?: boolean;
+}>;
+
 export class MusicDirector {
   private readonly audio = new Audio();
   private effectContext: AudioContext | null = null;
@@ -263,7 +267,7 @@ export class MusicDirector {
     }
   }
 
-  playPickup(settings: GameSettings): PickupAudioDebug {
+  playPickup(settings: GameSettings, options: PickupPlaybackOptions = {}): PickupAudioDebug {
     const startedAt = performance.now();
     if (!settings.musicEnabled || settings.masterVolume <= 0) {
       return {
@@ -304,7 +308,9 @@ export class MusicDirector {
     source.addEventListener('ended', () => {
       source.disconnect();
     }, { once: true });
-    console.info('[audio] pickup chime');
+    if (options.log ?? true) {
+      console.info('[audio] pickup chime');
+    }
     return {
       status: 'played',
       setupMs: performance.now() - startedAt,
