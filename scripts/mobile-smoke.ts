@@ -62,6 +62,7 @@ try {
   await page.locator('[data-testid="orientation-reminder"]').waitFor({ state: 'hidden', timeout: 8000 });
   await assertVersionBadge(page);
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
+  await assertCompactMobileSettings(page);
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
   await expectVisible(page, '[data-testid="loading-panel"]');
@@ -319,6 +320,79 @@ async function assertActionButtonsFit(page: Page, containerSelector: string): Pr
   if (clipped.length > 0) {
     throw new Error(`Expected ${containerSelector} buttons to fit in landscape viewport: ${JSON.stringify({ ...layout, clipped })}`);
   }
+}
+
+async function assertCompactMobileSettings(page: Page): Promise<void> {
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
+  await expectVisible(page, 'text=Render quality');
+
+  const layout = await page.evaluate(() => {
+    const panel = document.querySelector('.settings-panel');
+    const panelRect = panel instanceof HTMLElement ? panel.getBoundingClientRect() : null;
+    const soundtrackSelect = document.querySelector('[data-setting="soundtrack"]');
+    const soundtrackLabel = soundtrackSelect?.closest('label') ?? null;
+    const note = document.querySelector('.settings-note');
+    const soundtrackSelectStyle = soundtrackSelect instanceof HTMLElement ? window.getComputedStyle(soundtrackSelect) : null;
+    const soundtrackLabelStyle = soundtrackLabel instanceof HTMLElement ? window.getComputedStyle(soundtrackLabel) : null;
+    const noteStyle = note instanceof HTMLElement ? window.getComputedStyle(note) : null;
+    const soundtrackSelectRect = soundtrackSelect instanceof HTMLElement ? soundtrackSelect.getBoundingClientRect() : null;
+    const soundtrackLabelRect = soundtrackLabel instanceof HTMLElement ? soundtrackLabel.getBoundingClientRect() : null;
+    const noteRect = note instanceof HTMLElement ? note.getBoundingClientRect() : null;
+
+    return {
+      panel: panelRect
+        ? {
+            left: panelRect.left,
+            right: panelRect.right,
+            top: panelRect.top,
+            bottom: panelRect.bottom,
+            height: panelRect.height,
+          }
+        : null,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      soundtrackSelectVisible: Boolean(
+        soundtrackSelectStyle &&
+          soundtrackSelectStyle.display !== 'none' &&
+          soundtrackSelectStyle.visibility !== 'hidden' &&
+          soundtrackSelectRect &&
+          soundtrackSelectRect.width > 0 &&
+          soundtrackSelectRect.height > 0,
+      ),
+      soundtrackLabelVisible: Boolean(
+        soundtrackLabelStyle &&
+          soundtrackLabelStyle.display !== 'none' &&
+          soundtrackLabelStyle.visibility !== 'hidden' &&
+          soundtrackLabelRect &&
+          soundtrackLabelRect.width > 0 &&
+          soundtrackLabelRect.height > 0,
+      ),
+      noteVisible: Boolean(
+        noteStyle &&
+          noteStyle.display !== 'none' &&
+          noteStyle.visibility !== 'hidden' &&
+          noteRect &&
+          noteRect.width > 0 &&
+          noteRect.height > 0,
+      ),
+    };
+  });
+
+  if (
+    !layout.panel ||
+    layout.panel.left < 0 ||
+    layout.panel.top < 0 ||
+    layout.panel.right > layout.viewport.width ||
+    layout.panel.bottom > layout.viewport.height ||
+    layout.soundtrackSelectVisible ||
+    layout.soundtrackLabelVisible ||
+    layout.noteVisible
+  ) {
+    throw new Error(`Expected compact mobile settings without soundtrack controls, got ${JSON.stringify(layout)}`);
+  }
+
+  await assertActionButtonsFit(page, '.settings-panel');
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
+  await expectVisible(page, 'text=Move unseen through the facility');
 }
 
 async function assertCharacterPicker(page: Page, expectedHeroId: string): Promise<void> {

@@ -296,7 +296,7 @@ export class GameUi {
             <input type="checkbox" data-setting="music" ${this.settings.musicEnabled ? 'checked' : ''}/>
             Music
           </label>
-          <label>Soundtrack
+          <label class="settings-soundtrack">Soundtrack
             <select data-setting="soundtrack">
               ${soundtrackOptions.map((track) => `
                 <option value="${track.id}" ${this.settings.soundtrackId === track.id ? 'selected' : ''}>${track.name}</option>

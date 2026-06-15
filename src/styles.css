@@ -909,6 +909,18 @@ button:hover {
   align-items: center;
 }
 
+@media (max-width: 700px), (pointer: coarse) {
+  .settings-panel {
+    gap: 12px;
+  }
+
+  .settings-soundtrack,
+  .settings-panel label:has([data-setting="soundtrack"]),
+  .settings-note {
+    display: none;
+  }
+}
+
 @media (max-width: 700px) {
   .hud {
     grid-template-columns: 1fr;
@@ -1154,6 +1166,35 @@ button:hover {
     min-height: 31px;
     padding: 0 10px;
     font-size: 12px;
+  }
+
+  .settings-panel {
+    width: min(390px, calc(100vw - 20px));
+    gap: 8px;
+  }
+
+  .settings-soundtrack,
+  .settings-panel label:has([data-setting="soundtrack"]),
+  .settings-note {
+    display: none;
+  }
+
+  .settings-panel h1 {
+    margin-bottom: 2px;
+  }
+
+  .settings-panel label {
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .settings-panel select,
+  .settings-panel input[type="range"] {
+    height: 30px;
+  }
+
+  .settings-panel .panel-actions {
+    margin-top: 2px;
   }
 
   .overlay.is-title .menu-panel {
