@@ -2,6 +2,7 @@ import type { Vec2 } from './types';
 
 export class InputController {
   private readonly pressed = new Set<string>();
+  private virtualMovement: Vec2 = { x: 0, z: 0 };
 
   constructor() {
     window.addEventListener('keydown', this.handleKeyDown);
@@ -9,12 +10,22 @@ export class InputController {
   }
 
   movement(): Vec2 {
-    const x = Number(this.pressed.has('KeyD') || this.pressed.has('ArrowRight')) -
-      Number(this.pressed.has('KeyA') || this.pressed.has('ArrowLeft'));
-    const z = Number(this.pressed.has('KeyS') || this.pressed.has('ArrowDown')) -
-      Number(this.pressed.has('KeyW') || this.pressed.has('ArrowUp'));
-    const length = Math.hypot(x, z);
-    return length > 0 ? { x: x / length, z: z / length } : { x: 0, z: 0 };
+    const keyboard = this.keyboardMovement();
+    const combined = {
+      x: keyboard.x + this.virtualMovement.x,
+      z: keyboard.z + this.virtualMovement.z,
+    };
+    const length = Math.hypot(combined.x, combined.z);
+    return length > 1 ? { x: combined.x / length, z: combined.z / length } : combined;
+  }
+
+  setVirtualMovement(movement: Vec2): void {
+    const length = Math.hypot(movement.x, movement.z);
+    this.virtualMovement = length > 1 ? { x: movement.x / length, z: movement.z / length } : { ...movement };
+  }
+
+  clearVirtualMovement(): void {
+    this.virtualMovement = { x: 0, z: 0 };
   }
 
   isPressed(code: string): boolean {
@@ -24,6 +35,15 @@ export class InputController {
   dispose(): void {
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
+  }
+
+  private keyboardMovement(): Vec2 {
+    const x = Number(this.pressed.has('KeyD') || this.pressed.has('ArrowRight')) -
+      Number(this.pressed.has('KeyA') || this.pressed.has('ArrowLeft'));
+    const z = Number(this.pressed.has('KeyS') || this.pressed.has('ArrowDown')) -
+      Number(this.pressed.has('KeyW') || this.pressed.has('ArrowUp'));
+    const length = Math.hypot(x, z);
+    return length > 0 ? { x: x / length, z: z / length } : { x: 0, z: 0 };
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {

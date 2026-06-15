@@ -200,6 +200,8 @@ export class Game {
       onNextLevel: () => void this.nextLevel(),
       onStartOver: () => void this.startOver(),
       onToggleMute: () => void this.toggleMute(),
+      onTouchMove: (movement) => this.input.setVirtualMovement(movement),
+      onTouchEnd: () => this.input.clearVirtualMovement(),
       onSettingsChange: (settings) => void this.applySettings(settings),
     });
     this.debugPanel = new DebugPanel(this.ui.debug);
@@ -273,6 +275,9 @@ export class Game {
 
   private setPhase(phase: GamePhase): void {
     this.phase = phase;
+    if (!isPlayingPhase(phase)) {
+      this.input.clearVirtualMovement();
+    }
     if (phase === 'menu' || phase === 'character-select') {
       this.layoutTitleHeroPreview();
     }
@@ -1585,6 +1590,7 @@ export class Game {
       this.runAlertCount,
     );
     this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex, this.runSummary, this.loadingProgress, this.selectedHeroId);
+    this.ui.setTouchControlsVisible(this.canUpdateRun());
   }
 
   private enemyBodies(): { id: string; position: Vec2; radius: number }[] {

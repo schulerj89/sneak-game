@@ -263,8 +263,157 @@ button:hover {
 }
 
 .overlay[hidden],
-.debug[hidden] {
+.debug[hidden],
+.touch-controls[hidden] {
   display: none;
+}
+
+.touch-controls {
+  position: absolute;
+  left: max(18px, env(safe-area-inset-left));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 4;
+  display: none;
+  width: 136px;
+  height: 136px;
+  pointer-events: none;
+}
+
+.touch-pad {
+  --stick-x: 0px;
+  --stick-y: 0px;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(125, 252, 198, 0.36);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, rgba(125, 252, 198, 0.14), transparent 34%),
+    rgba(4, 8, 13, 0.3);
+  box-shadow:
+    inset 0 0 28px rgba(125, 252, 198, 0.08),
+    0 10px 34px rgba(0, 0, 0, 0.28);
+  touch-action: none;
+  user-select: none;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+}
+
+.touch-pad::before,
+.touch-pad::after,
+.touch-pad-line {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  content: '';
+}
+
+.touch-pad::before,
+.touch-pad::after {
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  border: solid rgba(239, 248, 255, 0.34);
+  transform-origin: center;
+}
+
+.touch-pad::before {
+  border-width: 2px 0 0 2px;
+  transform: translate(-50%, -50%) translateY(-38px) rotate(45deg);
+}
+
+.touch-pad::after {
+  border-width: 0 2px 2px 0;
+  transform: translate(-50%, -50%) translateY(38px) rotate(45deg);
+}
+
+.touch-pad-line-horizontal,
+.touch-pad-line-vertical {
+  left: 50%;
+  top: 50%;
+  border-color: rgba(239, 248, 255, 0.26);
+  border-style: solid;
+}
+
+.touch-pad-line-horizontal {
+  width: 82px;
+  height: 0;
+  border-width: 1px 0 0;
+  transform: translate(-50%, -50%);
+}
+
+.touch-pad-line-horizontal::before,
+.touch-pad-line-horizontal::after,
+.touch-pad-line-vertical::before,
+.touch-pad-line-vertical::after {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: solid rgba(239, 248, 255, 0.32);
+  content: '';
+}
+
+.touch-pad-line-horizontal::before {
+  left: -5px;
+  top: -6px;
+  border-width: 0 0 2px 2px;
+  transform: rotate(45deg);
+}
+
+.touch-pad-line-horizontal::after {
+  right: -5px;
+  top: -6px;
+  border-width: 2px 2px 0 0;
+  transform: rotate(45deg);
+}
+
+.touch-pad-line-vertical {
+  width: 0;
+  height: 82px;
+  border-width: 0 0 0 1px;
+  transform: translate(-50%, -50%);
+}
+
+.touch-pad-line-vertical::before {
+  left: -6px;
+  top: -5px;
+  border-width: 2px 0 0 2px;
+  transform: rotate(45deg);
+}
+
+.touch-pad-line-vertical::after {
+  left: -6px;
+  bottom: -5px;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.touch-stick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(125, 252, 198, 0.56);
+  border-radius: 50%;
+  background: rgba(125, 252, 198, 0.18);
+  box-shadow:
+    inset 0 0 20px rgba(255, 255, 255, 0.1),
+    0 0 18px rgba(125, 252, 198, 0.22);
+  transform: translate(calc(-50% + var(--stick-x)), calc(-50% + var(--stick-y)));
+  transition: transform 80ms linear;
+  pointer-events: none;
+}
+
+.touch-pad:active .touch-stick {
+  transition: none;
+}
+
+@media (pointer: coarse), (hover: none) {
+  .touch-controls.is-visible {
+    display: block;
+  }
 }
 
 .panel {
@@ -668,18 +817,30 @@ button:hover {
 @media (max-width: 700px) {
   .hud {
     grid-template-columns: 1fr;
+    inset: 10px 10px auto 10px;
+    gap: 8px;
   }
 
   .status-pill {
     justify-self: start;
+    min-width: 126px;
+    padding: 7px 11px;
+    font-size: 11px;
   }
 
   .hud-left {
-    max-width: calc(100vw - 32px);
+    max-width: calc(100vw - 20px);
+    padding: 8px 10px;
+  }
+
+  .hud-left span,
+  .objective-chip {
+    font-size: 12px;
   }
 
   .objective-chip {
     max-width: none;
+    min-height: 31px;
   }
 
   .objective-strip {
@@ -688,10 +849,32 @@ button:hover {
 
   .hud-right {
     justify-self: start;
+    flex-wrap: wrap;
+    max-width: calc(100vw - 20px);
+    padding: 6px;
+  }
+
+  .hud-right button {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 13px;
   }
 
   .debug {
-    width: calc(100vw - 32px);
+    left: 10px;
+    bottom: calc(164px + env(safe-area-inset-bottom));
+    width: min(340px, calc(100vw - 20px));
+    max-height: 28vh;
+    overflow: auto;
+    padding: 9px;
+    font-size: 11px;
+  }
+
+  .touch-controls {
+    left: max(14px, env(safe-area-inset-left));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    width: 124px;
+    height: 124px;
   }
 
   .overlay {

@@ -6,6 +6,7 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 
 - Twelve playable levels from Dock Blackout through Blackout Crown, with easy, medium, hard, and final challenge layouts.
 - Menu, settings, retry, and level-complete flows.
+- GitHub Pages deployment workflow for publishing the built Vite app from `dist`.
 - Black title screen with text-only branding and the cinematic hero GLB idling beside it.
 - Character select flow after Start Run, with four preloaded heroes and reusable hero definitions for new operatives.
 - First-level mission briefing that explains keycards, terminals, sentries, vision cones, and the locked exit.
@@ -22,11 +23,13 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Cinematic default rendering with a 320 MB advisory browser heap cap.
 - On-screen debug panel with FPS, memory, draw calls, player position, detection state, active track, and pickup timing/audio diagnostics.
 - Console logs for game phase, level loads, settings, audio, and detection events.
-- Unit tests, level route validation, and browser smoke coverage.
+- Mobile touch joystick for phone/tablet play.
+- Unit tests, level route validation, browser smoke coverage, and mobile smoke coverage.
 
 ## Controls
 
 - Move: `WASD` or arrow keys.
+- Mobile move: drag the translucent on-screen joystick.
 - Toggle menu: `Esc`.
 - Toggle debug tools: `F1`.
 
@@ -51,6 +54,7 @@ npm run build        # Type-check and build production assets
 npm run test:run     # Run Vitest unit tests
 npm run test:levels  # Validate authored level routes
 npm run test:browser # Run Playwright smoke test against the local dev server
+npm run test:mobile  # Run mobile viewport joystick smoke test against the local dev server
 npm run debug:hero-animation # Capture close-up hero idle/run/yaw debug screenshots
 npm run debug:enemy-sentry # Capture close-up sentry hover/light debug screenshots
 npm run assets:meshy-objectives # Generate Meshy objective GLBs when MESHY_API_KEY is set
@@ -60,6 +64,20 @@ npm run verify       # Run unit tests, level validation, and production build
 ```
 
 `npm run test:browser` expects the dev server to be running at `http://127.0.0.1:5173/`. It runs headed by default for realistic frame pacing; set `SMOKE_HEADLESS=true` if a headless smoke pass is needed.
+
+`npm run test:mobile` uses a mobile/touch browser context against the same dev server and writes `artifacts/shadow-circuit-mobile-touch.png`.
+
+## GitHub Pages
+
+The Pages workflow lives at `.github/workflows/main.yml`. It runs on pushes to `main` and from the Actions tab, installs dependencies, runs the unit and level route checks, builds with the GitHub Pages base path, uploads `dist`, and deploys the artifact.
+
+Expected Pages URL:
+
+```text
+https://schulerj89.github.io/sneak-game/
+```
+
+If the first run does not deploy, open the repository on GitHub and set Settings -> Pages -> Build and deployment -> Source to GitHub Actions.
 
 ## Project Structure
 

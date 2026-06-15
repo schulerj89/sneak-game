@@ -2,7 +2,7 @@ import { soundtrackOptions } from './audio';
 import { levelThumbnailSvg } from './assets';
 import { heroOptions, type HeroId } from './heroes';
 import { isLoadingPhase, isPlayingPhase } from './phase';
-import type { GamePhase, GameSettings, LevelDefinition, LoadingProgress, ObjectiveProgress, RunSummary, SuspicionState } from './types';
+import type { GamePhase, GameSettings, LevelDefinition, LoadingProgress, ObjectiveProgress, RunSummary, SuspicionState, Vec2 } from './types';
 
 type UiCallbacks = {
   onStart: () => void;
@@ -20,6 +20,8 @@ type UiCallbacks = {
   onNextLevel: () => void;
   onStartOver: () => void;
   onToggleMute: () => void;
+  onTouchMove: (movement: Vec2) => void;
+  onTouchEnd: () => void;
   onSettingsChange: (settings: GameSettings) => void;
 };
 
@@ -28,6 +30,10 @@ export class GameUi {
   readonly hud: HTMLElement;
   readonly debug: HTMLElement;
   readonly overlay: HTMLElement;
+  readonly touchControls: HTMLElement;
+  private readonly touchPad: HTMLElement;
+  private activeTouchPointerId: number | null = null;
+  private touchMovementActive = false;
 
   constructor(
     mount: HTMLElement,
@@ -39,6 +45,13 @@ export class GameUi {
         <div class="viewport" data-testid="game-viewport"></div>
         <section class="hud" data-testid="hud"></section>
         <section class="debug" data-testid="debug-panel"></section>
+        <section class="touch-controls" data-testid="touch-controls" hidden aria-label="Movement joystick">
+          <div class="touch-pad" data-testid="touch-pad">
+            <span class="touch-pad-line touch-pad-line-horizontal" aria-hidden="true"></span>
+            <span class="touch-pad-line touch-pad-line-vertical" aria-hidden="true"></span>
+            <span class="touch-stick" data-testid="touch-stick" aria-hidden="true"></span>
+          </div>
+        </section>
         <section class="overlay" data-testid="overlay"></section>
       </main>
     `;
@@ -46,6 +59,10 @@ export class GameUi {
     this.hud = required(mount, '.hud');
     this.debug = required(mount, '.debug');
     this.overlay = required(mount, '.overlay');
+    this.touchControls = required(mount, '.touch-controls');
+    this.touchPad = required(mount, '.touch-pad');
+    required(mount, '.touch-stick');
+    this.bindTouchControls();
   }
 
   setSettings(settings: GameSettings): void {
@@ -111,6 +128,14 @@ export class GameUi {
     const alerts = this.hud.querySelector('.run-alerts');
     if (time) time.textContent = formatRunTime(runElapsedMs);
     if (alerts) alerts.textContent = String(runAlertCount);
+  }
+
+  setTouchControlsVisible(visible: boolean): void {
+    this.touchControls.hidden = !visible;
+    this.touchControls.classList.toggle('is-visible', visible);
+    if (!visible) {
+      this.resetTouchControl();
+    }
   }
 
   renderOverlay(
@@ -342,6 +367,67 @@ export class GameUi {
     this.hud.querySelector('[data-action="settings"]')?.addEventListener('click', this.callbacks.onSettings);
     this.hud.querySelector('[data-action="level-select"]')?.addEventListener('click', this.callbacks.onLevelSelect);
     this.hud.querySelector('[data-action="menu"]')?.addEventListener('click', this.callbacks.onMenu);
+  }
+
+  private bindTouchControls(): void {
+    this.touchPad.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      if (this.touchControls.hidden) return;
+
+      event.preventDefault();
+      this.activeTouchPointerId = event.pointerId;
+      this.touchPad.setPointerCapture(event.pointerId);
+      this.updateTouchMovement(event);
+    });
+
+    this.touchPad.addEventListener('pointermove', (event) => {
+      if (event.pointerId !== this.activeTouchPointerId) return;
+
+      event.preventDefault();
+      this.updateTouchMovement(event);
+    });
+
+    this.touchPad.addEventListener('pointerup', (event) => this.releaseTouchMovement(event));
+    this.touchPad.addEventListener('pointercancel', (event) => this.releaseTouchMovement(event));
+    this.touchPad.addEventListener('lostpointercapture', (event) => this.releaseTouchMovement(event));
+  }
+
+  private updateTouchMovement(event: PointerEvent): void {
+    const rect = this.touchPad.getBoundingClientRect();
+    const radius = Math.max(1, Math.min(rect.width, rect.height) * 0.38);
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const rawX = event.clientX - centerX;
+    const rawY = event.clientY - centerY;
+    const distance = Math.hypot(rawX, rawY);
+    const factor = distance > radius ? radius / distance : 1;
+    const x = rawX * factor;
+    const y = rawY * factor;
+
+    this.touchMovementActive = true;
+    this.touchPad.style.setProperty('--stick-x', `${x}px`);
+    this.touchPad.style.setProperty('--stick-y', `${y}px`);
+    this.callbacks.onTouchMove({ x: x / radius, z: y / radius });
+  }
+
+  private releaseTouchMovement(event: PointerEvent): void {
+    if (event.pointerId !== this.activeTouchPointerId) return;
+
+    if (this.touchPad.hasPointerCapture(event.pointerId)) {
+      this.touchPad.releasePointerCapture(event.pointerId);
+    }
+    this.activeTouchPointerId = null;
+    this.resetTouchControl();
+  }
+
+  private resetTouchControl(): void {
+    this.touchPad.style.setProperty('--stick-x', '0px');
+    this.touchPad.style.setProperty('--stick-y', '0px');
+    this.activeTouchPointerId = null;
+    if (!this.touchMovementActive) return;
+
+    this.touchMovementActive = false;
+    this.callbacks.onTouchEnd();
   }
 
   private bindOverlay(): void {
