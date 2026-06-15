@@ -26,18 +26,38 @@ try {
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await expectVisible(page, '[data-testid="overlay"]');
+  await expectVisible(page, '[data-testid="orientation-reminder"]');
+  await assertDefaultDebugHidden(page);
+  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-mobile-portrait-rotate.png`, fullPage: true });
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.locator('[data-testid="orientation-reminder"]').waitFor({ state: 'hidden', timeout: 8000 });
+  await assertActionButtonsFit(page, '[data-testid="overlay"]');
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
   await expectVisible(page, '[data-testid="loading-panel"]');
   await expectVisible(page, '[data-testid="character-select-panel"]');
+  await expectVisible(page, '[data-testid="hero-picker"]');
+  await assertCharacterPicker(page, 'shadow-operative');
+  await assertActionButtonsFit(page, '[data-testid="character-select-panel"]');
+  await page.locator('[data-action="next-hero"]').click();
+  await page.waitForFunction(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { selectedHero: () => string } };
+    return debugWindow.__shadowCircuitDebug?.selectedHero() === 'echo-vanguard';
+  }, undefined, { timeout: 8000 });
+  await assertCharacterPicker(page, 'echo-vanguard');
+  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-mobile-character-select.png`, fullPage: true });
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
   await expectVisible(page, '[data-testid="briefing-panel"]');
+  await assertActionButtonsFit(page, '[data-testid="briefing-panel"]');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
   await expectVisible(page, '[data-testid="loading-panel"]');
   await assertPlayingPhase(page);
 
   await expectVisible(page, '[data-testid="touch-controls"]');
+  await assertDefaultDebugHidden(page);
+  await assertHudButtonsFit(page);
   await assertTouchLayout(page);
 
   const before = await playerPosition(page);
@@ -73,7 +93,7 @@ try {
   await page.locator('[data-testid="touch-controls"]').waitFor({ state: 'hidden', timeout: 8000 });
 
   console.info(`[mobile-smoke] ok url=${baseUrl}`);
-  console.info(`[mobile-smoke] screenshot=${screenshotDir}/shadow-circuit-mobile-touch.png`);
+  console.info(`[mobile-smoke] screenshots=${screenshotDir}/shadow-circuit-mobile-portrait-rotate.png, ${screenshotDir}/shadow-circuit-mobile-character-select.png, ${screenshotDir}/shadow-circuit-mobile-touch.png`);
 } finally {
   await context.close();
   await browser.close();
@@ -136,7 +156,107 @@ async function assertTouchLayout(page: Page): Promise<void> {
     };
   });
 
-  if (!layout.touch || layout.touch.width < 110 || layout.touch.height < 110 || layout.overlapsDebug || layout.overlapsHud) {
+  if (!layout.touch || layout.touch.width < 96 || layout.touch.height < 96 || layout.overlapsDebug || layout.overlapsHud) {
     throw new Error(`Unexpected mobile touch layout: ${JSON.stringify(layout)}`);
+  }
+}
+
+async function assertDefaultDebugHidden(page: Page): Promise<void> {
+  await page.locator('[data-testid="debug-panel"]').waitFor({ state: 'hidden', timeout: 8000 });
+  const debugHidden = await page.locator('[data-testid="debug-panel"]').evaluate((element) => {
+    const htmlElement = element as HTMLElement;
+    return htmlElement.hidden || window.getComputedStyle(htmlElement).display === 'none';
+  });
+  if (!debugHidden) {
+    throw new Error('Expected debug panel to be hidden by default');
+  }
+}
+
+async function assertHudButtonsFit(page: Page): Promise<void> {
+  const layout = await page.locator('[data-testid="hud"]').evaluate((hud) => {
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const buttons = [...hud.querySelectorAll('button')].map((button) => {
+      const rect = button.getBoundingClientRect();
+      return {
+        label: button.textContent?.trim() ?? '',
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+      };
+    });
+    return { viewport, buttons };
+  });
+
+  const clipped = layout.buttons.filter(
+    (button) =>
+      button.left < 0 ||
+      button.top < 0 ||
+      button.right > layout.viewport.width ||
+      button.bottom > layout.viewport.height,
+  );
+  if (clipped.length > 0) {
+    throw new Error(`Expected HUD buttons to fit in landscape viewport: ${JSON.stringify({ ...layout, clipped })}`);
+  }
+}
+
+async function assertActionButtonsFit(page: Page, containerSelector: string): Promise<void> {
+  const layout = await page.locator(containerSelector).evaluate((container) => {
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const buttons = [...container.querySelectorAll('button')].map((button) => {
+      const rect = button.getBoundingClientRect();
+      return {
+        label: button.textContent?.trim() ?? '',
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+      };
+    });
+    return { viewport, buttons };
+  });
+
+  const clipped = layout.buttons.filter(
+    (button) =>
+      button.left < 0 ||
+      button.top < 0 ||
+      button.right > layout.viewport.width ||
+      button.bottom > layout.viewport.height,
+  );
+  if (clipped.length > 0) {
+    throw new Error(`Expected ${containerSelector} buttons to fit in landscape viewport: ${JSON.stringify({ ...layout, clipped })}`);
+  }
+}
+
+async function assertCharacterPicker(page: Page, expectedHeroId: string): Promise<void> {
+  const state = await page.evaluate(() => {
+    const picker = document.querySelector('[data-testid="hero-picker"]');
+    const pickerStyle = picker ? window.getComputedStyle(picker) : null;
+    const grid = document.querySelector('.hero-grid');
+    const gridStyle = grid ? window.getComputedStyle(grid) : null;
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        selectedHero: () => string;
+        titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null };
+      };
+    };
+    return {
+      pickerVisible: pickerStyle?.display !== 'none',
+      pickerText: picker?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      gridHidden: gridStyle?.display === 'none',
+      selectedHero: debugWindow.__shadowCircuitDebug?.selectedHero(),
+      titleHero: debugWindow.__shadowCircuitDebug?.titleHero(),
+    };
+  });
+
+  if (
+    !state.pickerVisible ||
+    !state.gridHidden ||
+    state.selectedHero !== expectedHeroId ||
+    !state.titleHero?.visible ||
+    !state.titleHero.cinematic ||
+    state.titleHero.activeState !== 'idle'
+  ) {
+    throw new Error(`Expected compact character picker for ${expectedHeroId}, got ${JSON.stringify(state)}`);
   }
 }

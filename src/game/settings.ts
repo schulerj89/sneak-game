@@ -1,13 +1,13 @@
 import type { DetectionLeniency, GameSettings, RenderQuality, SoundtrackId } from './types';
 
-const storageKey = 'shadow-circuit-settings-v2';
+const storageKey = 'shadow-circuit-settings-v3';
 export const memoryCapMb = 320;
 export const targetFps = 60;
 
 export const defaultSettings: GameSettings = {
   quality: 'cinematic',
   musicEnabled: true,
-  debugEnabled: true,
+  debugEnabled: false,
   masterVolume: 0.36,
   soundtrackId: 'ghost-steps',
   detectionLeniency: 'standard',

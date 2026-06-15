@@ -8,6 +8,8 @@ type UiCallbacks = {
   onStart: () => void;
   onBeginBriefing: () => void;
   onSelectHero: (heroId: HeroId) => void;
+  onPreviousHero: () => void;
+  onNextHero: () => void;
   onConfirmHero: () => void;
   onResume: () => void;
   onSettings: () => void;
@@ -51,6 +53,11 @@ export class GameUi {
             <span class="touch-pad-line touch-pad-line-vertical" aria-hidden="true"></span>
             <span class="touch-stick" data-testid="touch-stick" aria-hidden="true"></span>
           </div>
+        </section>
+        <section class="orientation-reminder" data-testid="orientation-reminder" aria-live="polite">
+          <div class="orientation-device" aria-hidden="true"></div>
+          <strong>Rotate to landscape</strong>
+          <span>Shadow Circuit is tuned for a wider view on mobile.</span>
         </section>
         <section class="overlay" data-testid="overlay"></section>
       </main>
@@ -187,6 +194,14 @@ export class GameUi {
         <div class="panel character-select-panel" data-testid="character-select-panel">
           <h1>Select Operative</h1>
           <p>${selectedHero.name} is ready for the run.</p>
+          <div class="hero-picker" data-testid="hero-picker" style="--hero-accent: ${selectedHero.accentColor}">
+            <button type="button" data-action="previous-hero" aria-label="Previous operative">&larr;</button>
+            <span class="hero-picker-name">
+              <strong>${selectedHero.name}</strong>
+              <span>${selectedHero.role}</span>
+            </span>
+            <button type="button" data-action="next-hero" aria-label="Next operative">&rarr;</button>
+          </div>
           <div class="hero-grid" role="list" aria-label="Hero roster">
             ${heroOptions.map((hero) => `
               <button
@@ -434,6 +449,8 @@ export class GameUi {
     this.overlay.querySelector('[data-action="start"]')?.addEventListener('click', this.callbacks.onStart);
     this.overlay.querySelector('[data-action="begin-briefing"]')?.addEventListener('click', this.callbacks.onBeginBriefing);
     this.overlay.querySelector('[data-action="confirm-hero"]')?.addEventListener('click', this.callbacks.onConfirmHero);
+    this.overlay.querySelector('[data-action="previous-hero"]')?.addEventListener('click', this.callbacks.onPreviousHero);
+    this.overlay.querySelector('[data-action="next-hero"]')?.addEventListener('click', this.callbacks.onNextHero);
     this.overlay.querySelectorAll('[data-hero-id]').forEach((button) => {
       button.addEventListener('click', () => {
         this.callbacks.onSelectHero((button as HTMLElement).dataset.heroId as HeroId);

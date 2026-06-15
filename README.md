@@ -30,6 +30,7 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 
 - Move: `WASD` or arrow keys.
 - Mobile move: drag the translucent on-screen joystick.
+- Mobile layout: rotate to landscape when prompted.
 - Toggle menu: `Esc`.
 - Toggle debug tools: `F1`.
 

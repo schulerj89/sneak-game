@@ -188,6 +188,8 @@ export class Game {
       onStart: () => void this.start(),
       onBeginBriefing: () => void this.beginBriefedRun(),
       onSelectHero: (heroId) => this.selectHero(heroId),
+      onPreviousHero: () => this.selectAdjacentHero(-1),
+      onNextHero: () => this.selectAdjacentHero(1),
       onConfirmHero: () => void this.confirmHeroSelection(),
       onResume: () => void this.resumeFromSettings(),
       onSettings: () => this.openSettings(),
@@ -271,6 +273,12 @@ export class Game {
     this.fitCameraToTitle();
     this.renderUi();
     console.info(`[hero] selected ${heroId}`);
+  }
+
+  private selectAdjacentHero(direction: -1 | 1): void {
+    const currentIndex = heroOptions.findIndex((hero) => hero.id === this.selectedHeroId);
+    const nextIndex = (Math.max(0, currentIndex) + direction + heroOptions.length) % heroOptions.length;
+    this.selectHero(heroOptions[nextIndex].id);
   }
 
   private setPhase(phase: GamePhase): void {
