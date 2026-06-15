@@ -79,6 +79,7 @@ const compactCharacterSelectHeroBaseX = 1.35;
 const titleHeroBaseY = 0.24;
 const compactCharacterSelectHeroBaseY = 1.18;
 const compactCharacterSelectHeroScale = 1.12;
+const compactLandscapeLevelCameraScale = 0.9;
 const silentPickupWarmupVolume = 0.0001;
 
 declare global {
@@ -1759,7 +1760,7 @@ export class Game {
       return;
     }
 
-    const scale = Math.max(1, this.level.floorSize.x / 16.5, this.level.floorSize.z / 11.8, this.camera.aspect < 1 ? 1.2 : 1);
+    const scale = this.levelCameraScale();
     this.camera.position.set(0, 10.2 * scale, 10.4 * scale);
     this.camera.lookAt(0, 0, 0);
 
@@ -1767,6 +1768,11 @@ export class Game {
       this.scene.fog.near = 8 * scale;
       this.scene.fog.far = 22 * scale;
     }
+  }
+
+  private levelCameraScale(): number {
+    const floorScale = Math.max(1, this.level.floorSize.x / 16.5, this.level.floorSize.z / 11.8, this.camera.aspect < 1 ? 1.2 : 1);
+    return this.isCompactLandscapeViewport() ? floorScale * compactLandscapeLevelCameraScale : floorScale;
   }
 
   private fitCameraToTitle(): void {

@@ -232,6 +232,7 @@ export class GameUi {
         <div class="panel briefing-panel" data-testid="briefing-panel">
           <h1>Mission Briefing</h1>
           <p>${level.briefing}</p>
+          <p class="mobile-briefing-copy">Collect required keycards and terminals. Stay out of red sentry vision and use cover to break sight. When the exit turns green, reach it to finish the level.</p>
           <div class="briefing-grid">
             <div class="briefing-item">
               <span class="briefing-icon objective-keycard" aria-hidden="true"><span class="objective-icon"></span></span>

@@ -81,6 +81,7 @@ try {
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
   await expectVisible(page, '[data-testid="briefing-panel"]');
+  await assertMobileBriefingSimplified(page);
   await assertActionButtonsFit(page, '[data-testid="briefing-panel"]');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
   await expectVisible(page, '[data-testid="loading-panel"]');
@@ -319,6 +320,53 @@ async function assertActionButtonsFit(page: Page, containerSelector: string): Pr
   );
   if (clipped.length > 0) {
     throw new Error(`Expected ${containerSelector} buttons to fit in landscape viewport: ${JSON.stringify({ ...layout, clipped })}`);
+  }
+}
+
+async function assertMobileBriefingSimplified(page: Page): Promise<void> {
+  const state = await page.locator('[data-testid="briefing-panel"]').evaluate((panel) => {
+    const panelRect = panel.getBoundingClientRect();
+    const mobileCopy = panel.querySelector('.mobile-briefing-copy');
+    const grid = panel.querySelector('.briefing-grid');
+    const mobileCopyRect = mobileCopy instanceof HTMLElement ? mobileCopy.getBoundingClientRect() : null;
+    const gridRect = grid instanceof HTMLElement ? grid.getBoundingClientRect() : null;
+    const mobileCopyStyle = mobileCopy instanceof HTMLElement ? window.getComputedStyle(mobileCopy) : null;
+    const gridStyle = grid instanceof HTMLElement ? window.getComputedStyle(grid) : null;
+
+    return {
+      panel: { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      text: mobileCopy?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      mobileCopyVisible: Boolean(
+        mobileCopyStyle &&
+          mobileCopyStyle.display !== 'none' &&
+          mobileCopyStyle.visibility !== 'hidden' &&
+          mobileCopyRect &&
+          mobileCopyRect.width > 0 &&
+          mobileCopyRect.height > 0,
+      ),
+      gridVisible: Boolean(
+        gridStyle &&
+          gridStyle.display !== 'none' &&
+          gridStyle.visibility !== 'hidden' &&
+          gridRect &&
+          gridRect.width > 0 &&
+          gridRect.height > 0,
+      ),
+    };
+  });
+
+  if (
+    !state.mobileCopyVisible ||
+    state.gridVisible ||
+    !state.text.includes('keycards and terminals') ||
+    !state.text.includes('exit turns green') ||
+    state.panel.left < 0 ||
+    state.panel.top < 0 ||
+    state.panel.right > state.viewport.width ||
+    state.panel.bottom > state.viewport.height
+  ) {
+    throw new Error(`Expected simplified mobile briefing, got ${JSON.stringify(state)}`);
   }
 }
 
