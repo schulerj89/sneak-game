@@ -6,6 +6,9 @@ const screenshotDir = 'artifacts';
 const headless = process.env.MOBILE_SMOKE_HEADLESS === 'true';
 const browserName = process.env.MOBILE_SMOKE_BROWSER ?? 'chromium';
 const playingTimeoutMs = Number(process.env.MOBILE_SMOKE_PLAYING_TIMEOUT_MS ?? 45000);
+const emulateIos = process.env.MOBILE_SMOKE_IOS === 'true' || browserName === 'webkit';
+const iphoneUserAgent =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
 if (browserName !== 'chromium' && browserName !== 'webkit') {
   throw new Error(`Unsupported MOBILE_SMOKE_BROWSER=${browserName}`);
@@ -28,6 +31,7 @@ const context = await browser.newContext({
   deviceScaleFactor: 2,
   hasTouch: true,
   isMobile: true,
+  userAgent: emulateIos ? iphoneUserAgent : undefined,
 });
 const page = await context.newPage();
 const pageErrors: string[] = [];
@@ -151,6 +155,7 @@ async function collectDiagnostics(page: Page, pageErrors: readonly string[]): Pr
         levelId: () => string;
         loadingProgress: () => { value: number; label: string };
         selectedHero: () => string;
+        memorySafeAssets: () => boolean;
       };
     };
     return {
@@ -159,6 +164,7 @@ async function collectDiagnostics(page: Page, pageErrors: readonly string[]): Pr
       levelId: debugWindow.__shadowCircuitDebug?.levelId(),
       loadingProgress: debugWindow.__shadowCircuitDebug?.loadingProgress(),
       selectedHero: debugWindow.__shadowCircuitDebug?.selectedHero(),
+      memorySafeAssets: debugWindow.__shadowCircuitDebug?.memorySafeAssets(),
       overlayText: overlay?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 600) ?? '',
     };
   });
@@ -294,6 +300,8 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
       __shadowCircuitDebug?: {
         selectedHero: () => string;
         titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null; x: number | null };
+        memorySafeAssets: () => boolean;
+        runtimeQuality: () => string;
       };
     };
     return {
@@ -302,16 +310,20 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
       gridHidden: gridStyle?.display === 'none',
       selectedHero: debugWindow.__shadowCircuitDebug?.selectedHero(),
       titleHero: debugWindow.__shadowCircuitDebug?.titleHero(),
+      memorySafeAssets: debugWindow.__shadowCircuitDebug?.memorySafeAssets(),
+      runtimeQuality: debugWindow.__shadowCircuitDebug?.runtimeQuality(),
     };
   });
+  const expectedCinematic = state.memorySafeAssets !== true;
 
   if (
     !state.pickerVisible ||
     !state.gridHidden ||
     state.selectedHero !== expectedHeroId ||
     !state.titleHero?.visible ||
-    !state.titleHero.cinematic ||
-    state.titleHero.activeState !== 'idle' ||
+    state.titleHero.cinematic !== expectedCinematic ||
+    (expectedCinematic && state.titleHero.activeState !== 'idle') ||
+    (state.memorySafeAssets === true && state.runtimeQuality !== 'memory') ||
     state.titleHero.x === null ||
     Math.abs(state.titleHero.x - 1.35) > 0.08
   ) {

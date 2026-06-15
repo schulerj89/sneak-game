@@ -12,6 +12,7 @@ import { add, clampToRoom, distance, normalize, scale, subtract } from './math';
 import { collectNearbyObjectives, getObjectiveProgress } from './objectives';
 import { ObjectiveAssetLibrary } from './objectiveAssets';
 import { isLoadingPhase, isPlayingPhase } from './phase';
+import { shouldUseMobileMemorySafeAssets } from './platform';
 import {
   beginPickupFrameProbe,
   createPickupDebugSample,
@@ -32,6 +33,7 @@ import type {
   LevelDefinition,
   ObjectiveDefinition,
   ObjectiveProgress,
+  RenderQuality,
   LightSpec,
   LoadingProgress,
   RunSummary,
@@ -125,6 +127,9 @@ declare global {
         volume: number;
       };
       musicEnabled: () => boolean;
+      memorySafeAssets: () => boolean;
+      runtimeQuality: () => RenderQuality;
+      rendererMemory: () => { geometries: number; textures: number };
     };
   }
 }
@@ -137,6 +142,7 @@ export class Game {
   private readonly music = new MusicDirector();
   private readonly characterAssets = new CharacterAssetLibrary();
   private readonly objectiveAssets = new ObjectiveAssetLibrary();
+  private readonly memorySafeAssets = shouldUseMobileMemorySafeAssets();
   private readonly ui: GameUi;
   private readonly debugPanel: DebugPanel;
   private readonly clock = new THREE.Clock();
@@ -218,6 +224,9 @@ export class Game {
     window.addEventListener('resize', this.resize);
     window.addEventListener('keydown', this.handleHotkeys);
     this.installDebugHooks();
+    if (this.memorySafeAssets) {
+      console.info('[performance] mobile memory-safe asset mode enabled');
+    }
     console.info('[game] Shadow Circuit initialized');
   }
 
@@ -233,6 +242,8 @@ export class Game {
     window.removeEventListener('keydown', this.handleHotkeys);
     this.input.dispose();
     this.music.stop();
+    this.clearTitlePreview();
+    this.clearLevelObjects();
     this.characterAssets.dispose();
     this.objectiveAssets.dispose();
     this.renderer.dispose();
@@ -328,16 +339,18 @@ export class Game {
       this.settings.masterVolume !== settings.masterVolume ||
       this.settings.soundtrackId !== settings.soundtrackId;
     const qualityChanged = this.settings.quality !== settings.quality;
+    const previousRuntimeQuality = this.runtimeQuality();
 
     this.settings = settings;
     this.ui.setSettings(settings);
     saveSettings(settings);
     this.applyRendererQuality();
-    if (qualityChanged) {
-      if (settings.quality !== 'cinematic' || this.objectiveAssets.hasCinematicAssets()) {
+    if (qualityChanged || previousRuntimeQuality !== this.runtimeQuality()) {
+      const runtimeQuality = this.runtimeQuality();
+      if (runtimeQuality !== 'cinematic' || this.objectiveAssets.hasCinematicAssets()) {
         this.rebuildObjectiveMeshes();
       }
-      if (settings.quality !== 'cinematic' || this.characterAssets.hasCinematicAssets()) {
+      if (runtimeQuality !== 'cinematic' || this.characterAssets.hasCinematicAssets()) {
         this.rebuildCharacterMeshes();
       }
     }
@@ -433,7 +446,7 @@ export class Game {
     await runLoadingSequence({
       tasks: [
         { label: 'Loading menu music', run: () => this.music.preloadMenuTrack() },
-        { label: 'Loading hero roster', run: () => this.characterAssets.preloadHeroRoster() },
+        { label: 'Loading hero roster', run: () => this.preloadCharacterSelectAssets() },
         { label: 'Preparing selected operative', run: () => this.prepareTitlePreview() },
       ],
       onProgress: (progress) => this.updateLoadingProgress(progress),
@@ -448,6 +461,7 @@ export class Game {
     const targetIndex = Math.max(0, Math.min(levels.length - 1, levelIndex));
     const targetLevel = levels[targetIndex];
     this.loadingProgress = { value: 0, label: `Loading ${targetLevel.name}` };
+    this.prepareBlackLoadingScene();
     this.setPhase('loading');
 
     await runLoadingSequence({
@@ -463,8 +477,8 @@ export class Game {
   private levelTransitionTasks(levelIndex: number): readonly LoadingTask[] {
     const targetLevel = levels[levelIndex];
     return [
-      { label: 'Loading character assets', run: () => this.characterAssets.preload(this.settings.quality, this.selectedHeroId) },
-      { label: 'Loading objective assets', run: () => this.objectiveAssets.preload(this.settings.quality) },
+      { label: 'Loading character assets', run: () => this.characterAssets.preload(this.runtimeQuality(), this.selectedHeroId) },
+      { label: 'Loading objective assets', run: () => this.objectiveAssets.preload(this.runtimeQuality()) },
       { label: `Loading ${targetLevel.name}`, run: () => this.loadLevel(levelIndex) },
       { label: 'Loading soundtrack', run: () => this.music.preload(this.settings, soundtrackIdForLevel(levelIndex)) },
       { label: 'Compiling level materials', run: () => this.warmupRenderStates() },
@@ -472,6 +486,20 @@ export class Game {
       { label: 'Warming pickup audio', run: () => this.music.warmupEffects(this.settings) },
       { label: 'Simulating collectible pickups', run: () => this.warmupPickupCollections() },
     ];
+  }
+
+  private async preloadCharacterSelectAssets(): Promise<void> {
+    if (this.memorySafeAssets) return;
+
+    await this.characterAssets.preloadHeroRoster();
+  }
+
+  private prepareBlackLoadingScene(): void {
+    this.clearTitlePreview();
+    this.clearLevelObjects();
+    this.scene.background = new THREE.Color('#000000');
+    this.scene.fog = null;
+    this.renderer.render(this.scene, this.camera);
   }
 
   private showTitleScene(): void {
@@ -503,6 +531,14 @@ export class Game {
     const heroId = this.selectedHeroId;
     if (this.titleHeroVisual && this.titlePreviewHeroId === heroId) return;
 
+    if (this.memorySafeAssets) {
+      this.installTitleHeroPreview(heroId);
+      if (this.phase === 'menu' || this.phase === 'character-select') {
+        this.fitCameraToTitle();
+      }
+      return;
+    }
+
     await this.characterAssets.preloadHero(heroId);
     if (this.disposed || this.selectedHeroId !== heroId) return;
 
@@ -513,7 +549,7 @@ export class Game {
   }
 
   private installTitleHeroPreview(heroId: HeroId = this.selectedHeroId): void {
-    this.titlePreview.clear();
+    this.clearTitlePreview();
     this.titlePreview.name = 'title-preview';
 
     const platformMaterial = new THREE.MeshBasicMaterial({ color: '#020405', transparent: true, opacity: 0.64 });
@@ -534,11 +570,11 @@ export class Game {
     fill.position.set(1.35, 1.15, 2.15);
     fill.name = 'title-hero-fill-light';
 
-    const character = this.characterAssets.createHero('cinematic', heroId);
+    const character = this.characterAssets.createHero(this.memorySafeAssets ? 'memory' : 'cinematic', heroId);
     this.titleHeroVisual = character.object;
     this.titleHeroAnimator = character.animator;
     this.titleHeroAnimator?.setMotionState('idle', 0);
-    this.titleHeroVisual.name = `title-hero:${heroId}:cinematic`;
+    this.titleHeroVisual.name = `title-hero:${heroId}:${this.titleHeroAnimator ? 'cinematic' : 'simple'}`;
     this.titlePreviewHeroId = heroId;
     this.titleHeroVisual.position.set(titleHeroBaseX, titleHeroBaseY, 0);
     this.titleHeroVisual.rotation.y = -0.26;
@@ -628,8 +664,8 @@ export class Game {
     for (const light of level.lights) {
       const point = new THREE.PointLight(light.color, light.intensity, light.radius);
       point.position.set(light.position.x, light.height, light.position.z);
-      point.castShadow = this.settings.quality !== 'memory';
-      point.shadow.mapSize.setScalar(qualityProfile(this.settings.quality).shadowMapSize);
+      point.castShadow = this.runtimeQuality() !== 'memory';
+      point.shadow.mapSize.setScalar(qualityProfile(this.runtimeQuality()).shadowMapSize);
       point.name = `light:${light.id}`;
       this.scene.add(point);
 
@@ -713,7 +749,7 @@ export class Game {
   }
 
   private createRenderer(): THREE.WebGLRenderer {
-    const profile = qualityProfile(this.settings.quality);
+    const profile = qualityProfile(this.runtimeQuality());
     const renderer = new THREE.WebGLRenderer({ antialias: profile.antialias, powerPreference: 'high-performance' });
     renderer.setPixelRatio(profile.pixelRatio);
     renderer.shadowMap.enabled = profile.shadows;
@@ -872,7 +908,7 @@ export class Game {
   }
 
   private applyRendererQuality(): void {
-    const profile = qualityProfile(this.settings.quality);
+    const profile = qualityProfile(this.runtimeQuality());
     this.renderer.setPixelRatio(profile.pixelRatio);
     this.renderer.shadowMap.enabled = profile.shadows;
     this.allocateQualityMemory(profile.memoryReserveMb);
@@ -897,7 +933,7 @@ export class Game {
   }
 
   private createEnemy(spec: EnemySpec): EnemyRuntime {
-    const character = this.characterAssets.createEnemy(spec.id, this.settings.quality);
+    const character = this.characterAssets.createEnemy(spec.id, this.runtimeQuality());
     const mesh = character.object;
 
     const cone = new THREE.Mesh(
@@ -914,8 +950,8 @@ export class Game {
     cone.name = `vision:${spec.id}`;
 
     const light = new THREE.SpotLight('#ffcf5a', 42, spec.visionRange, (spec.visionAngleDegrees * Math.PI) / 360, 0.55, 1.65);
-    light.castShadow = this.settings.quality !== 'memory';
-    light.shadow.mapSize.setScalar(qualityProfile(this.settings.quality).shadowMapSize);
+    light.castShadow = this.runtimeQuality() !== 'memory';
+    light.shadow.mapSize.setScalar(qualityProfile(this.runtimeQuality()).shadowMapSize);
     light.name = `vision-light:${spec.id}`;
     const lens = new THREE.Mesh(
       new THREE.SphereGeometry(0.045, 16, 8),
@@ -941,7 +977,7 @@ export class Game {
 
   private createObjective(spec: ObjectiveDefinition): ObjectiveRuntime {
     const isKeycard = spec.type === 'keycard';
-    const mesh = this.objectiveAssets.create(spec, this.settings.quality);
+    const mesh = this.objectiveAssets.create(spec, this.runtimeQuality());
 
     const glow = new THREE.PointLight(isKeycard ? '#ffd45a' : '#5ad7ff', 18, 2.1);
     glow.position.set(spec.position.x, 0.68, spec.position.z);
@@ -952,8 +988,10 @@ export class Game {
 
   private rebuildObjectiveMeshes(): void {
     const specs = this.level.objectives ?? [];
+    const disposal = createResourceDisposalState();
     this.objectives.forEach((objective) => {
       this.scene.remove(objective.mesh, objective.glow);
+      disposeTransientObjectResources(objective.mesh, disposal);
     });
     this.objectives = specs.map((objective) => this.createObjective(objective));
     this.objectives.forEach((objective) => {
@@ -966,9 +1004,11 @@ export class Game {
     this.refreshPlayerVisual();
     this.playerMesh.position.set(this.playerPosition.x, 0.48, this.playerPosition.z);
 
+    const disposal = createResourceDisposalState();
     for (const enemy of this.enemies) {
       this.scene.remove(enemy.mesh);
-      const character = this.characterAssets.createEnemy(enemy.spec.id, this.settings.quality);
+      disposeTransientObjectResources(enemy.mesh, disposal);
+      const character = this.characterAssets.createEnemy(enemy.spec.id, this.runtimeQuality());
       enemy.mesh = character.object;
       enemy.animator = character.animator;
       this.scene.add(enemy.mesh);
@@ -977,8 +1017,9 @@ export class Game {
   }
 
   private refreshPlayerVisual(): void {
+    disposeTransientObjectResources(this.playerMesh);
     this.playerMesh.clear();
-    const character = this.characterAssets.createHero(this.settings.quality, this.selectedHeroId);
+    const character = this.characterAssets.createHero(this.runtimeQuality(), this.selectedHeroId);
     this.playerVisual = character.object;
     this.playerAnimator = character.animator;
     this.playerMesh.add(this.playerVisual);
@@ -1148,6 +1189,7 @@ export class Game {
   }
 
   private updateDebugRays(): void {
+    disposeTransientObjectResources(this.debugRays);
     this.debugRays.clear();
     if (!this.settings.debugEnabled) return;
 
@@ -1176,6 +1218,10 @@ export class Game {
 
   private isTransitioning(): boolean {
     return isLoadingPhase(this.phase);
+  }
+
+  private runtimeQuality(): RenderQuality {
+    return this.memorySafeAssets ? 'memory' : this.settings.quality;
   }
 
   private usesMenuMusic(): boolean {
@@ -1220,13 +1266,30 @@ export class Game {
 
   private clearLevelObjects(): void {
     const persistent = new Set<THREE.Object3D>([this.debugRays]);
+    const disposal = createResourceDisposalState();
     for (const child of [...this.scene.children]) {
       if (persistent.has(child) || child instanceof THREE.AmbientLight) continue;
       this.scene.remove(child);
+      if (child === this.titlePreview) {
+        this.clearTitlePreview(disposal);
+      } else if (child === this.playerContactShadow) {
+        continue;
+      } else {
+        disposeTransientObjectResources(child, disposal);
+      }
     }
+    this.playerMesh.clear();
     this.blockers = [];
     this.enemies = [];
     this.objectives = [];
+  }
+
+  private clearTitlePreview(disposal: ResourceDisposalState = createResourceDisposalState()): void {
+    disposeTransientObjectResources(this.titlePreview, disposal);
+    this.titlePreview.clear();
+    this.titleHeroVisual = null;
+    this.titleHeroAnimator = null;
+    this.titlePreviewHeroId = null;
   }
 
   private updateCharacterAnimations(now: number, delta: number): void {
@@ -1241,7 +1304,7 @@ export class Game {
       return;
     }
 
-    if (this.settings.quality !== 'cinematic') return;
+    if (this.runtimeQuality() !== 'cinematic') return;
 
     const time = now / 1000;
     this.playerAnimator?.update(delta);
@@ -1368,6 +1431,9 @@ export class Game {
       activeTrackId: () => this.music.currentTrack(),
       musicPlayback: () => this.music.playbackState(),
       musicEnabled: () => this.settings.musicEnabled,
+      memorySafeAssets: () => this.memorySafeAssets,
+      runtimeQuality: () => this.runtimeQuality(),
+      rendererMemory: () => ({ ...this.renderer.info.memory }),
       selectedHero: () => this.selectedHeroId,
       heroRoster: () => heroOptions.map((hero) => hero.id),
     };
@@ -1436,7 +1502,7 @@ export class Game {
     const snapshot = this.titleHeroAnimator?.snapshot();
     return {
       visible: (this.phase === 'menu' || this.phase === 'character-select') && this.scene.children.includes(this.titlePreview) && Boolean(this.titleHeroVisual),
-      cinematic: this.titleHeroVisual?.name.endsWith(':cinematic') ?? false,
+      cinematic: this.titleHeroAnimator !== null,
       activeState: snapshot?.activeState ?? null,
       clipNames: snapshot?.clipNames ?? [],
       x: this.titleHeroVisual?.position.x ?? null,
@@ -1589,7 +1655,7 @@ export class Game {
 
     this.memoryPressureWarned = true;
     console.warn(
-      `[performance] memory cap exceeded ${usedMemoryMb.toFixed(1)} MB > ${memoryCapMb} MB; keeping selected ${this.settings.quality} quality`,
+      `[performance] memory cap exceeded ${usedMemoryMb.toFixed(1)} MB > ${memoryCapMb} MB; keeping selected ${this.settings.quality} quality, runtime ${this.runtimeQuality()}`,
     );
   }
 
@@ -1688,6 +1754,64 @@ function createContactShadow(width: number, depth: number, opacity: number): THR
   shadow.scale.set(width, depth, 1);
   shadow.name = 'contact-shadow';
   return shadow;
+}
+
+type ResourceDisposalState = {
+  geometries: Set<THREE.BufferGeometry>;
+  materials: Set<THREE.Material>;
+};
+
+function createResourceDisposalState(): ResourceDisposalState {
+  return {
+    geometries: new Set<THREE.BufferGeometry>(),
+    materials: new Set<THREE.Material>(),
+  };
+}
+
+function disposeTransientObjectResources(object: THREE.Object3D, disposal = createResourceDisposalState()): void {
+  object.traverse((child) => {
+    if (isInsideSharedCachedAsset(child, object)) return;
+
+    if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Line) {
+      disposeGeometry(child.geometry, disposal);
+      disposeMaterial(child.material, disposal);
+    }
+  });
+}
+
+function disposeGeometry(geometry: THREE.BufferGeometry | undefined, disposal: ResourceDisposalState): void {
+  if (!geometry || disposal.geometries.has(geometry)) return;
+
+  geometry.dispose();
+  disposal.geometries.add(geometry);
+}
+
+function disposeMaterial(material: THREE.Material | THREE.Material[] | undefined, disposal: ResourceDisposalState): void {
+  const materials = Array.isArray(material) ? material : material ? [material] : [];
+  materials.forEach((entry) => {
+    if (disposal.materials.has(entry)) return;
+    entry.dispose();
+    disposal.materials.add(entry);
+  });
+}
+
+function isSharedCachedAssetRoot(object: THREE.Object3D): boolean {
+  return (
+    (object.name.startsWith('player:') && object.name.endsWith(':cinematic')) ||
+    (object.name.startsWith('enemy:') && object.name.endsWith(':cinematic')) ||
+    (object.name.startsWith('objective:') && object.name.endsWith(':cinematic')) ||
+    object.name.includes(':cinematic')
+  );
+}
+
+function isInsideSharedCachedAsset(object: THREE.Object3D, root: THREE.Object3D): boolean {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    if (isSharedCachedAssetRoot(current)) return true;
+    if (current === root) return false;
+    current = current.parent;
+  }
+  return false;
 }
 
 function dampAngle(current: number, target: number, factor: number): number {
