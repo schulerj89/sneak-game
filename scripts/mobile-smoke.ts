@@ -14,7 +14,7 @@ const browser = await chromium.launch({
   ],
 });
 const context = await browser.newContext({
-  viewport: { width: 390, height: 844 },
+  viewport: { width: 430, height: 932 },
   deviceScaleFactor: 2,
   hasTouch: true,
   isMobile: true,
@@ -30,7 +30,7 @@ try {
   await assertDefaultDebugHidden(page);
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-mobile-portrait-rotate.png`, fullPage: true });
 
-  await page.setViewportSize({ width: 844, height: 390 });
+  await page.setViewportSize({ width: 932, height: 430 });
   await page.locator('[data-testid="orientation-reminder"]').waitFor({ state: 'hidden', timeout: 8000 });
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
 
@@ -88,6 +88,8 @@ try {
   }
 
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-mobile-touch.png`, fullPage: true });
+
+  await completeDockAndAdvance(page);
 
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Menu' }).click();
   await page.locator('[data-testid="touch-controls"]').waitFor({ state: 'hidden', timeout: 8000 });
@@ -237,7 +239,7 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
         selectedHero: () => string;
-        titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null };
+        titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null; x: number | null };
       };
     };
     return {
@@ -255,8 +257,45 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
     state.selectedHero !== expectedHeroId ||
     !state.titleHero?.visible ||
     !state.titleHero.cinematic ||
-    state.titleHero.activeState !== 'idle'
+    state.titleHero.activeState !== 'idle' ||
+    state.titleHero.x === null ||
+    Math.abs(state.titleHero.x - 1.35) > 0.08
   ) {
     throw new Error(`Expected compact character picker for ${expectedHeroId}, got ${JSON.stringify(state)}`);
+  }
+}
+
+async function completeDockAndAdvance(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        movePlayerTo: (point: { x: number; z: number }) => void;
+      };
+    };
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -1.0, z: -1.2 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 2.4, z: -3.4 });
+    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5, z: -3.2 });
+  });
+  await expectVisible(page, 'text=Exit Reached');
+  await assertActionButtonsFit(page, '[data-testid="overlay"]');
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Next Level' }).click();
+  await expectVisible(page, '[data-testid="loading-panel"]');
+  await assertPlayingPhase(page);
+
+  const levelState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        levelId: () => string;
+        phase: () => string;
+      };
+    };
+    return {
+      levelId: debugWindow.__shadowCircuitDebug?.levelId(),
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+    };
+  });
+
+  if (levelState.levelId !== 'archive-lanes' || levelState.phase !== 'playing') {
+    throw new Error(`Expected Next Level to enter Archive Lanes without reset, got ${JSON.stringify(levelState)}`);
   }
 }

@@ -73,6 +73,7 @@ const enemyHoverAmplitude = 0.12;
 const enemyHoverSpeed = 1.45;
 const titleHeroBaseX = 1.45;
 const characterSelectHeroBaseX = 2.35;
+const compactCharacterSelectHeroBaseX = 1.35;
 const titleHeroBaseY = 0.24;
 const silentPickupWarmupVolume = 0.0001;
 
@@ -547,7 +548,7 @@ export class Game {
   }
 
   private layoutTitleHeroPreview(): void {
-    const x = this.phase === 'character-select' ? characterSelectHeroBaseX : titleHeroBaseX;
+    const x = this.titleHeroPreviewX();
     const platform = this.titlePreview.getObjectByName('title-hero-platform');
     if (platform) {
       platform.position.x = x;
@@ -555,6 +556,16 @@ export class Game {
     if (this.titleHeroVisual) {
       this.titleHeroVisual.position.x = x;
     }
+  }
+
+  private titleHeroPreviewX(): number {
+    if (this.phase !== 'character-select') return titleHeroBaseX;
+    return this.isCompactLandscapeViewport() ? compactCharacterSelectHeroBaseX : characterSelectHeroBaseX;
+  }
+
+  private isCompactLandscapeViewport(): boolean {
+    const bounds = this.ui.root.getBoundingClientRect();
+    return bounds.width > bounds.height && bounds.width <= 960 && bounds.height <= 500;
   }
 
   private loadLevel(index: number): void {
@@ -1551,6 +1562,7 @@ export class Game {
   }
 
   private fitCameraToTitle(): void {
+    this.layoutTitleHeroPreview();
     const aspectOffset = this.camera.aspect < 1 ? 0.65 : 0;
     this.camera.position.set(1.15 + aspectOffset, 1.12, 3.15);
     this.camera.lookAt(1.35, 0.68, 0);
