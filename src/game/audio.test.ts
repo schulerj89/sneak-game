@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { soundtrackOptions } from './audio';
+import { levelSoundtrackIds, soundtrackIdForLevel, soundtrackOptions, titleMusicTrack } from './audio';
 
 describe('soundtrack metadata', () => {
   it('keeps every track source and license auditable', () => {
@@ -19,8 +19,15 @@ describe('soundtrack metadata', () => {
       'ghost-steps',
       'cyberpunk-moonlight',
       'dark-sci-fi-sector',
+      'dark-sci-fi-airy',
       'dark-sci-fi-pulse',
       'dark-sci-fi-urgent',
+      'dark-sci-fi-transmission',
+      'insistent',
+      'future-loading-loop',
+      'lost-signal',
+      'background-space',
+      'ambient-horror',
     ]);
   });
 
@@ -41,11 +48,29 @@ describe('soundtrack metadata', () => {
 
   it('includes the new CC0 dark sci-fi tracks', () => {
     const darkSciFiTracks = soundtrackOptions.filter((track) => track.id.startsWith('dark-sci-fi-'));
-    expect(darkSciFiTracks).toHaveLength(3);
+    expect(darkSciFiTracks).toHaveLength(5);
     for (const track of darkSciFiTracks) {
       expect.soft(track.url).toContain('.mp3');
       expect.soft(track.source.license).toBe('CC0');
       expect.soft(track.source.sourceUrl).toContain('opengameart.org/content/dark-sci-fi-audio-pack');
     }
+  });
+
+  it('assigns one downloaded gameplay track per level', () => {
+    expect(levelSoundtrackIds).toHaveLength(12);
+    expect(new Set(levelSoundtrackIds).size).toBe(12);
+    for (let index = 0; index < levelSoundtrackIds.length; index += 1) {
+      expect(soundtrackIdForLevel(index)).toBe(levelSoundtrackIds[index]);
+      expect(soundtrackOptions.some((track) => track.id === soundtrackIdForLevel(index))).toBe(true);
+    }
+  });
+
+  it('uses a separate external menu track for title and character select', () => {
+    expect(titleMusicTrack.id).toBe('title-on-patrol');
+    expect(titleMusicTrack.name).toBe('On Patrol');
+    expect(titleMusicTrack.url).toContain('.ogg');
+    expect(titleMusicTrack.source.license).toBe('CC0');
+    expect(titleMusicTrack.source.sourceUrl).toContain('opengameart.org/content/on-patrol');
+    expect(soundtrackOptions.some((track) => String(track.id) === titleMusicTrack.id)).toBe(false);
   });
 });

@@ -3,8 +3,29 @@ import type { GameSettings } from './types';
 import ghostStepsUrl from '../assets/ghost-steps.mp3?url';
 import cyberpunkMoonlightUrl from '../assets/cyberpunk-moonlight-sonata.mp3?url';
 import darkSciFiSectorUrl from '../assets/dark-sci-fi-sector.mp3?url';
+import darkSciFiAiryUrl from '../assets/dark-sci-fi-airy.mp3?url';
 import darkSciFiPulseUrl from '../assets/dark-sci-fi-pulse.mp3?url';
 import darkSciFiUrgentUrl from '../assets/dark-sci-fi-urgent.mp3?url';
+import darkSciFiTransmissionUrl from '../assets/dark-sci-fi-transmission.mp3?url';
+import insistentUrl from '../assets/insistent.ogg?url';
+import futureLoadingLoopUrl from '../assets/future-loading-loop.wav?url';
+import lostSignalUrl from '../assets/lost-signal-main-theme.mp3?url';
+import backgroundSpaceUrl from '../assets/background-space-track.ogg?url';
+import ambientHorrorUrl from '../assets/ambient-horror-track-01.ogg?url';
+import titleOnPatrolUrl from '../assets/title-on-patrol.ogg?url';
+
+export const titleMusicTrack = {
+  id: 'title-on-patrol',
+  name: 'On Patrol',
+  url: titleOnPatrolUrl,
+  tempoBpm: 116,
+  source: {
+    kind: 'external',
+    license: 'CC0',
+    sourceUrl: 'https://opengameart.org/content/on-patrol',
+    attribution: '"On Patrol" by Section 31. License: CC0. Attribution is not required.',
+  },
+} as const;
 
 export const soundtrackOptions = [
   {
@@ -46,6 +67,19 @@ export const soundtrackOptions = [
     },
   },
   {
+    id: 'dark-sci-fi-airy',
+    name: 'Dark Sci-Fi: Airy',
+    url: darkSciFiAiryUrl,
+    tempoBpm: 76,
+    source: {
+      kind: 'external',
+      license: 'CC0',
+      sourceUrl: 'https://opengameart.org/content/dark-sci-fi-audio-pack',
+      attribution:
+        '"Airy" from "Ball Logic: Dark Sci-Fi Audio Pack" by SRG774. License: CC0. Attribution is appreciated, but not required.',
+    },
+  },
+  {
     id: 'dark-sci-fi-pulse',
     name: 'Dark Sci-Fi: Pulse',
     url: darkSciFiPulseUrl,
@@ -71,30 +105,125 @@ export const soundtrackOptions = [
         '"Urgent" from "Ball Logic: Dark Sci-Fi Audio Pack" by SRG774. License: CC0. Attribution is appreciated, but not required.',
     },
   },
+  {
+    id: 'dark-sci-fi-transmission',
+    name: 'Dark Sci-Fi: Transmission',
+    url: darkSciFiTransmissionUrl,
+    tempoBpm: 96,
+    source: {
+      kind: 'external',
+      license: 'CC0',
+      sourceUrl: 'https://opengameart.org/content/dark-sci-fi-audio-pack',
+      attribution:
+        '"Transmission" from "Ball Logic: Dark Sci-Fi Audio Pack" by SRG774. License: CC0. Attribution is appreciated, but not required.',
+    },
+  },
+  {
+    id: 'insistent',
+    name: 'Insistent',
+    url: insistentUrl,
+    tempoBpm: 92,
+    source: {
+      kind: 'external',
+      license: 'CC0',
+      sourceUrl: 'https://opengameart.org/content/insistent-background-loop',
+      attribution: '"Insistent" by yd. License: CC0. Attribution is not required.',
+    },
+  },
+  {
+    id: 'future-loading-loop',
+    name: 'Future Loading Loop',
+    url: futureLoadingLoopUrl,
+    tempoBpm: 118,
+    source: {
+      kind: 'external',
+      license: 'CC0',
+      sourceUrl: 'https://opengameart.org/content/loading-screen-loop',
+      attribution: '"Loading screen loop" by Brandon Morris, submitted by HaelDB. License: CC0. Attribution is not required.',
+    },
+  },
+  {
+    id: 'lost-signal',
+    name: 'Lost Signal',
+    url: lostSignalUrl,
+    tempoBpm: 92,
+    source: {
+      kind: 'external',
+      license: 'CC-BY 3.0',
+      sourceUrl: 'https://opengameart.org/content/sci-fi-electronic-lost-signal',
+      attribution: '"Sci-Fi electronic [lost signal]" by PetterTheSturgeon. License: CC BY 3.0.',
+    },
+  },
+  {
+    id: 'background-space',
+    name: 'Background Space',
+    url: backgroundSpaceUrl,
+    tempoBpm: 84,
+    source: {
+      kind: 'external',
+      license: 'CC0',
+      sourceUrl: 'https://opengameart.org/content/background-space-track',
+      attribution: '"Background space track" by yd. License: CC0. Attribution is not required.',
+    },
+  },
+  {
+    id: 'ambient-horror',
+    name: 'Ambient Horror 01',
+    url: ambientHorrorUrl,
+    tempoBpm: 74,
+    source: {
+      kind: 'external',
+      license: 'CC0',
+      sourceUrl: 'https://opengameart.org/content/ambient-horror-track-01',
+      attribution: '"Ambient Horror Track 01" by Cleyton Kauffman. License: CC0. Attribution is not required.',
+    },
+  },
 ] as const;
+
+export type ActiveTrackId = GameSettings['soundtrackId'] | typeof titleMusicTrack.id;
+
+export const levelSoundtrackIds: readonly GameSettings['soundtrackId'][] = [
+  'ghost-steps',
+  'dark-sci-fi-sector',
+  'dark-sci-fi-airy',
+  'cyberpunk-moonlight',
+  'dark-sci-fi-pulse',
+  'insistent',
+  'background-space',
+  'lost-signal',
+  'dark-sci-fi-urgent',
+  'ambient-horror',
+  'future-loading-loop',
+  'dark-sci-fi-transmission',
+] as const;
+
+export function soundtrackIdForLevel(levelIndex: number): GameSettings['soundtrackId'] {
+  return levelSoundtrackIds[levelIndex % levelSoundtrackIds.length] ?? soundtrackOptions[0].id;
+}
 
 export class MusicDirector {
   private readonly audio = new Audio();
   private effectContext: AudioContext | null = null;
+  private pickupGain: GainNode | null = null;
   private pickupSamples: Float32Array | null = null;
   private pickupBuffer: AudioBuffer | null = null;
   private effectsPrimed = false;
-  private activeTrackId: GameSettings['soundtrackId'] | null = null;
+  private activeTrackId: ActiveTrackId | null = null;
 
   constructor() {
     this.audio.loop = true;
     this.audio.preload = 'auto';
   }
 
-  preload(settings: GameSettings): void {
+  preload(settings: GameSettings, soundtrackId: GameSettings['soundtrackId'] = settings.soundtrackId): void {
     this.preloadPickupCue();
-    const track = soundtrackOptions.find((option) => option.id === settings.soundtrackId) ?? soundtrackOptions[0];
-    if (this.activeTrackId !== track.id) {
-      this.audio.pause();
-      this.audio.src = track.url;
-      this.audio.currentTime = 0;
-      this.activeTrackId = track.id;
-    }
+    const track = selectedSoundtrack(soundtrackId);
+    this.setTrack(track);
+    this.audio.load();
+  }
+
+  preloadMenuTrack(): void {
+    this.setTrack(titleMusicTrack);
     this.audio.load();
   }
 
@@ -102,28 +231,13 @@ export class MusicDirector {
     this.preparePickupSamples();
   }
 
-  async sync(settings: GameSettings): Promise<void> {
-    const track = soundtrackOptions.find((option) => option.id === settings.soundtrackId) ?? soundtrackOptions[0];
-    if (this.activeTrackId !== track.id) {
-      this.audio.pause();
-      this.audio.src = track.url;
-      this.audio.currentTime = 0;
-      this.activeTrackId = track.id;
-      this.audio.load();
-    }
+  async sync(settings: GameSettings, soundtrackId: GameSettings['soundtrackId'] = settings.soundtrackId): Promise<void> {
+    const track = selectedSoundtrack(soundtrackId);
+    await this.playTrack(track, settings, 0.86, 'soundtrack');
+  }
 
-    if (!settings.musicEnabled) {
-      this.audio.pause();
-      return;
-    }
-
-    this.audio.volume = Math.min(1, settings.masterVolume * 0.86);
-    try {
-      await this.audio.play();
-      console.info(`[audio] soundtrack playing ${track.name}`);
-    } catch (error) {
-      console.warn(`[audio] playback deferred ${error instanceof Error ? error.message : String(error)}`);
-    }
+  async playMenu(settings: GameSettings): Promise<void> {
+    await this.playTrack(titleMusicTrack, settings, 0.72, 'menu music');
   }
 
   stop(): void {
@@ -131,16 +245,22 @@ export class MusicDirector {
     this.audio.currentTime = 0;
   }
 
-  warmupEffects(settings: GameSettings): void {
-    if (!settings.musicEnabled || settings.masterVolume <= 0 || this.effectContext) return;
+  async warmupEffects(settings: GameSettings): Promise<void> {
+    if (settings.masterVolume <= 0) return;
 
-    this.effectContext = new AudioContext();
-    this.pickupBuffer = this.createPickupBuffer(this.effectContext);
-    void this.effectContext.resume().then(() => {
-      if (this.effectContext) {
-        this.primePickupGraph(this.effectContext);
+    const context = this.effectContext ?? new AudioContext();
+    this.effectContext = context;
+    this.pickupBuffer ??= this.createPickupBuffer(context);
+    this.pickupGain ??= this.createPickupGain(context);
+
+    try {
+      await withTimeout(context.resume(), 180);
+      if (context.state === 'running') {
+        await withTimeout(this.primePickupGraph(context), 140);
       }
-    });
+    } catch (error) {
+      console.warn(`[audio] pickup warmup deferred ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   playPickup(settings: GameSettings): PickupAudioDebug {
@@ -166,22 +286,23 @@ export class MusicDirector {
     const bufferCreated = this.pickupBuffer === null;
     const buffer = this.pickupBuffer ?? this.createPickupBuffer(context);
     this.pickupBuffer = buffer;
+    const gain = this.pickupGain ?? this.createPickupGain(context);
+    this.pickupGain = gain;
 
     const now = context.currentTime;
     const gainLevel = Math.max(0.0001, Math.min(0.55, settings.masterVolume * 0.9));
-    const gain = context.createGain();
+    gain.gain.cancelScheduledValues(now);
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(gainLevel, now + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-    gain.connect(context.destination);
 
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.connect(gain);
     source.start(now);
+    this.effectsPrimed = true;
     source.addEventListener('ended', () => {
       source.disconnect();
-      gain.disconnect();
     }, { once: true });
     console.info('[audio] pickup chime');
     return {
@@ -196,12 +317,12 @@ export class MusicDirector {
     };
   }
 
-  currentTrack(): GameSettings['soundtrackId'] | null {
+  currentTrack(): ActiveTrackId | null {
     return this.activeTrackId;
   }
 
   playbackState(): {
-    activeTrackId: GameSettings['soundtrackId'] | null;
+    activeTrackId: ActiveTrackId | null;
     paused: boolean;
     readyState: number;
     errorCode: number | null;
@@ -214,6 +335,37 @@ export class MusicDirector {
       errorCode: this.audio.error?.code ?? null,
       volume: this.audio.volume,
     };
+  }
+
+  private async playTrack(
+    track: (typeof soundtrackOptions)[number] | typeof titleMusicTrack,
+    settings: GameSettings,
+    volumeScale: number,
+    logLabel: string,
+  ): Promise<void> {
+    this.setTrack(track);
+    if (!settings.musicEnabled) {
+      this.audio.pause();
+      return;
+    }
+
+    this.audio.volume = Math.min(1, settings.masterVolume * volumeScale);
+    try {
+      await this.audio.play();
+      console.info(`[audio] ${logLabel} playing ${track.name}`);
+    } catch (error) {
+      console.warn(`[audio] playback deferred ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private setTrack(track: (typeof soundtrackOptions)[number] | typeof titleMusicTrack): void {
+    if (this.activeTrackId === track.id) return;
+
+    this.audio.pause();
+    this.audio.src = track.url;
+    this.audio.currentTime = 0;
+    this.activeTrackId = track.id;
+    this.audio.load();
   }
 
   private preparePickupSamples(): Float32Array {
@@ -247,21 +399,51 @@ export class MusicDirector {
     return buffer;
   }
 
-  private primePickupGraph(context: AudioContext): void {
-    if (this.effectsPrimed) return;
+  private createPickupGain(context: AudioContext): GainNode {
+    const gain = context.createGain();
+    gain.gain.value = 0.0001;
+    gain.connect(context.destination);
+    return gain;
+  }
+
+  private primePickupGraph(context: AudioContext): Promise<void> {
+    if (this.effectsPrimed) return Promise.resolve();
 
     const source = context.createBufferSource();
-    const gain = context.createGain();
+    const gain = this.pickupGain ?? this.createPickupGain(context);
+    this.pickupGain = gain;
     source.buffer = this.pickupBuffer ?? this.createPickupBuffer(context);
-    gain.gain.value = 0.0001;
+    const now = context.currentTime;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(0.0001, now);
     source.connect(gain);
-    gain.connect(context.destination);
-    source.start();
-    source.stop(context.currentTime + 0.01);
-    source.addEventListener('ended', () => {
-      source.disconnect();
-      gain.disconnect();
-    }, { once: true });
     this.effectsPrimed = true;
+    return new Promise((resolve) => {
+      source.addEventListener('ended', () => {
+        source.disconnect();
+        resolve();
+      }, { once: true });
+      source.start(now);
+      source.stop(now + 0.02);
+    });
   }
+}
+
+function selectedSoundtrack(soundtrackId: GameSettings['soundtrackId']): (typeof soundtrackOptions)[number] {
+  return soundtrackOptions.find((option) => option.id === soundtrackId) ?? soundtrackOptions[0];
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | void> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => resolve(), timeoutMs);
+    promise
+      .then((value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      })
+      .catch((error: unknown) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      });
+  });
 }

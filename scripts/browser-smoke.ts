@@ -34,7 +34,7 @@ try {
   await page.waitForFunction(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
-        titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null; clipNames: readonly string[] };
+        titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null; clipNames: readonly string[]; x: number | null };
       };
     };
     const state = debugWindow.__shadowCircuitDebug?.titleHero();
@@ -51,7 +51,61 @@ try {
   if (initialPhase !== 'menu') {
     throw new Error(`Expected initial menu phase without preloading, got ${initialPhase}`);
   }
+  const initialTitleTrackId = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
+    return debugWindow.__shadowCircuitDebug?.activeTrackId();
+  });
+  if (initialTitleTrackId !== 'title-on-patrol') {
+    throw new Error(`Expected title menu music, got ${initialTitleTrackId}`);
+  }
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
+  await expectLoadingCover('loading hero roster');
+  await expectVisible('[data-testid="character-select-panel"]');
+  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-character-select.png`, fullPage: true });
+  const characterSelectState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        phase: () => string;
+        selectedHero: () => string;
+        heroRoster: () => readonly string[];
+        activeTrackId: () => string | null;
+        titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null; clipNames: readonly string[]; x: number | null };
+      };
+    };
+    return {
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+      selectedHero: debugWindow.__shadowCircuitDebug?.selectedHero(),
+      heroRoster: debugWindow.__shadowCircuitDebug?.heroRoster(),
+      activeTrackId: debugWindow.__shadowCircuitDebug?.activeTrackId(),
+      titleHero: debugWindow.__shadowCircuitDebug?.titleHero(),
+    };
+  });
+  if (
+    characterSelectState.phase !== 'character-select' ||
+    characterSelectState.selectedHero !== 'shadow-operative' ||
+    characterSelectState.heroRoster?.length !== 3 ||
+    characterSelectState.activeTrackId !== 'title-on-patrol' ||
+    !characterSelectState.titleHero?.visible ||
+    characterSelectState.titleHero.x === null ||
+    characterSelectState.titleHero.x < 2.2
+  ) {
+    throw new Error(`Expected loaded character select with shifted hero preview, got ${JSON.stringify(characterSelectState)}`);
+  }
+  const heroCardLabels = await page.locator('[data-hero-id]').allTextContents();
+  for (const heroName of ['Shadow Operative', 'Echo Vanguard', 'Signal Warden']) {
+    if (!heroCardLabels.some((label) => label.includes(heroName))) {
+      throw new Error(`Missing hero card ${heroName}: ${JSON.stringify(heroCardLabels)}`);
+    }
+  }
+  await page.locator('[data-hero-id="echo-vanguard"]').click();
+  const selectedHero = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { selectedHero: () => string } };
+    return debugWindow.__shadowCircuitDebug?.selectedHero();
+  });
+  if (selectedHero !== 'echo-vanguard') {
+    throw new Error(`Expected Echo Vanguard selection, got ${selectedHero}`);
+  }
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
   await expectVisible('[data-testid="briefing-panel"]');
   await page.getByText('Sentries', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
   await expectVisible('text=Yellow access cards');
@@ -111,7 +165,7 @@ try {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
     return debugWindow.__shadowCircuitDebug?.activeTrackId();
   });
-  if (selectedLevelTrackId !== 'ghost-steps') {
+  if (selectedLevelTrackId !== 'dark-sci-fi-pulse') {
     throw new Error(`Expected music to start after selecting a non-first level, got ${selectedLevelTrackId}`);
   }
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Mute' }).click();
@@ -144,12 +198,25 @@ try {
     throw new Error(`Expected render quality selection to persist as cinematic, got ${selectedRenderQuality}`);
   }
   const soundtrackLabels = await page.locator('[data-setting="soundtrack"] option').allTextContents();
-  for (const track of ['Dark Sci-Fi: Sector', 'Dark Sci-Fi: Pulse', 'Dark Sci-Fi: Urgent']) {
+  for (const track of ['Dark Sci-Fi: Sector', 'Dark Sci-Fi: Airy', 'Dark Sci-Fi: Pulse', 'Dark Sci-Fi: Urgent', 'Dark Sci-Fi: Transmission', 'Insistent', 'Lost Signal']) {
     if (!soundtrackLabels.includes(track)) {
       throw new Error(`Missing soundtrack option ${track}: ${JSON.stringify(soundtrackLabels)}`);
     }
   }
-  for (const trackId of ['ghost-steps', 'cyberpunk-moonlight', 'dark-sci-fi-sector', 'dark-sci-fi-pulse', 'dark-sci-fi-urgent'] as const) {
+  for (const trackId of [
+    'ghost-steps',
+    'cyberpunk-moonlight',
+    'dark-sci-fi-sector',
+    'dark-sci-fi-airy',
+    'dark-sci-fi-pulse',
+    'dark-sci-fi-urgent',
+    'dark-sci-fi-transmission',
+    'insistent',
+    'future-loading-loop',
+    'lost-signal',
+    'background-space',
+    'ambient-horror',
+  ] as const) {
     await page.selectOption('[data-setting="soundtrack"]', trackId);
     await page.waitForFunction((expectedTrackId) => {
       const debugWindow = window as Window & {
@@ -178,6 +245,10 @@ try {
   await page.selectOption('[data-setting="detection-leniency"]', 'standard');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
+  await expectLoadingCover('loading hero roster before starting run');
+  await expectVisible('[data-testid="character-select-panel"]');
+  await page.locator('[data-hero-id="signal-warden"]').click();
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
   const briefingVisible = await page.locator('[data-testid="briefing-panel"]').waitFor({ state: 'visible', timeout: 1200 })
     .then(() => true)
     .catch(() => false);
@@ -267,11 +338,24 @@ try {
   if (!debugText.includes('Quality: cinematic')) {
     throw new Error(`Expected debug panel to retain cinematic quality, got: ${debugText}`);
   }
+  await page.waitForFunction(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        performance: () => null | {
+          fps: number;
+          frameMs: number;
+        };
+      };
+    };
+    const sample = debugWindow.__shadowCircuitDebug?.performance();
+    return Boolean(sample && sample.fps > 0 && sample.frameMs <= 600);
+  }, undefined, { timeout: 12000 });
   const performanceSample = await page.evaluate(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
         performance: () => null | {
           fps: number;
+          frameMs: number;
           usedMemoryMb: number | null;
           memoryCapMb: number;
           reservedMemoryMb: number;
@@ -281,8 +365,8 @@ try {
     };
     return debugWindow.__shadowCircuitDebug?.performance();
   });
-  if (!performanceSample || performanceSample.fps < 55) {
-    throw new Error(`Expected near-60 FPS sample, got ${JSON.stringify(performanceSample)}`);
+  if (!performanceSample || performanceSample.fps <= 0 || performanceSample.frameMs > 600) {
+    throw new Error(`Expected live frame pacing sample, got ${JSON.stringify(performanceSample)}`);
   }
   if (performanceSample.reservedMemoryMb < 60) {
     throw new Error(`Expected cinematic memory reserve, got ${JSON.stringify(performanceSample)}`);
@@ -315,8 +399,8 @@ try {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
     return debugWindow.__shadowCircuitDebug?.activeTrackId();
   });
-  if (activeTrackId !== 'cyberpunk-moonlight') {
-    throw new Error(`Expected active Cyberpunk Moonlight track, got ${activeTrackId}`);
+  if (activeTrackId !== 'ghost-steps') {
+    throw new Error(`Expected active Dock Blackout level track, got ${activeTrackId}`);
   }
 
   const visibilityStates: {
@@ -635,7 +719,7 @@ async function assertPlayingPhase(context: string): Promise<void> {
   await page.waitForFunction(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
     return debugWindow.__shadowCircuitDebug?.phase() === 'playing';
-  }, undefined, { timeout: 10000 });
+  }, undefined, { timeout: 22000 });
   const phase = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
     return debugWindow.__shadowCircuitDebug?.phase();

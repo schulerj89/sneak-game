@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { MusicDirector } from './audio';
+import { type ActiveTrackId, MusicDirector, soundtrackIdForLevel } from './audio';
 import { CharacterAssetLibrary, type CharacterAnimator } from './characterAssets';
 import { collidesWithEnemies, collidesWithObstacles, enemyRadius, playerRadius } from './collision';
 import { DebugPanel } from './debug';
 import { advanceSuspicion, emptySuspicion, getDetectionState, isSightBlocked } from './detection';
+import { defaultHeroId, heroOptions, isHeroId, type HeroId } from './heroes';
 import { InputController } from './input';
 import { levels } from './levels';
 import { runLoadingSequence, type LoadingTask } from './loading';
@@ -59,9 +60,20 @@ type ObjectiveRuntime = {
   glow: THREE.PointLight;
 };
 
+type CollectObjectiveOptions = Readonly<{
+  audioSettings?: GameSettings;
+  recordDebug?: boolean;
+  startFrameProbe?: boolean;
+  log?: boolean;
+}>;
+
 const enemyHoverBaseY = 0.72;
 const enemyHoverAmplitude = 0.12;
 const enemyHoverSpeed = 1.45;
+const titleHeroBaseX = 1.45;
+const characterSelectHeroBaseX = 2.35;
+const titleHeroBaseY = 0.24;
+const silentPickupWarmupVolume = 0.0001;
 
 declare global {
   interface Window {
@@ -85,7 +97,7 @@ declare global {
       playerPosition: () => Vec2;
       heroAnimation: () => { activeState: string | null; clipNames: readonly string[]; yaw: number; debugCamera: boolean };
       setHeroDebugView: (enabled: boolean) => void;
-      titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null; clipNames: readonly string[] };
+      titleHero: () => { visible: boolean; cinematic: boolean; activeState: string | null; clipNames: readonly string[]; x: number | null };
       enemySentry: () => {
         id: string | null;
         cinematic: boolean;
@@ -100,9 +112,11 @@ declare global {
         debugCamera: boolean;
       };
       setEnemyDebugView: (enabled: boolean) => void;
-      activeTrackId: () => GameSettings['soundtrackId'] | null;
+      selectedHero: () => HeroId;
+      heroRoster: () => readonly string[];
+      activeTrackId: () => ActiveTrackId | null;
       musicPlayback: () => {
-        activeTrackId: GameSettings['soundtrackId'] | null;
+        activeTrackId: ActiveTrackId | null;
         paused: boolean;
         readyState: number;
         errorCode: number | null;
@@ -131,11 +145,12 @@ export class Game {
   private levelSelectReturnPhase: GamePhase = 'menu';
   private loadingProgress: LoadingProgress = { value: 0, label: 'Starting systems' };
   private levelIndex = 0;
+  private selectedHeroId: HeroId = defaultHeroId;
   private playerPosition: Vec2 = { ...levels[0].start };
   private readonly titlePreview = new THREE.Group();
   private titleHeroVisual: THREE.Object3D | null = null;
   private titleHeroAnimator: CharacterAnimator | null = null;
-  private titlePreviewPromise: Promise<void> | null = null;
+  private titlePreviewHeroId: HeroId | null = null;
   private readonly playerMesh = new THREE.Group();
   private playerVisual: THREE.Object3D | null = null;
   private playerAnimator: CharacterAnimator | null = null;
@@ -171,7 +186,9 @@ export class Game {
     this.ui = new GameUi(mount, this.settings, {
       onStart: () => void this.start(),
       onBeginBriefing: () => void this.beginBriefedRun(),
-      onResume: () => this.setPhase(this.settingsReturnPhase),
+      onSelectHero: (heroId) => this.selectHero(heroId),
+      onConfirmHero: () => void this.confirmHeroSelection(),
+      onResume: () => void this.resumeFromSettings(),
       onSettings: () => this.openSettings(),
       onMenu: () => this.openMenu(),
       onTitle: () => this.returnToTitle(),
@@ -218,6 +235,23 @@ export class Game {
   }
 
   private async start(): Promise<void> {
+    if (this.isTransitioning()) return;
+
+    await this.music.playMenu(this.settings);
+    await this.loadCharacterSelectWithTransition();
+    if (this.disposed) return;
+
+    this.setPhase('character-select');
+    await this.music.playMenu(this.settings);
+  }
+
+  private async beginBriefedRun(): Promise<void> {
+    this.firstLevelBriefingSeen = true;
+    await this.startPreparedRun(0);
+  }
+
+  private async confirmHeroSelection(): Promise<void> {
+    this.characterAssets.releaseUnselectedHeroes(this.selectedHeroId);
     if (this.levelIndex === 0 && !this.firstLevelBriefingSeen) {
       this.setPhase('briefing');
       return;
@@ -226,13 +260,21 @@ export class Game {
     await this.startPreparedRun(this.levelIndex);
   }
 
-  private async beginBriefedRun(): Promise<void> {
-    this.firstLevelBriefingSeen = true;
-    await this.startPreparedRun(0);
+  private selectHero(heroId: HeroId): void {
+    if (!isHeroId(heroId)) return;
+
+    this.selectedHeroId = heroId;
+    this.installTitleHeroPreview(heroId);
+    this.fitCameraToTitle();
+    this.renderUi();
+    console.info(`[hero] selected ${heroId}`);
   }
 
   private setPhase(phase: GamePhase): void {
     this.phase = phase;
+    if (phase === 'menu' || phase === 'character-select') {
+      this.layoutTitleHeroPreview();
+    }
     this.renderUi();
     console.info(`[game] phase=${phase} level=${this.level.id}`);
   }
@@ -242,6 +284,14 @@ export class Game {
 
     this.settingsReturnPhase = this.phase === 'settings' ? this.settingsReturnPhase : this.phase;
     this.setPhase('settings');
+    void this.music.sync(this.settings);
+  }
+
+  private async resumeFromSettings(): Promise<void> {
+    this.setPhase(this.settingsReturnPhase);
+    if (this.usesMenuMusic()) {
+      await this.music.playMenu(this.settings);
+    }
   }
 
   private openMenu(): void {
@@ -249,6 +299,7 @@ export class Game {
 
     this.showTitleScene();
     this.setPhase('menu');
+    void this.music.playMenu(this.settings);
   }
 
   private openLevelSelect(): void {
@@ -278,7 +329,7 @@ export class Game {
       }
     }
     if (audioChanged) {
-      this.music.warmupEffects(settings);
+      await this.music.warmupEffects(settings);
       await this.music.sync(settings);
     }
     this.renderUi();
@@ -335,6 +386,7 @@ export class Game {
 
     this.showTitleScene();
     this.setPhase('menu');
+    void this.music.playMenu(this.settings);
   }
 
   private async startOver(): Promise<void> {
@@ -353,8 +405,26 @@ export class Game {
 
     this.beginRun();
     this.setPhase('playing');
-    this.music.warmupEffects(this.settings);
-    await this.music.sync(this.settings);
+    await this.music.warmupEffects(this.settings);
+    await this.music.sync(this.settings, soundtrackIdForLevel(this.levelIndex));
+  }
+
+  private async loadCharacterSelectWithTransition(): Promise<void> {
+    this.loadingProgress = { value: 0, label: 'Loading hero roster' };
+    this.setPhase('loading');
+
+    await runLoadingSequence({
+      tasks: [
+        { label: 'Loading menu music', run: () => this.music.preloadMenuTrack() },
+        { label: 'Loading hero roster', run: () => this.characterAssets.preloadHeroRoster() },
+        { label: 'Preparing selected operative', run: () => this.prepareTitlePreview() },
+      ],
+      onProgress: (progress) => this.updateLoadingProgress(progress),
+      shouldCancel: () => this.disposed,
+      minDurationMs: 1100,
+      minTaskMs: 180,
+      readyDelayMs: 150,
+    });
   }
 
   private async loadLevelWithTransition(levelIndex: number): Promise<void> {
@@ -376,13 +446,14 @@ export class Game {
   private levelTransitionTasks(levelIndex: number): readonly LoadingTask[] {
     const targetLevel = levels[levelIndex];
     return [
-      { label: 'Loading character assets', run: () => this.characterAssets.preload(this.settings.quality) },
+      { label: 'Loading character assets', run: () => this.characterAssets.preload(this.settings.quality, this.selectedHeroId) },
       { label: 'Loading objective assets', run: () => this.objectiveAssets.preload(this.settings.quality) },
       { label: `Loading ${targetLevel.name}`, run: () => this.loadLevel(levelIndex) },
-      { label: 'Loading soundtrack', run: () => this.music.preload(this.settings) },
+      { label: 'Loading soundtrack', run: () => this.music.preload(this.settings, soundtrackIdForLevel(levelIndex)) },
       { label: 'Compiling level materials', run: () => this.warmupRenderStates() },
       { label: 'Priming objective states', run: () => this.warmupObjectiveStates() },
-      { label: 'Preparing pickup audio', run: () => this.music.preloadPickupCue() },
+      { label: 'Warming pickup audio', run: () => this.music.warmupEffects(this.settings) },
+      { label: 'Simulating first pickup', run: () => this.warmupPickupCollection() },
     ];
   }
 
@@ -405,36 +476,33 @@ export class Game {
     this.objectiveNotice = '';
     this.objectiveNoticeUntil = 0;
     this.fitCameraToTitle();
+    this.music.preloadMenuTrack();
     void this.prepareTitlePreview();
+    void this.music.playMenu(this.settings);
     this.renderUi();
   }
 
   private async prepareTitlePreview(): Promise<void> {
-    if (this.titleHeroVisual) return;
+    const heroId = this.selectedHeroId;
+    if (this.titleHeroVisual && this.titlePreviewHeroId === heroId) return;
 
-    this.titlePreviewPromise ??= this.characterAssets.preloadHero()
-      .then(() => {
-        if (this.disposed) return;
-        this.installTitleHeroPreview();
-        if (this.phase === 'menu') {
-          this.fitCameraToTitle();
-        }
-      })
-      .catch((error: unknown) => {
-        this.titlePreviewPromise = null;
-        console.warn(`[title] hero preview unavailable: ${error instanceof Error ? error.message : String(error)}`);
-      });
-    await this.titlePreviewPromise;
+    await this.characterAssets.preloadHero(heroId);
+    if (this.disposed || this.selectedHeroId !== heroId) return;
+
+    this.installTitleHeroPreview(heroId);
+    if (this.phase === 'menu' || this.phase === 'character-select') {
+      this.fitCameraToTitle();
+    }
   }
 
-  private installTitleHeroPreview(): void {
+  private installTitleHeroPreview(heroId: HeroId = this.selectedHeroId): void {
     this.titlePreview.clear();
     this.titlePreview.name = 'title-preview';
 
     const platformMaterial = new THREE.MeshBasicMaterial({ color: '#020405', transparent: true, opacity: 0.64 });
     const platform = new THREE.Mesh(new THREE.CircleGeometry(1.04, 48), platformMaterial);
     platform.rotation.x = -Math.PI / 2;
-    platform.position.set(1.45, -0.02, 0);
+    platform.position.set(titleHeroBaseX, titleHeroBaseY - 0.02, 0);
     platform.name = 'title-hero-platform';
 
     const key = new THREE.DirectionalLight('#e7fbff', 5.2);
@@ -449,15 +517,28 @@ export class Game {
     fill.position.set(1.35, 1.15, 2.15);
     fill.name = 'title-hero-fill-light';
 
-    const character = this.characterAssets.createHero('cinematic');
+    const character = this.characterAssets.createHero('cinematic', heroId);
     this.titleHeroVisual = character.object;
     this.titleHeroAnimator = character.animator;
     this.titleHeroAnimator?.setMotionState('idle', 0);
-    this.titleHeroVisual.name = 'title-hero:cinematic';
-    this.titleHeroVisual.position.set(1.45, 0, 0);
+    this.titleHeroVisual.name = `title-hero:${heroId}:cinematic`;
+    this.titlePreviewHeroId = heroId;
+    this.titleHeroVisual.position.set(titleHeroBaseX, titleHeroBaseY, 0);
     this.titleHeroVisual.rotation.y = -0.26;
 
     this.titlePreview.add(platform, key, rim, fill, this.titleHeroVisual);
+    this.layoutTitleHeroPreview();
+  }
+
+  private layoutTitleHeroPreview(): void {
+    const x = this.phase === 'character-select' ? characterSelectHeroBaseX : titleHeroBaseX;
+    const platform = this.titlePreview.getObjectByName('title-hero-platform');
+    if (platform) {
+      platform.position.x = x;
+    }
+    if (this.titleHeroVisual) {
+      this.titleHeroVisual.position.x = x;
+    }
   }
 
   private loadLevel(index: number): void {
@@ -661,6 +742,59 @@ export class Game {
     this.renderUi();
   }
 
+  private warmupPickupCollection(): void {
+    const objective = (this.level.objectives ?? [])[0];
+    if (!objective) return;
+
+    const previousPhase = this.phase;
+    const previousPlayerPosition = { ...this.playerPosition };
+    const previousPlayerMeshPosition = this.playerMesh.position.clone();
+    const previousContactShadowPosition = this.playerContactShadow.position.clone();
+    const previousCollectedIds = new Set(this.collectedObjectiveIds);
+    const previousNotice = this.objectiveNotice;
+    const previousNoticeUntil = this.objectiveNoticeUntil;
+    const previousPickupDebug = this.pickupDebug;
+    const previousPickupFrameProbe = this.pickupFrameProbe;
+    const previousRunStartedAt = this.runStartedAt;
+    const previousLastHudSecond = this.lastHudSecond;
+
+    this.phase = 'playing';
+    this.runStartedAt = performance.now();
+    this.playerPosition = { ...objective.position };
+    this.playerMesh.position.set(objective.position.x, 0.48, objective.position.z);
+    this.playerContactShadow.position.set(objective.position.x, 0.016, objective.position.z);
+    this.collectObjectives({
+      audioSettings: this.pickupWarmupSettings(),
+      recordDebug: false,
+      startFrameProbe: false,
+      log: false,
+    });
+    this.renderer.render(this.scene, this.camera);
+
+    this.phase = previousPhase;
+    this.playerPosition = previousPlayerPosition;
+    this.playerMesh.position.copy(previousPlayerMeshPosition);
+    this.playerContactShadow.position.copy(previousContactShadowPosition);
+    this.collectedObjectiveIds = previousCollectedIds;
+    this.objectiveNotice = previousNotice;
+    this.objectiveNoticeUntil = previousNoticeUntil;
+    this.pickupDebug = previousPickupDebug;
+    this.pickupFrameProbe = previousPickupFrameProbe;
+    this.runStartedAt = previousRunStartedAt;
+    this.lastHudSecond = previousLastHudSecond;
+    this.updateObjectiveMeshes();
+    this.renderUi();
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  private pickupWarmupSettings(): GameSettings {
+    return {
+      ...this.settings,
+      musicEnabled: true,
+      masterVolume: silentPickupWarmupVolume,
+    };
+  }
+
   private createLightFixture(light: LightSpec): THREE.Group {
     const group = new THREE.Group();
     group.position.set(light.position.x, light.height, light.position.z);
@@ -814,7 +948,7 @@ export class Game {
 
   private refreshPlayerVisual(): void {
     this.playerMesh.clear();
-    const character = this.characterAssets.createHero(this.settings.quality);
+    const character = this.characterAssets.createHero(this.settings.quality, this.selectedHeroId);
     this.playerVisual = character.object;
     this.playerAnimator = character.animator;
     this.playerMesh.add(this.playerVisual);
@@ -914,7 +1048,11 @@ export class Game {
     }
   }
 
-  private collectObjectives(): void {
+  private collectObjectives(options: CollectObjectiveOptions = {}): void {
+    const audioSettings = options.audioSettings ?? this.settings;
+    const recordDebug = options.recordDebug ?? true;
+    const startFrameProbe = options.startFrameProbe ?? recordDebug;
+    const log = options.log ?? true;
     const startedAt = performance.now();
     const collectStartedAt = performance.now();
     const next = collectNearbyObjectives(this.level, this.playerPosition, this.collectedObjectiveIds);
@@ -933,27 +1071,33 @@ export class Game {
       : `Collected ${objective?.label ?? 'objective'}`;
     this.objectiveNoticeUntil = performance.now() + 2600;
     const audioStartedAt = performance.now();
-    const audioDebug = this.music.playPickup(this.settings);
+    const audioDebug = this.music.playPickup(audioSettings);
     const audioMs = performance.now() - audioStartedAt;
     const uiStartedAt = performance.now();
     this.renderUi();
     const uiMs = performance.now() - uiStartedAt;
     const totalMs = performance.now() - startedAt;
-    this.pickupDebug = createPickupDebugSample({
-      id: objective?.id ?? collectedNow[0] ?? null,
-      label: objective?.label ?? 'objective',
-      collectedAtMs: startedAt,
-      totalMs,
-      collectMs,
-      meshMs,
-      audioMs,
-      uiMs,
-      audio: audioDebug,
-    });
-    this.pickupFrameProbe = beginPickupFrameProbe(startedAt);
-    console.info(
-      `[objective] collected=${[...this.collectedObjectiveIds].join(',')} pickupMs=${totalMs.toFixed(1)} audioMs=${audioMs.toFixed(1)} uiMs=${uiMs.toFixed(1)}`,
-    );
+    if (recordDebug) {
+      this.pickupDebug = createPickupDebugSample({
+        id: objective?.id ?? collectedNow[0] ?? null,
+        label: objective?.label ?? 'objective',
+        collectedAtMs: startedAt,
+        totalMs,
+        collectMs,
+        meshMs,
+        audioMs,
+        uiMs,
+        audio: audioDebug,
+      });
+    }
+    if (startFrameProbe) {
+      this.pickupFrameProbe = beginPickupFrameProbe(startedAt);
+    }
+    if (log) {
+      console.info(
+        `[objective] collected=${[...this.collectedObjectiveIds].join(',')} pickupMs=${totalMs.toFixed(1)} audioMs=${audioMs.toFixed(1)} uiMs=${uiMs.toFixed(1)}`,
+      );
+    }
   }
 
   private updateObjectiveMeshes(): void {
@@ -1003,6 +1147,10 @@ export class Game {
     return isLoadingPhase(this.phase);
   }
 
+  private usesMenuMusic(): boolean {
+    return isMenuMusicPhase(this.phase, this.settingsReturnPhase);
+  }
+
   private canUpdateRun(): boolean {
     return isPlayingPhase(this.phase);
   }
@@ -1036,12 +1184,13 @@ export class Game {
   }
 
   private updateCharacterAnimations(now: number, delta: number): void {
-    if (this.phase === 'menu') {
+    if (this.phase === 'menu' || this.phase === 'character-select') {
       this.titleHeroAnimator?.setMotionState('idle');
       this.titleHeroAnimator?.update(delta);
       if (this.titleHeroVisual) {
         const time = now / 1000;
-        this.titleHeroVisual.position.y = Math.sin(time * 2.2) * 0.015;
+        this.layoutTitleHeroPreview();
+        this.titleHeroVisual.position.y = titleHeroBaseY + Math.sin(time * 2.2) * 0.015;
       }
       return;
     }
@@ -1108,6 +1257,7 @@ export class Game {
       this.objectiveProgress(),
       sample,
       this.pickupDebug,
+      this.music.currentTrack(),
     );
     this.renderer.info.reset();
 
@@ -1172,6 +1322,8 @@ export class Game {
       activeTrackId: () => this.music.currentTrack(),
       musicPlayback: () => this.music.playbackState(),
       musicEnabled: () => this.settings.musicEnabled,
+      selectedHero: () => this.selectedHeroId,
+      heroRoster: () => heroOptions.map((hero) => hero.id),
     };
   }
 
@@ -1234,13 +1386,14 @@ export class Game {
     };
   }
 
-  private titleHeroDebugState(): { visible: boolean; cinematic: boolean; activeState: string | null; clipNames: readonly string[] } {
+  private titleHeroDebugState(): { visible: boolean; cinematic: boolean; activeState: string | null; clipNames: readonly string[]; x: number | null } {
     const snapshot = this.titleHeroAnimator?.snapshot();
     return {
-      visible: this.phase === 'menu' && this.scene.children.includes(this.titlePreview) && Boolean(this.titleHeroVisual),
+      visible: (this.phase === 'menu' || this.phase === 'character-select') && this.scene.children.includes(this.titlePreview) && Boolean(this.titleHeroVisual),
       cinematic: this.titleHeroVisual?.name.endsWith(':cinematic') ?? false,
       activeState: snapshot?.activeState ?? null,
       clipNames: snapshot?.clipNames ?? [],
+      x: this.titleHeroVisual?.position.x ?? null,
     };
   }
 
@@ -1339,7 +1492,7 @@ export class Game {
   }
 
   private fitCameraToLevel(): void {
-    if (this.phase === 'menu') {
+    if (this.phase === 'menu' || this.phase === 'character-select') {
       this.fitCameraToTitle();
       return;
     }
@@ -1409,7 +1562,7 @@ export class Game {
       runElapsedMs,
       this.runAlertCount,
     );
-    this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex, this.runSummary, this.loadingProgress);
+    this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex, this.runSummary, this.loadingProgress, this.selectedHeroId);
   }
 
   private enemyBodies(): { id: string; position: Vec2; radius: number }[] {
@@ -1460,6 +1613,14 @@ export class Game {
       this.ui.updateRunHud(this.currentRunElapsedMs(), this.runAlertCount);
     }
   }
+}
+
+function isMenuMusicPhase(phase: GamePhase, settingsReturnPhase: GamePhase): boolean {
+  return (
+    phase === 'menu' ||
+    phase === 'character-select' ||
+    (phase === 'settings' && (settingsReturnPhase === 'menu' || settingsReturnPhase === 'character-select'))
+  );
 }
 
 function createContactShadow(width: number, depth: number, opacity: number): THREE.Mesh {

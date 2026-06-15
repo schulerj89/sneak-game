@@ -64,8 +64,15 @@ export type SoundtrackId =
   | 'ghost-steps'
   | 'cyberpunk-moonlight'
   | 'dark-sci-fi-sector'
+  | 'dark-sci-fi-airy'
   | 'dark-sci-fi-pulse'
-  | 'dark-sci-fi-urgent';
+  | 'dark-sci-fi-urgent'
+  | 'dark-sci-fi-transmission'
+  | 'insistent'
+  | 'future-loading-loop'
+  | 'lost-signal'
+  | 'background-space'
+  | 'ambient-horror';
 
 export type GameSettings = {
   quality: RenderQuality;
@@ -79,6 +86,7 @@ export type GameSettings = {
 export type GamePhase =
   | 'loading'
   | 'menu'
+  | 'character-select'
   | 'briefing'
   | 'playing'
   | 'paused'

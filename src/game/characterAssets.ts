@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import type { RenderQuality } from './types';
-import heroIdleUrl from '../assets/hero/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Idle_3_withSkin.glb?url';
-import heroRunUrl from '../assets/hero/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Run_02_withSkin.glb?url';
+import { defaultHeroId, heroOptionById, heroOptions, type HeroId } from './heroes';
 import sentryUrl from '../assets/characters/sentry/enemy_sentry.glb?url';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
@@ -27,7 +26,7 @@ type CharacterAnimationClips = {
   single?: THREE.AnimationClip;
 };
 
-const characterAssetTypes: readonly CharacterAssetType[] = ['hero', 'sentry'];
+const sentryAssetKey = 'sentry';
 
 export class CharacterAnimator {
   private readonly mixer: THREE.AnimationMixer;
@@ -98,67 +97,76 @@ export class CharacterAnimator {
 }
 
 export class CharacterAssetLibrary {
-  private readonly cinematicAssets = new Map<CharacterAssetType, CinematicCharacterAsset>();
+  private readonly cinematicAssets = new Map<string, CinematicCharacterAsset>();
+  private readonly loadingAssets = new Map<string, Promise<void>>();
   private loaderPromise: Promise<RuntimeGltfLoader> | null = null;
-  private preloadPromise: Promise<void> | null = null;
-  private preloadHeroPromise: Promise<void> | null = null;
 
-  async preload(quality: RenderQuality): Promise<void> {
-    if (quality !== 'cinematic' || this.hasAllAssets()) return;
+  async preload(quality: RenderQuality, heroId: HeroId = defaultHeroId): Promise<void> {
+    if (quality !== 'cinematic' || this.hasAllAssets(heroId)) return;
 
-    this.preloadPromise ??= Promise.all(characterAssetTypes.map((type) => this.loadAsset(type)))
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        this.preloadPromise = null;
-        console.warn(`[assets] cinematic character assets unavailable: ${error instanceof Error ? error.message : String(error)}`);
-      });
-    await this.preloadPromise;
+    try {
+      await Promise.all([
+        this.loadHeroAssetById(heroId),
+        this.loadSentryAssetIntoCache(),
+      ]);
+    } catch (error: unknown) {
+      console.warn(`[assets] cinematic character assets unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
-  async preloadHero(): Promise<void> {
-    if (this.cinematicAssets.has('hero')) return;
-
-    this.preloadHeroPromise ??= this.loadAsset('hero')
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        this.preloadHeroPromise = null;
-        console.warn(`[assets] cinematic hero asset unavailable: ${error instanceof Error ? error.message : String(error)}`);
-      });
-    await this.preloadHeroPromise;
+  async preloadHero(heroId: HeroId = defaultHeroId): Promise<void> {
+    try {
+      await this.loadHeroAssetById(heroId);
+    } catch (error: unknown) {
+      console.warn(`[assets] cinematic hero asset unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
-  createHero(quality: RenderQuality): CharacterAssetInstance {
-    const asset = quality === 'cinematic' ? this.cinematicAssets.get('hero') : null;
-    const instance = asset ? this.cloneAsset(asset, 'player:cinematic') : { object: createSimpleHeroObject(), animator: null };
+  async preloadHeroRoster(): Promise<void> {
+    try {
+      await Promise.all(heroOptions.map((hero) => this.loadHeroAssetById(hero.id)));
+    } catch (error: unknown) {
+      console.warn(`[assets] cinematic hero roster unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  createHero(quality: RenderQuality, heroId: HeroId = defaultHeroId): CharacterAssetInstance {
+    const asset = quality === 'cinematic' ? this.cinematicAssets.get(heroAssetKey(heroId)) : null;
+    const instance = asset ? this.cloneAsset(asset, `player:${heroId}:cinematic`) : { object: createSimpleHeroObject(), animator: null };
     const object = instance.object;
     object.position.set(0, 0, 0);
     return instance;
   }
 
   createEnemy(id: string, quality: RenderQuality): CharacterAssetInstance {
-    const asset = quality === 'cinematic' ? this.cinematicAssets.get('sentry') : null;
+    const asset = quality === 'cinematic' ? this.cinematicAssets.get(sentryAssetKey) : null;
     const instance = asset ? this.cloneAsset(asset, `enemy:${id}:cinematic`) : { object: createSimpleEnemyObject(id), animator: null };
     const object = instance.object;
     object.position.set(0, 0, 0);
     return instance;
   }
 
-  hasCinematicAssets(): boolean {
-    return this.hasAllAssets();
+  hasCinematicAssets(heroId: HeroId = defaultHeroId): boolean {
+    return this.hasAllAssets(heroId);
+  }
+
+  releaseUnselectedHeroes(selectedHeroId: HeroId): void {
+    for (const [key, asset] of this.cinematicAssets) {
+      if (!key.startsWith('hero:') || key === heroAssetKey(selectedHeroId)) continue;
+
+      this.disposeAsset(asset);
+      this.cinematicAssets.delete(key);
+      console.info(`[assets] released cinematic character ${key}`);
+    }
   }
 
   dispose(): void {
     for (const asset of this.cinematicAssets.values()) {
-      asset.scene.traverse((child) => {
-        if (!(child instanceof THREE.Mesh)) return;
-        child.geometry.dispose();
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        materials.forEach((material) => material.dispose());
-      });
+      this.disposeAsset(asset);
     }
     this.cinematicAssets.clear();
+    this.loadingAssets.clear();
     this.loaderPromise = null;
-    this.preloadPromise = null;
   }
 
   private cloneAsset(asset: CinematicCharacterAsset, name: string): CharacterAssetInstance {
@@ -174,29 +182,56 @@ export class CharacterAssetLibrary {
     return { object, animator };
   }
 
-  private hasAllAssets(): boolean {
-    return characterAssetTypes.every((type) => this.cinematicAssets.has(type));
+  private hasAllAssets(heroId: HeroId): boolean {
+    return this.cinematicAssets.has(heroAssetKey(heroId)) && this.cinematicAssets.has(sentryAssetKey);
   }
 
-  private async loadAsset(type: CharacterAssetType): Promise<void> {
-    if (this.cinematicAssets.has(type)) return;
+  private async loadHeroAssetById(heroId: HeroId): Promise<void> {
+    const key = heroAssetKey(heroId);
+    await this.loadCachedAsset(key, 'hero', (loader) => this.loadHeroAsset(loader, heroId));
+  }
 
-    const loader = await this.loader();
-    const asset = type === 'hero' ? await this.loadHeroAsset(loader) : await this.loadSentryAsset(loader);
-    const group = new THREE.Group();
-    group.name = `character-asset:${type}`;
-    normalizeCharacterScene(asset.scene, type);
-    prepareCharacterMaterials(asset.scene, type);
-    group.add(asset.scene);
-    group.add(createCharacterAccentLight(type));
-    group.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-    this.cinematicAssets.set(type, { scene: group, clips: asset.clips });
-    console.info(`[assets] loaded cinematic character ${type} animations=${Object.keys(asset.clips).length}`);
+  private async loadSentryAssetIntoCache(): Promise<void> {
+    await this.loadCachedAsset(sentryAssetKey, 'sentry', (loader) => this.loadSentryAsset(loader));
+  }
+
+  private async loadCachedAsset(
+    key: string,
+    type: CharacterAssetType,
+    load: (loader: RuntimeGltfLoader) => Promise<{ scene: THREE.Group; clips: CharacterAnimationClips }>,
+  ): Promise<void> {
+    if (this.cinematicAssets.has(key)) return;
+
+    const pending = this.loadingAssets.get(key);
+    if (pending) {
+      await pending;
+      return;
+    }
+
+    const promise = (async () => {
+      const loader = await this.loader();
+      const asset = await load(loader);
+      const group = new THREE.Group();
+      group.name = `character-asset:${key}`;
+      normalizeCharacterScene(asset.scene, type);
+      prepareCharacterMaterials(asset.scene, type);
+      group.add(asset.scene);
+      group.add(createCharacterAccentLight(type));
+      group.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      this.cinematicAssets.set(key, { scene: group, clips: asset.clips });
+      console.info(`[assets] loaded cinematic character ${type} ${key} animations=${Object.keys(asset.clips).length}`);
+    })();
+    this.loadingAssets.set(key, promise);
+    try {
+      await promise;
+    } finally {
+      this.loadingAssets.delete(key);
+    }
   }
 
   private loader(): Promise<RuntimeGltfLoader> {
@@ -204,8 +239,9 @@ export class CharacterAssetLibrary {
     return this.loaderPromise;
   }
 
-  private async loadHeroAsset(loader: RuntimeGltfLoader): Promise<{ scene: THREE.Group; clips: CharacterAnimationClips }> {
-    const [idleGltf, runGltf] = await Promise.all([loader.loadAsync(heroIdleUrl), loader.loadAsync(heroRunUrl)]);
+  private async loadHeroAsset(loader: RuntimeGltfLoader, heroId: HeroId): Promise<{ scene: THREE.Group; clips: CharacterAnimationClips }> {
+    const hero = heroOptionById(heroId);
+    const [idleGltf, runGltf] = await Promise.all([loader.loadAsync(hero.idleUrl), loader.loadAsync(hero.runUrl)]);
     return {
       scene: idleGltf.scene,
       clips: {
@@ -222,6 +258,28 @@ export class CharacterAssetLibrary {
       clips: {},
     };
   }
+
+  private disposeAsset(asset: CinematicCharacterAsset): void {
+    const disposedMaterials = new Set<THREE.Material>();
+    const disposedGeometries = new Set<THREE.BufferGeometry>();
+    asset.scene.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      if (!disposedGeometries.has(child.geometry)) {
+        child.geometry.dispose();
+        disposedGeometries.add(child.geometry);
+      }
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.forEach((material) => {
+        if (disposedMaterials.has(material)) return;
+        material.dispose();
+        disposedMaterials.add(material);
+      });
+    });
+  }
+}
+
+function heroAssetKey(heroId: HeroId): string {
+  return `hero:${heroId}`;
 }
 
 export function createSimpleHeroObject(): THREE.Object3D {

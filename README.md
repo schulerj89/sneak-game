@@ -6,9 +6,9 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 
 - Twelve playable levels from Dock Blackout through Blackout Crown, with easy, medium, hard, and final challenge layouts.
 - Menu, settings, retry, and level-complete flows.
-- Black title screen with the cinematic hero GLB idling beside the logo.
+- Black title screen with text-only branding and the cinematic hero GLB idling beside it.
+- Character select flow after Start Run, with a preloaded hero roster and reusable hero definitions for new operatives.
 - First-level mission briefing that explains keycards, terminals, sentries, vision cones, and the locked exit.
-- Clear SC circuit-lock logo and branded menu presentation.
 - Level select menu with generated level preview images.
 - Guard patrols with visible cones and raycast line-of-sight detection.
 - Suspicion meter with alert recovery and detection leniency settings.
@@ -17,9 +17,10 @@ Shadow Circuit is a local Three.js stealth game prototype. You sneak through dar
 - Cinematic hero idle/run GLBs plus a supplied enemy sentry GLB with code-driven hover, front spotlight, and procedural mesh fallback for lower quality modes.
 - Dark-room lighting, dim locked exits, unlock-only goal beacons, shadows by quality setting, and simple custom assets.
 - Shader-based floor detail, goal beacons, and contact shadows.
-- Downloaded external soundtrack choices with auditable license metadata.
-- Cinematic default rendering with a 224 MB advisory browser heap cap.
-- On-screen debug panel with FPS, memory, draw calls, player position, and detection state.
+- Downloaded external soundtrack choices with title-screen music, per-level track assignment, and auditable license metadata.
+- Level loading simulates a first collectible pickup so objective UI, mesh visibility, and pickup audio are warmed before play starts.
+- Cinematic default rendering with a 320 MB advisory browser heap cap.
+- On-screen debug panel with FPS, memory, draw calls, player position, detection state, active track, and pickup timing/audio diagnostics.
 - Console logs for game phase, level loads, settings, audio, and detection events.
 - Unit tests, level route validation, and browser smoke coverage.
 
@@ -87,18 +88,6 @@ Then commit and push the checkpoint.
 ![Level Select](docs/images/shadow-circuit-level-select.png)
 
 ![Settings](docs/images/shadow-circuit-settings.png)
-
-### Characters
-
-![Cinematic Hero and Sentry](docs/images/shadow-circuit-characters.png)
-
-![Hero Reference](src/assets/characters/reference/shadow-circuit-hero-reference.png)
-
-![Sentry Reference](src/assets/characters/reference/shadow-circuit-sentry-reference.png)
-
-![Meshy Hero Model](docs/images/shadow-circuit-hero-meshy-model.png)
-
-![Enemy Sentry Debug](docs/images/shadow-circuit-enemy-sentry-debug.png)
 
 ### Levels
 

@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest';
 const animatedAssets = [
   new URL('../assets/hero/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Idle_3_withSkin.glb', import.meta.url),
   new URL('../assets/hero/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Run_02_withSkin.glb', import.meta.url),
+  new URL('../assets/hero/hero_2/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Idle_3_withSkin.glb', import.meta.url),
+  new URL('../assets/hero/hero_2/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Run_02_withSkin.glb', import.meta.url),
+  new URL('../assets/hero/hero_3/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Idle_3_withSkin.glb', import.meta.url),
+  new URL('../assets/hero/hero_3/Meshy_AI_a_small_tactical_chib_biped/Meshy_AI_a_small_tactical_chib_biped_Animation_Run_02_withSkin.glb', import.meta.url),
 ] as const;
 const staticAssets = [
   new URL('../assets/characters/sentry/enemy_sentry.glb', import.meta.url),

@@ -1,11 +1,14 @@
 import { soundtrackOptions } from './audio';
-import { levelThumbnailSvg, logoSvg } from './assets';
+import { levelThumbnailSvg } from './assets';
+import { heroOptions, type HeroId } from './heroes';
 import { isLoadingPhase, isPlayingPhase } from './phase';
 import type { GamePhase, GameSettings, LevelDefinition, LoadingProgress, ObjectiveProgress, RunSummary, SuspicionState } from './types';
 
 type UiCallbacks = {
   onStart: () => void;
   onBeginBriefing: () => void;
+  onSelectHero: (heroId: HeroId) => void;
+  onConfirmHero: () => void;
   onResume: () => void;
   onSettings: () => void;
   onMenu: () => void;
@@ -117,9 +120,11 @@ export class GameUi {
     levelIndex: number,
     runSummary: RunSummary | null,
     loadingProgress: LoadingProgress,
+    selectedHeroId: HeroId,
   ): void {
     this.overlay.classList.toggle('is-loading', isLoadingPhase(phase));
-    this.overlay.classList.toggle('is-title', phase === 'menu');
+    this.overlay.classList.toggle('is-title', phase === 'menu' || phase === 'character-select');
+    this.overlay.classList.toggle('is-character-select', phase === 'character-select');
     this.overlay.hidden = isPlayingPhase(phase);
     if (isPlayingPhase(phase)) return;
 
@@ -129,7 +134,6 @@ export class GameUi {
       const percent = Math.round(loadingProgress.value * 100);
       this.overlay.innerHTML = `
         <div class="panel loading-panel" data-testid="loading-panel">
-          <div class="logo">${logoSvg()}</div>
           <h1>Loading</h1>
           <div class="loading-bar" data-testid="loading-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}">
             <span style="width: ${percent}%"></span>
@@ -140,12 +144,42 @@ export class GameUi {
     } else if (phase === 'menu') {
       this.overlay.innerHTML = `
         <div class="panel menu-panel">
-          <div class="logo">${logoSvg()}</div>
+          <h1 class="title-wordmark" aria-label="Shadow Circuit">
+            <span>Shadow</span>
+            <span>Circuit</span>
+          </h1>
           <p>Move unseen through the facility, read patrol lights, and break the circuit before the sentries close in.</p>
           <div class="panel-actions">
             <button type="button" data-action="start">Start Run</button>
             <button type="button" data-action="level-select">Level Select</button>
             <button type="button" data-action="settings">Settings</button>
+          </div>
+        </div>
+      `;
+    } else if (phase === 'character-select') {
+      const selectedHero = heroOptions.find((hero) => hero.id === selectedHeroId) ?? heroOptions[0];
+      this.overlay.innerHTML = `
+        <div class="panel character-select-panel" data-testid="character-select-panel">
+          <h1>Select Operative</h1>
+          <p>${selectedHero.name} is ready for the run.</p>
+          <div class="hero-grid" role="list" aria-label="Hero roster">
+            ${heroOptions.map((hero) => `
+              <button
+                type="button"
+                class="hero-card ${hero.id === selectedHeroId ? 'is-active' : ''}"
+                data-hero-id="${hero.id}"
+                aria-pressed="${hero.id === selectedHeroId}"
+                style="--hero-accent: ${hero.accentColor}"
+              >
+                <span class="hero-card-name">${hero.name}</span>
+                <span class="hero-card-role">${hero.role}</span>
+                <span class="hero-card-copy">${hero.description}</span>
+              </button>
+            `).join('')}
+          </div>
+          <div class="panel-actions">
+            <button type="button" data-action="confirm-hero">Start Level</button>
+            <button type="button" data-action="menu">Title</button>
           </div>
         </div>
       `;
@@ -313,6 +347,12 @@ export class GameUi {
   private bindOverlay(): void {
     this.overlay.querySelector('[data-action="start"]')?.addEventListener('click', this.callbacks.onStart);
     this.overlay.querySelector('[data-action="begin-briefing"]')?.addEventListener('click', this.callbacks.onBeginBriefing);
+    this.overlay.querySelector('[data-action="confirm-hero"]')?.addEventListener('click', this.callbacks.onConfirmHero);
+    this.overlay.querySelectorAll('[data-hero-id]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.callbacks.onSelectHero((button as HTMLElement).dataset.heroId as HeroId);
+      });
+    });
     this.overlay.querySelector('[data-action="resume"]')?.addEventListener('click', this.callbacks.onResume);
     this.overlay.querySelectorAll('[data-action="level-select"]').forEach((button) =>
       button.addEventListener('click', this.callbacks.onLevelSelect),

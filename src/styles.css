@@ -289,13 +289,37 @@ button:hover {
   padding: 0;
 }
 
-.overlay.is-title .logo svg {
-  width: min(430px, 100%);
-}
-
 .overlay.is-title .panel p {
   max-width: 420px;
   color: #aebdca;
+}
+
+.overlay.is-character-select {
+  align-items: center;
+}
+
+.overlay.is-title .character-select-panel {
+  width: min(760px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  margin-left: clamp(8px, 5vw, 78px);
+  overflow: auto;
+}
+
+.title-wordmark {
+  display: grid;
+  gap: 0;
+  margin: 0 0 24px;
+  color: #eff8ff;
+  font-size: 56px;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.title-wordmark span:last-child {
+  color: #7dfcc6;
+  text-shadow: 0 0 16px rgba(125, 252, 198, 0.3);
 }
 
 .loading-panel {
@@ -303,7 +327,7 @@ button:hover {
 }
 
 .loading-panel h1 {
-  margin-top: 18px;
+  margin-top: 0;
 }
 
 .loading-bar {
@@ -321,12 +345,6 @@ button:hover {
   border-radius: inherit;
   background: linear-gradient(90deg, #7dfcc6, #5ad7ff);
   transition: width 160ms ease;
-}
-
-.logo svg {
-  display: block;
-  width: min(470px, 100%);
-  height: auto;
 }
 
 .panel h1 {
@@ -501,6 +519,57 @@ button:hover {
   gap: 10px;
 }
 
+.hero-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.hero-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 154px;
+  border-color: rgba(127, 160, 190, 0.34);
+  padding: 13px;
+  text-align: left;
+}
+
+.hero-card::before {
+  content: "";
+  display: block;
+  width: 38px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--hero-accent, #7dfcc6);
+  box-shadow: 0 0 16px var(--hero-accent, #7dfcc6);
+}
+
+.hero-card.is-active {
+  border-color: var(--hero-accent, #7dfcc6);
+  background: rgba(12, 28, 36, 0.96);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hero-accent, #7dfcc6) 60%, transparent);
+}
+
+.hero-card-name {
+  color: #eff8ff;
+  font-weight: 900;
+}
+
+.hero-card-role {
+  color: var(--hero-accent, #7dfcc6);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.hero-card-copy {
+  color: #9fb2c2;
+  font-size: 13px;
+  line-height: 1.42;
+}
+
 .settings-panel {
   display: grid;
   gap: 16px;
@@ -637,6 +706,15 @@ button:hover {
 
   .briefing-grid {
     grid-template-columns: 1fr;
+  }
+
+  .title-wordmark {
+    font-size: 40px;
+  }
+
+  .overlay.is-title .character-select-panel {
+    width: 100%;
+    margin-left: 0;
   }
 
   .run-summary {

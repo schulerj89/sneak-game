@@ -50,6 +50,7 @@ export class DebugPanel {
     objectives: ObjectiveProgress,
     sample: DebugSample,
     pickup: PickupDebugSample,
+    activeTrackId: string | null,
   ): void {
     this.element.hidden = !settings.debugEnabled;
     if (!settings.debugEnabled) return;
@@ -69,7 +70,7 @@ export class DebugPanel {
       <div>Pressure: ${sample.memoryPressure}</div>
       <div>Draws: ${sample.drawCalls} Triangles: ${sample.triangles}</div>
       <div>Quality: ${settings.quality}</div>
-      <div>Track: ${settings.soundtrackId}</div>
+      <div>Track: ${activeTrackId ?? settings.soundtrackId}</div>
       <div>Pickup: ${pickup.id ? `${pickup.label} (${pickup.id})` : 'none'}</div>
       <div>Pickup cost: ${pickup.totalMs.toFixed(1)}ms total | audio ${pickup.audioMs.toFixed(1)}ms | UI ${pickup.uiMs.toFixed(1)}ms</div>
       <div>Pickup detail: collect ${pickup.collectMs.toFixed(1)}ms | mesh ${pickup.meshMs.toFixed(1)}ms | frame ${pickup.frameSpikeMs.toFixed(1)}ms/${pickup.framesObserved}f</div>

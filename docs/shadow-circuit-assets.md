@@ -2,18 +2,15 @@
 
 The game uses procedural geometry, code-native UI assets, downloaded external music tracks, and reusable GLB props:
 
-- Player: Memory first and Balanced use the teal capsule mesh; Cinematic preloads the supplied hero GLBs from `src/assets/hero/` and blends idle/Run_02 animation clips.
+- Player: Memory first and Balanced use the teal capsule mesh; Cinematic preloads the selected supplied hero GLBs from `src/assets/hero/` and blends idle/Run_02 animation clips.
 - Guards: Memory first and Balanced use red cone meshes; Cinematic preloads the supplied static sentry GLB from `src/assets/characters/sentry/enemy_sentry.glb`, then applies hover motion and front spotlight tracking in code.
 - Vision: transparent cone geometry.
 - Cover: box meshes sized per level.
 - Goal: emissive green cylinder.
-- Logo: inline SVG in `src/game/assets.ts`.
 - Objectives: Memory first and Balanced use simple runtime geometry; Cinematic preloads small GLB keycard and terminal props from `src/assets/objectives/`.
-- Characters: Cinematic preloads hero idle/Run_02 GLBs from `src/assets/hero/` and the supplied enemy sentry GLB from `src/assets/characters/sentry/`.
+- Characters: Cinematic preloads hero idle/Run_02 GLBs from the roster in `src/game/heroes.ts` and the supplied enemy sentry GLB from `src/assets/characters/sentry/`.
 - Character references: generated PNG concept images live under `src/assets/characters/reference/` and are the source inputs for Meshy Image to 3D.
-- Music: downloaded external MP3 tracks in `src/assets/`.
-
-The logo includes the player character silhouette inside a search cone to keep the brand connected to the game mechanic.
+- Music: downloaded external tracks in `src/assets/`, with a separate title/character-select track and per-level gameplay assignments.
 
 ## Meshy Objective Assets
 
@@ -68,7 +65,7 @@ Only these GLBs are loaded by the runtime:
 
 Use `npm run debug:hero-animation` to verify the close-up hero camera, idle-to-run transition, return-to-idle transition, and movement-facing yaw. The script writes screenshots to `artifacts/hero-debug-*.png`.
 
-The title screen also uses the same cinematic hero GLB in its idle state. It renders inside the Three.js scene on a black title background instead of using a static image or showing level one behind the menu.
+The title and character-select screens also use the selected cinematic hero GLB in its idle state. It renders inside the Three.js scene on a black title background instead of using a static image or showing level one behind the menu.
 
 ## Enemy Sentry Runtime
 

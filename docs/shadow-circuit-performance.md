@@ -1,6 +1,6 @@
 # Shadow Circuit Performance
 
-The project targets crisp rendering while staying under a `224 MB` advisory browser heap budget when browser memory reporting is available. Settings persist in local storage and fresh sessions start in `Cinematic` mode.
+The project targets crisp rendering while staying under a `320 MB` advisory browser heap budget when browser memory reporting is available. Settings persist in local storage and fresh sessions start in `Cinematic` mode.
 
 ## Quality Profiles
 
@@ -18,6 +18,10 @@ The debug panel displays:
 - Three.js draw calls and triangle count.
 - Active render quality.
 - Reserved cinematic memory.
+- Active music track.
+- Pickup timing, frame spike, and pickup audio warmup state.
+
+Each level load primes objective visibility states, warms pickup audio, and then runs a silent simulated first pickup. That dry run exercises objective collection, HUD notice rendering, mesh/light visibility changes, and the Web Audio pickup graph before the player can collect an item.
 
 Run this during checkpoints:
 
