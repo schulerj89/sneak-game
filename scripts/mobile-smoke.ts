@@ -62,6 +62,7 @@ try {
   await page.locator('[data-testid="orientation-reminder"]').waitFor({ state: 'hidden', timeout: 8000 });
   await assertVersionBadge(page);
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
+  await assertMobileTitleAchievements(page);
   await assertCompactMobileSettings(page);
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
@@ -320,6 +321,43 @@ async function assertActionButtonsFit(page: Page, containerSelector: string): Pr
   );
   if (clipped.length > 0) {
     throw new Error(`Expected ${containerSelector} buttons to fit in landscape viewport: ${JSON.stringify({ ...layout, clipped })}`);
+  }
+}
+
+async function assertMobileTitleAchievements(page: Page): Promise<void> {
+  const state = await page.locator('[data-testid="achievement-summary"]').evaluate((summary) => {
+    const summaryRect = summary.getBoundingClientRect();
+    const cards = [...summary.querySelectorAll('[data-achievement-id]')];
+    const descriptionVisible = cards.some((card) => {
+      const description = card.querySelector('.achievement-card-copy span');
+      if (!(description instanceof HTMLElement)) return false;
+
+      const rect = description.getBoundingClientRect();
+      const style = window.getComputedStyle(description);
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+    });
+
+    return {
+      count: cards.length,
+      descriptionVisible,
+      summary: { left: summaryRect.left, right: summaryRect.right, top: summaryRect.top, bottom: summaryRect.bottom },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      text: summary.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    };
+  });
+
+  if (
+    state.count !== 3 ||
+    state.descriptionVisible ||
+    !state.text.includes('Circuit Complete') ||
+    !state.text.includes('Perfect Shadow') ||
+    !state.text.includes('Second Sweep') ||
+    state.summary.left < 0 ||
+    state.summary.top < 0 ||
+    state.summary.right > state.viewport.width ||
+    state.summary.bottom > state.viewport.height
+  ) {
+    throw new Error(`Expected compact mobile title achievements, got ${JSON.stringify(state)}`);
   }
 }
 

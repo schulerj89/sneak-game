@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { loadAchievementProgress, recordLevelAchievementClear, type AchievementProgress } from './achievements';
 import { type ActiveTrackId, MusicDirector, soundtrackIdForLevel } from './audio';
 import { CharacterAssetLibrary, type CharacterAnimator } from './characterAssets';
 import { collidesWithEnemies, collidesWithObstacles, enemyRadius, playerRadius } from './collision';
@@ -80,6 +81,7 @@ const titleHeroBaseY = 0.24;
 const compactCharacterSelectHeroBaseY = 1.18;
 const compactCharacterSelectHeroScale = 1.12;
 const compactLandscapeLevelCameraScale = 0.9;
+const achievementLevelIds = levels.map((level) => level.id);
 const silentPickupWarmupVolume = 0.0001;
 
 declare global {
@@ -145,6 +147,7 @@ declare global {
       heroAssetQuality: () => RenderQuality;
       enemyAssetQuality: () => RenderQuality;
       rendererMemory: () => { geometries: number; textures: number };
+      achievements: () => readonly AchievementProgress[];
     };
   }
 }
@@ -187,6 +190,10 @@ export class Game {
   private collectedObjectiveIds = new Set<string>();
   private objectiveNotice = '';
   private objectiveNoticeUntil = 0;
+  private achievementProgress: readonly AchievementProgress[] = loadAchievementProgress(achievementLevelIds);
+  private achievementNotice = '';
+  private achievementNoticeUntil = 0;
+  private readonly achievementNoticeQueue: string[] = [];
   private debugRays = new THREE.Group();
   private currentDetection: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
   private currentSuspicion: SuspicionState = emptySuspicion();
@@ -1466,6 +1473,12 @@ export class Game {
       this.objectiveNotice = '';
       this.renderUi();
     }
+    if (this.achievementNotice && now > this.achievementNoticeUntil) {
+      this.achievementNotice = '';
+      this.achievementNoticeUntil = 0;
+      this.showNextAchievementNotice(now);
+      this.renderUi();
+    }
     if (this.canUpdateRun()) {
       const hudSecond = Math.floor(this.currentRunElapsedMs() / 1000);
       if (hudSecond !== this.lastHudSecond) {
@@ -1566,6 +1579,7 @@ export class Game {
       selectedHero: () => this.selectedHeroId,
       heroRoster: () => heroOptions.map((hero) => hero.id),
       loadedHeroAssets: () => this.characterAssets.loadedHeroIds(),
+      achievements: () => this.achievementProgress,
     };
   }
 
@@ -1835,7 +1849,17 @@ export class Game {
       runElapsedMs,
       this.runAlertCount,
     );
-    this.ui.renderOverlay(this.phase, this.level, levels, this.levelIndex, this.runSummary, this.loadingProgress, this.selectedHeroId);
+    this.ui.renderOverlay(
+      this.phase,
+      this.level,
+      levels,
+      this.levelIndex,
+      this.runSummary,
+      this.loadingProgress,
+      this.selectedHeroId,
+      this.achievementProgress,
+    );
+    this.ui.renderAchievementNotice(this.achievementNotice);
     this.ui.setTouchControlsVisible(this.canUpdateRun());
   }
 
@@ -1875,10 +1899,35 @@ export class Game {
       saveBestTime(this.level.id, summary.elapsedMs);
     }
 
+    const achievements = recordLevelAchievementClear({
+      levelId: this.level.id,
+      grade: summary.grade,
+      levelIds: achievementLevelIds,
+    });
+    this.achievementProgress = achievements.progress;
+    this.queueAchievementNotices(achievements.unlocked);
+
     this.runSummary = summary;
     this.objectiveNotice = '';
     this.objectiveNoticeUntil = 0;
     this.setPhase('complete');
+  }
+
+  private queueAchievementNotices(unlocked: readonly AchievementProgress[]): void {
+    if (unlocked.length === 0) return;
+
+    this.achievementNoticeQueue.push(...unlocked.map((achievement) => achievement.title));
+    if (!this.achievementNotice) {
+      this.showNextAchievementNotice(performance.now());
+    }
+  }
+
+  private showNextAchievementNotice(now: number): void {
+    const nextNotice = this.achievementNoticeQueue.shift();
+    if (!nextNotice) return;
+
+    this.achievementNotice = nextNotice;
+    this.achievementNoticeUntil = now + 3600;
   }
 
   private recordAlertTransition(previous: SuspicionState['status'], next: SuspicionState['status']): void {

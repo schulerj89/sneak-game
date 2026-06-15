@@ -2,6 +2,7 @@ import { chromium, type ConsoleMessage } from 'playwright';
 import { mkdir } from 'node:fs/promises';
 import { PNG } from 'pngjs';
 import packageInfo from '../package.json';
+import { levels } from '../src/game/levels';
 
 const baseUrl = process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
 const screenshotDir = 'artifacts';
@@ -61,6 +62,7 @@ try {
   if (initialTitleTrackId !== 'title-on-patrol') {
     throw new Error(`Expected title menu music, got ${initialTitleTrackId}`);
   }
+  await assertTitleAchievements();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
   await expectLoadingCover('loading hero roster');
   await expectVisible('[data-testid="character-select-panel"]');
@@ -608,8 +610,27 @@ try {
     throw new Error(`Expected Next Level to load Archive Lanes, got ${JSON.stringify(nextLevelState)}`);
   }
 
+  await seedSecondSweepAchievementUnlock();
   await completeFinalLevel();
   await expectVisible('text=Game Complete');
+  await expectVisible('[data-testid="achievement-toast"]');
+  const achievementToastText = await page.locator('[data-testid="achievement-toast"]').innerText();
+  const normalizedAchievementToastText = achievementToastText.toLowerCase();
+  if (!normalizedAchievementToastText.includes('achievement unlocked') || !achievementToastText.includes('Second Sweep')) {
+    throw new Error(`Expected Second Sweep achievement toast, got ${achievementToastText}`);
+  }
+  const achievementState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        achievements: () => readonly { id: string; progress: number; target: number; unlocked: boolean }[];
+      };
+    };
+    return debugWindow.__shadowCircuitDebug?.achievements();
+  });
+  const secondSweep = achievementState?.find((achievement) => achievement.id === 'clear-all-levels-twice');
+  if (!secondSweep?.unlocked || secondSweep.progress !== secondSweep.target) {
+    throw new Error(`Expected Second Sweep achievement to be complete, got ${JSON.stringify(achievementState)}`);
+  }
   const finalButtonLabels = await page.locator('[data-testid="overlay"]').getByRole('button').allTextContents();
   if (
     finalButtonLabels.includes('Next Level') ||
@@ -697,6 +718,33 @@ async function assertVersionBadge(): Promise<void> {
   }
 }
 
+async function assertTitleAchievements(): Promise<void> {
+  await expectVisible('[data-testid="achievement-summary"]');
+  const achievementCardCount = await page.locator('[data-achievement-id]').count();
+  if (achievementCardCount !== 3) {
+    throw new Error(`Expected 3 title achievement rows, found ${achievementCardCount}`);
+  }
+
+  const achievementText = await page.locator('[data-testid="achievement-summary"]').innerText();
+  for (const label of ['Circuit Complete', 'Perfect Shadow', 'Second Sweep']) {
+    if (!achievementText.includes(label)) {
+      throw new Error(`Missing achievement label ${label}: ${achievementText}`);
+    }
+  }
+
+  const achievementState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        achievements: () => readonly { id: string; progress: number; target: number; unlocked: boolean }[];
+      };
+    };
+    return debugWindow.__shadowCircuitDebug?.achievements();
+  });
+  if (!achievementState || achievementState.length !== 3 || achievementState.some((achievement) => achievement.progress !== 0)) {
+    throw new Error(`Expected empty initial achievement progress, got ${JSON.stringify(achievementState)}`);
+  }
+}
+
 async function expectLoadingCover(context: string): Promise<void> {
   await expectVisible('[data-testid="loading-panel"]');
   const loadingState = await page.evaluate(() => {
@@ -711,6 +759,21 @@ async function expectLoadingCover(context: string): Promise<void> {
   if (!loadingState.hasLoadingClass || loadingState.hidden || loadingState.backgroundColor !== 'rgb(0, 0, 0)') {
     throw new Error(`Expected black loading cover while ${context}, got ${JSON.stringify(loadingState)}`);
   }
+}
+
+async function seedSecondSweepAchievementUnlock(): Promise<void> {
+  const records = Object.fromEntries(
+    levels.map((level, index) => [
+      level.id,
+      {
+        clears: index === levels.length - 1 ? 1 : 2,
+        bestGrade: 'S',
+      },
+    ]),
+  );
+  await page.evaluate((seedRecords) => {
+    window.localStorage.setItem('shadow-circuit-achievements-v1', JSON.stringify(seedRecords));
+  }, records);
 }
 
 async function selectDebugLevel(levelIndex: number): Promise<void> {

@@ -1,5 +1,6 @@
 import { soundtrackOptions } from './audio';
 import { levelThumbnailSvg } from './assets';
+import type { AchievementProgress } from './achievements';
 import { heroOptions, type HeroId } from './heroes';
 import { isLoadingPhase, isPlayingPhase } from './phase';
 import type { GamePhase, GameSettings, LevelDefinition, LoadingProgress, ObjectiveProgress, RunSummary, SuspicionState, Vec2 } from './types';
@@ -35,6 +36,7 @@ export class GameUi {
   readonly hud: HTMLElement;
   readonly debug: HTMLElement;
   readonly overlay: HTMLElement;
+  readonly achievementToast: HTMLElement;
   readonly touchControls: HTMLElement;
   private readonly touchPad: HTMLElement;
   private activeTouchPointerId: number | null = null;
@@ -50,6 +52,7 @@ export class GameUi {
         <div class="viewport" data-testid="game-viewport"></div>
         <section class="hud" data-testid="hud"></section>
         <section class="debug" data-testid="debug-panel"></section>
+        <section class="achievement-toast" data-testid="achievement-toast" hidden></section>
         <section class="touch-controls" data-testid="touch-controls" hidden aria-label="Movement joystick">
           <div class="touch-pad" data-testid="touch-pad">
             <span class="touch-pad-line touch-pad-line-horizontal" aria-hidden="true"></span>
@@ -70,6 +73,7 @@ export class GameUi {
     this.hud = required(mount, '.hud');
     this.debug = required(mount, '.debug');
     this.overlay = required(mount, '.overlay');
+    this.achievementToast = required(mount, '.achievement-toast');
     this.touchControls = required(mount, '.touch-controls');
     this.touchPad = required(mount, '.touch-pad');
     required(mount, '.touch-stick');
@@ -141,6 +145,19 @@ export class GameUi {
     if (alerts) alerts.textContent = String(runAlertCount);
   }
 
+  renderAchievementNotice(achievementTitle: string): void {
+    this.achievementToast.hidden = !achievementTitle;
+    this.achievementToast.innerHTML = achievementTitle
+      ? `
+        <span class="achievement-toast-star" aria-hidden="true">★</span>
+        <span>
+          <strong>Achievement unlocked</strong>
+          <span>${achievementTitle}</span>
+        </span>
+      `
+      : '';
+  }
+
   setTouchControlsVisible(visible: boolean): void {
     this.touchControls.hidden = !visible;
     this.touchControls.classList.toggle('is-visible', visible);
@@ -157,6 +174,7 @@ export class GameUi {
     runSummary: RunSummary | null,
     loadingProgress: LoadingProgress,
     selectedHeroId: HeroId,
+    achievements: readonly AchievementProgress[],
   ): void {
     this.overlay.classList.toggle('is-loading', isLoadingPhase(phase));
     this.overlay.classList.toggle('is-title', phase === 'menu' || phase === 'character-select');
@@ -190,6 +208,26 @@ export class GameUi {
             <button type="button" data-action="level-select">Level Select</button>
             <button type="button" data-action="settings">Settings</button>
           </div>
+          <section class="achievement-summary" data-testid="achievement-summary" aria-label="Achievements">
+            <div class="achievement-summary-head">
+              <strong>Achievements</strong>
+              <span>${achievements.filter((achievement) => achievement.unlocked).length} / ${achievements.length}</span>
+            </div>
+            <div class="achievement-list">
+              ${achievements.map((achievement) => `
+                <article class="achievement-card ${achievement.unlocked ? 'is-unlocked' : ''}" data-achievement-id="${achievement.id}">
+                  <div class="achievement-card-copy">
+                    <strong>${achievement.title}</strong>
+                    <span>${achievement.description}</span>
+                  </div>
+                  <span class="achievement-card-progress">${achievementProgressLabel(achievement)}</span>
+                  <span class="achievement-progress-bar" aria-hidden="true">
+                    <span style="width: ${achievementPercent(achievement)}%"></span>
+                  </span>
+                </article>
+              `).join('')}
+            </div>
+          </section>
         </div>
       `;
     } else if (phase === 'character-select') {
@@ -507,6 +545,15 @@ function statusLabel(phase: GamePhase, suspicion: SuspicionState, objectives: Ob
 
 function selectedTrack(soundtrackId: GameSettings['soundtrackId']): (typeof soundtrackOptions)[number] {
   return soundtrackOptions.find((track) => track.id === soundtrackId) ?? soundtrackOptions[0];
+}
+
+function achievementPercent(achievement: AchievementProgress): number {
+  if (achievement.target <= 0) return 0;
+  return Math.round(Math.min(1, achievement.progress / achievement.target) * 100);
+}
+
+function achievementProgressLabel(achievement: AchievementProgress): string {
+  return achievement.unlocked ? 'Done' : `${achievement.progress} / ${achievement.target}`;
 }
 
 function formatRunTime(milliseconds: number): string {

@@ -276,8 +276,58 @@ button:hover {
 
 .overlay[hidden],
 .debug[hidden],
+.achievement-toast[hidden],
 .touch-controls[hidden] {
   display: none;
+}
+
+.achievement-toast {
+  position: absolute;
+  top: 88px;
+  left: 50%;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid rgba(255, 212, 90, 0.58);
+  border-radius: 8px;
+  padding: 11px 13px;
+  color: #eff8ff;
+  background: rgba(8, 11, 17, 0.9);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.38), 0 0 24px rgba(255, 212, 90, 0.12);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.achievement-toast-star {
+  color: #ffd45a;
+  font-size: 24px;
+  line-height: 1;
+  text-shadow: 0 0 14px rgba(255, 212, 90, 0.45);
+}
+
+.achievement-toast strong,
+.achievement-toast span span {
+  display: block;
+}
+
+.achievement-toast strong {
+  color: #ffd45a;
+  font-size: 11px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.achievement-toast span span {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .touch-controls {
@@ -532,6 +582,95 @@ button:hover {
 .overlay.is-title .panel p {
   max-width: 420px;
   color: #aebdca;
+}
+
+.achievement-summary {
+  display: grid;
+  gap: 8px;
+  width: min(440px, 100%);
+  margin-top: 18px;
+}
+
+.achievement-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #eff8ff;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.achievement-summary-head span {
+  color: #ffd45a;
+}
+
+.achievement-list {
+  display: grid;
+  gap: 7px;
+}
+
+.achievement-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  align-items: center;
+  border: 1px solid rgba(127, 160, 190, 0.26);
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: rgba(5, 8, 13, 0.68);
+}
+
+.achievement-card.is-unlocked {
+  border-color: rgba(255, 212, 90, 0.58);
+  background: rgba(31, 26, 10, 0.58);
+}
+
+.achievement-card-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.achievement-card-copy strong {
+  overflow: hidden;
+  color: #eff8ff;
+  font-size: 13px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.achievement-card-copy span {
+  overflow: hidden;
+  color: #9fb2c2;
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.achievement-card-progress {
+  color: #ffd45a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.achievement-progress-bar {
+  grid-column: 1 / -1;
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(127, 160, 190, 0.18);
+}
+
+.achievement-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffd45a, #7dfcc6);
 }
 
 .overlay.is-character-select {
@@ -988,6 +1127,17 @@ button:hover {
     height: 124px;
   }
 
+  .achievement-toast {
+    top: auto;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    width: min(360px, calc(100vw - 32px));
+    padding: 9px 11px;
+  }
+
+  .achievement-toast span span {
+    font-size: 13px;
+  }
+
   .overlay {
     align-items: flex-start;
     padding: 12px;
@@ -1008,6 +1158,19 @@ button:hover {
 
   .title-wordmark {
     font-size: 40px;
+  }
+
+  .achievement-summary {
+    gap: 7px;
+    margin-top: 14px;
+  }
+
+  .achievement-card {
+    padding: 8px 9px;
+  }
+
+  .achievement-card-copy span {
+    display: none;
   }
 
   .overlay.is-title .character-select-panel {
@@ -1145,6 +1308,27 @@ button:hover {
     height: 40px;
   }
 
+  .achievement-toast {
+    top: auto;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: min(340px, calc(100vw - 172px));
+    min-width: 220px;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .achievement-toast-star {
+    font-size: 20px;
+  }
+
+  .achievement-toast strong {
+    font-size: 10px;
+  }
+
+  .achievement-toast span span {
+    font-size: 12px;
+  }
+
   .overlay {
     align-items: center;
     padding: 10px;
@@ -1217,6 +1401,36 @@ button:hover {
 
   .overlay.is-title .panel p {
     max-width: 320px;
+  }
+
+  .achievement-summary {
+    width: 100%;
+    margin-top: 12px;
+  }
+
+  .achievement-summary-head {
+    font-size: 11px;
+  }
+
+  .achievement-list {
+    gap: 6px;
+  }
+
+  .achievement-card {
+    padding: 7px 8px;
+  }
+
+  .achievement-card-copy strong,
+  .achievement-card-progress {
+    font-size: 11px;
+  }
+
+  .achievement-card-copy span {
+    display: none;
+  }
+
+  .achievement-progress-bar {
+    height: 5px;
   }
 
   .overlay.is-title .character-select-panel {
