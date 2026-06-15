@@ -190,6 +190,8 @@ try {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
   await expectVisible('text=Render quality');
   await page.selectOption('[data-setting="quality"]', 'cinematic');
+  await page.locator('[data-setting="debug"]').check();
+  await page.locator('[data-testid="debug-panel"]').waitFor({ state: 'visible', timeout: 8000 });
   const selectedRenderQuality = await page.evaluate(() => {
     const select = document.querySelector('[data-setting="quality"]') as HTMLSelectElement | null;
     return select?.value;

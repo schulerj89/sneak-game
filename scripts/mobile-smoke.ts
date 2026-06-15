@@ -1,18 +1,28 @@
 import { mkdir } from 'node:fs/promises';
-import { chromium, type Page } from 'playwright';
+import { chromium, webkit, type Page } from 'playwright';
 
 const baseUrl = process.env.MOBILE_SMOKE_URL ?? process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
 const screenshotDir = 'artifacts';
 const headless = process.env.MOBILE_SMOKE_HEADLESS === 'true';
+const browserName = process.env.MOBILE_SMOKE_BROWSER ?? 'chromium';
+const playingTimeoutMs = Number(process.env.MOBILE_SMOKE_PLAYING_TIMEOUT_MS ?? 45000);
 
-const browser = await chromium.launch({
-  headless,
-  args: [
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    '--disable-backgrounding-occluded-windows',
-  ],
-});
+if (browserName !== 'chromium' && browserName !== 'webkit') {
+  throw new Error(`Unsupported MOBILE_SMOKE_BROWSER=${browserName}`);
+}
+
+const browser = await (browserName === 'webkit' ? webkit : chromium).launch(
+  browserName === 'chromium'
+    ? {
+        headless,
+        args: [
+          '--disable-background-timer-throttling',
+          '--disable-renderer-backgrounding',
+          '--disable-backgrounding-occluded-windows',
+        ],
+      }
+    : { headless },
+);
 const context = await browser.newContext({
   viewport: { width: 430, height: 932 },
   deviceScaleFactor: 2,
@@ -20,10 +30,20 @@ const context = await browser.newContext({
   isMobile: true,
 });
 const page = await context.newPage();
+const pageErrors: string[] = [];
+page.on('pageerror', (error) => {
+  pageErrors.push(error instanceof Error ? error.stack ?? error.message : String(error));
+});
 
 try {
   await mkdir(screenshotDir, { recursive: true });
-  await page.addInitScript(() => window.localStorage.clear());
+  await page.addInitScript(() => {
+    try {
+      window.localStorage.clear();
+    } catch {
+      // Storage can be unavailable in Safari private/quota-limited sessions.
+    }
+  });
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await expectVisible(page, '[data-testid="overlay"]');
   await expectVisible(page, '[data-testid="orientation-reminder"]');
@@ -90,12 +110,22 @@ try {
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-mobile-touch.png`, fullPage: true });
 
   await completeDockAndAdvance(page);
+  if (pageErrors.length > 0) {
+    throw new Error(`Unexpected page error(s): ${pageErrors.join('\n')}`);
+  }
 
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Menu' }).click();
   await page.locator('[data-testid="touch-controls"]').waitFor({ state: 'hidden', timeout: 8000 });
 
-  console.info(`[mobile-smoke] ok url=${baseUrl}`);
+  console.info(`[mobile-smoke] ok browser=${browserName} url=${baseUrl}`);
   console.info(`[mobile-smoke] screenshots=${screenshotDir}/shadow-circuit-mobile-portrait-rotate.png, ${screenshotDir}/shadow-circuit-mobile-character-select.png, ${screenshotDir}/shadow-circuit-mobile-touch.png`);
+} catch (error) {
+  const diagnostics = await collectDiagnostics(page, pageErrors).catch((diagnosticError: unknown) => ({
+    diagnosticError: diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError),
+    pageErrors,
+  }));
+  console.error(`[mobile-smoke] diagnostics=${JSON.stringify(diagnostics)}`);
+  throw error;
 } finally {
   await context.close();
   await browser.close();
@@ -109,7 +139,31 @@ async function assertPlayingPhase(page: Page): Promise<void> {
   await page.waitForFunction(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
     return debugWindow.__shadowCircuitDebug?.phase() === 'playing';
-  }, undefined, { timeout: 22000 });
+  }, undefined, { timeout: playingTimeoutMs });
+}
+
+async function collectDiagnostics(page: Page, pageErrors: readonly string[]): Promise<Record<string, unknown>> {
+  const appState = await page.evaluate(() => {
+    const overlay = document.querySelector('[data-testid="overlay"]');
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        phase: () => string;
+        levelId: () => string;
+        loadingProgress: () => { value: number; label: string };
+        selectedHero: () => string;
+      };
+    };
+    return {
+      href: window.location.href,
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+      levelId: debugWindow.__shadowCircuitDebug?.levelId(),
+      loadingProgress: debugWindow.__shadowCircuitDebug?.loadingProgress(),
+      selectedHero: debugWindow.__shadowCircuitDebug?.selectedHero(),
+      overlayText: overlay?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 600) ?? '',
+    };
+  });
+
+  return { ...appState, pageErrors };
 }
 
 async function playerPosition(page: Page): Promise<{ x: number; z: number }> {

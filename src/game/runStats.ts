@@ -31,15 +31,23 @@ export function createRunSummary(params: {
   };
 }
 
-export function loadBestTime(levelId: string, storage: Storage = window.localStorage): number | null {
+export function loadBestTime(levelId: string, storage: Storage | null = browserStorage()): number | null {
+  if (!storage) return null;
+
   const records = loadRecords(storage);
   return records[levelId]?.bestTimeMs ?? null;
 }
 
-export function saveBestTime(levelId: string, elapsedMs: number, storage: Storage = window.localStorage): void {
+export function saveBestTime(levelId: string, elapsedMs: number, storage: Storage | null = browserStorage()): void {
+  if (!storage) return;
+
   const records = loadRecords(storage);
   records[levelId] = { bestTimeMs: Math.max(0, Math.round(elapsedMs)) };
-  storage.setItem(recordsKey, JSON.stringify(records));
+  try {
+    storage.setItem(recordsKey, JSON.stringify(records));
+  } catch {
+    // Safari can reject localStorage writes in private/quota-limited sessions.
+  }
 }
 
 function loadRecords(storage: Storage): RunRecords {
@@ -68,4 +76,14 @@ function gradeRun(score: number, alerts: number, elapsedSeconds: number, parSeco
   if (score >= 850) return 'A';
   if (score >= 700) return 'B';
   return 'C';
+}
+
+function browserStorage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }

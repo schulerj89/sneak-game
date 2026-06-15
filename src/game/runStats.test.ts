@@ -29,6 +29,12 @@ class MemoryStorage implements Storage {
   }
 }
 
+class WriteBlockedStorage extends MemoryStorage {
+  setItem(): void {
+    throw new Error('blocked');
+  }
+}
+
 describe('run stats', () => {
   it('awards an S grade for a clean par run', () => {
     const summary = createRunSummary({
@@ -64,5 +70,12 @@ describe('run stats', () => {
 
     expect(loadBestTime('dock-blackout', storage)).toBe(31_234);
     expect(loadBestTime('archive-lanes', storage)).toBe(null);
+  });
+
+  it('does not interrupt completion when storage writes are blocked', () => {
+    const storage = new WriteBlockedStorage();
+
+    expect(() => saveBestTime('dock-blackout', 31_234.4, storage)).not.toThrow();
+    expect(loadBestTime('dock-blackout', storage)).toBe(null);
   });
 });

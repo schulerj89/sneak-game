@@ -14,6 +14,14 @@ import backgroundSpaceUrl from '../assets/background-space-track.ogg?url';
 import ambientHorrorUrl from '../assets/ambient-horror-track-01.ogg?url';
 import titleOnPatrolUrl from '../assets/title-on-patrol.ogg?url';
 
+type AudioContextConstructor = new () => AudioContext;
+
+declare global {
+  interface Window {
+    webkitAudioContext?: AudioContextConstructor;
+  }
+}
+
 export const titleMusicTrack = {
   id: 'title-on-patrol',
   name: 'On Patrol',
@@ -252,12 +260,16 @@ export class MusicDirector {
   async warmupEffects(settings: GameSettings): Promise<void> {
     if (settings.masterVolume <= 0) return;
 
-    const context = this.effectContext ?? new AudioContext();
-    this.effectContext = context;
-    this.pickupBuffer ??= this.createPickupBuffer(context);
-    this.pickupGain ??= this.createPickupGain(context);
-
     try {
+      const context = this.effectContext ?? createEffectContext();
+      if (!context) {
+        console.warn('[audio] pickup warmup unavailable');
+        return;
+      }
+
+      this.effectContext = context;
+      this.pickupBuffer ??= this.createPickupBuffer(context);
+      this.pickupGain ??= this.createPickupGain(context);
       await withTimeout(context.resume(), 180);
       if (context.state === 'running') {
         await withTimeout(this.primePickupGraph(context), 140);
@@ -282,45 +294,54 @@ export class MusicDirector {
       };
     }
 
-    const context = this.effectContext ?? new AudioContext();
-    this.effectContext = context;
-    void context.resume().catch((error: unknown) => {
-      console.warn(`[audio] pickup resume deferred ${error instanceof Error ? error.message : String(error)}`);
-    });
-    const bufferCreated = this.pickupBuffer === null;
-    const buffer = this.pickupBuffer ?? this.createPickupBuffer(context);
-    this.pickupBuffer = buffer;
-    const gain = this.pickupGain ?? this.createPickupGain(context);
-    this.pickupGain = gain;
+    try {
+      const context = this.effectContext ?? createEffectContext();
+      if (!context) {
+        return this.pickupErrorDebug(startedAt);
+      }
 
-    const now = context.currentTime;
-    const gainLevel = Math.max(0.0001, Math.min(0.55, settings.masterVolume * 0.9));
-    gain.gain.cancelScheduledValues(now);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(gainLevel, now + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      this.effectContext = context;
+      void context.resume().catch((error: unknown) => {
+        console.warn(`[audio] pickup resume deferred ${error instanceof Error ? error.message : String(error)}`);
+      });
+      const bufferCreated = this.pickupBuffer === null;
+      const buffer = this.pickupBuffer ?? this.createPickupBuffer(context);
+      this.pickupBuffer = buffer;
+      const gain = this.pickupGain ?? this.createPickupGain(context);
+      this.pickupGain = gain;
 
-    const source = context.createBufferSource();
-    source.buffer = buffer;
-    source.connect(gain);
-    source.start(now);
-    this.effectsPrimed = true;
-    source.addEventListener('ended', () => {
-      source.disconnect();
-    }, { once: true });
-    if (options.log ?? true) {
-      console.info('[audio] pickup chime');
+      const now = context.currentTime;
+      const gainLevel = Math.max(0.0001, Math.min(0.55, settings.masterVolume * 0.9));
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(gainLevel, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(gain);
+      source.start(now);
+      this.effectsPrimed = true;
+      source.addEventListener('ended', () => {
+        source.disconnect();
+      }, { once: true });
+      if (options.log ?? true) {
+        console.info('[audio] pickup chime');
+      }
+      return {
+        status: 'played',
+        setupMs: performance.now() - startedAt,
+        contextState: context.state,
+        samplesReady: this.pickupSamples !== null,
+        bufferReady: this.pickupBuffer !== null,
+        bufferCreated,
+        effectsPrimed: this.effectsPrimed,
+        gain: gainLevel,
+      };
+    } catch (error) {
+      console.warn(`[audio] pickup unavailable ${error instanceof Error ? error.message : String(error)}`);
+      return this.pickupErrorDebug(startedAt);
     }
-    return {
-      status: 'played',
-      setupMs: performance.now() - startedAt,
-      contextState: context.state,
-      samplesReady: this.pickupSamples !== null,
-      bufferReady: this.pickupBuffer !== null,
-      bufferCreated,
-      effectsPrimed: this.effectsPrimed,
-      gain: gainLevel,
-    };
   }
 
   currentTrack(): ActiveTrackId | null {
@@ -433,10 +454,30 @@ export class MusicDirector {
       source.stop(now + 0.02);
     });
   }
+
+  private pickupErrorDebug(startedAt: number): PickupAudioDebug {
+    return {
+      status: 'error',
+      setupMs: performance.now() - startedAt,
+      contextState: this.effectContext?.state ?? 'none',
+      samplesReady: this.pickupSamples !== null,
+      bufferReady: this.pickupBuffer !== null,
+      bufferCreated: false,
+      effectsPrimed: this.effectsPrimed,
+      gain: 0,
+    };
+  }
 }
 
 function selectedSoundtrack(soundtrackId: GameSettings['soundtrackId']): (typeof soundtrackOptions)[number] {
   return soundtrackOptions.find((option) => option.id === soundtrackId) ?? soundtrackOptions[0];
+}
+
+function createEffectContext(): AudioContext | null {
+  const Context = window.AudioContext ?? window.webkitAudioContext;
+  if (!Context) return null;
+
+  return new Context();
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | void> {

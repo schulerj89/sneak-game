@@ -35,7 +35,11 @@ export function loadSettings(): GameSettings {
 }
 
 export function saveSettings(settings: GameSettings): void {
-  window.localStorage.setItem(storageKey, JSON.stringify(settings));
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(settings));
+  } catch {
+    // Keep the current session usable if browser storage is unavailable.
+  }
 }
 
 export function qualityProfile(quality: RenderQuality): {
