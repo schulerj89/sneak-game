@@ -570,6 +570,12 @@ button:hover {
   width: min(620px, 100%);
 }
 
+.goals-panel {
+  display: grid;
+  gap: 16px;
+  width: min(520px, 100%);
+}
+
 .overlay.is-title .menu-panel {
   width: min(520px, calc(100vw - 40px));
   margin-left: clamp(8px, 5vw, 78px);
@@ -589,6 +595,11 @@ button:hover {
   gap: 8px;
   width: min(440px, 100%);
   margin-top: 18px;
+}
+
+.goals-panel .achievement-summary {
+  width: 100%;
+  margin-top: 0;
 }
 
 .achievement-summary-head {

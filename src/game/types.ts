@@ -93,6 +93,7 @@ export type GamePhase =
   | 'caught'
   | 'complete'
   | 'settings'
+  | 'goals'
   | 'level-select';
 
 export type LoadingProgress = Readonly<{

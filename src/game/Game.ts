@@ -223,6 +223,7 @@ export class Game {
       onConfirmHero: () => void this.confirmHeroSelection(),
       onResume: () => void this.resumeFromSettings(),
       onSettings: () => this.openSettings(),
+      onGoals: () => this.openGoals(),
       onMenu: () => this.openMenu(),
       onTitle: () => this.returnToTitle(),
       onLevelSelect: () => this.openLevelSelect(),
@@ -335,6 +336,14 @@ export class Game {
     this.settingsReturnPhase = this.phase === 'settings' ? this.settingsReturnPhase : this.phase;
     this.setPhase('settings');
     void this.music.sync(this.settings);
+  }
+
+  private openGoals(): void {
+    if (this.isTransitioning()) return;
+
+    this.showTitleScene();
+    this.setPhase('goals');
+    void this.music.playMenu(this.settings);
   }
 
   private async resumeFromSettings(): Promise<void> {
@@ -1534,6 +1543,8 @@ export class Game {
         void this.resumeFromSettings();
       } else if (this.phase === 'level-select') {
         this.setPhase(this.levelSelectReturnPhase);
+      } else if (this.phase === 'goals') {
+        this.openMenu();
       }
     }
     if (event.code === 'F1') {
@@ -1941,8 +1952,9 @@ export class Game {
 function isMenuMusicPhase(phase: GamePhase, settingsReturnPhase: GamePhase): boolean {
   return (
     phase === 'menu' ||
+    phase === 'goals' ||
     phase === 'character-select' ||
-    (phase === 'settings' && (settingsReturnPhase === 'menu' || settingsReturnPhase === 'character-select'))
+    (phase === 'settings' && (settingsReturnPhase === 'menu' || settingsReturnPhase === 'goals' || settingsReturnPhase === 'character-select'))
   );
 }
 

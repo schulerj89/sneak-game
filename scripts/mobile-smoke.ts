@@ -62,7 +62,7 @@ try {
   await page.locator('[data-testid="orientation-reminder"]').waitFor({ state: 'hidden', timeout: 8000 });
   await assertVersionBadge(page);
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
-  await assertMobileTitleAchievements(page);
+  await assertMobileGoalsPanel(page);
   await assertCompactMobileSettings(page);
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
@@ -324,8 +324,30 @@ async function assertActionButtonsFit(page: Page, containerSelector: string): Pr
   }
 }
 
-async function assertMobileTitleAchievements(page: Page): Promise<void> {
-  const state = await page.locator('[data-testid="achievement-summary"]').evaluate((summary) => {
+async function assertMobileGoalsPanel(page: Page): Promise<void> {
+  const inlineAchievementSummaryCount = await page.locator('[data-testid="achievement-summary"]').count();
+  if (inlineAchievementSummaryCount !== 0) {
+    throw new Error(`Expected mobile title screen to keep goals separate, found ${inlineAchievementSummaryCount} inline summaries`);
+  }
+
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Goals' }).click();
+  await expectVisible(page, '[data-testid="goals-panel"]');
+  await assertActionButtonsFit(page, '[data-testid="goals-panel"]');
+
+  const state = await page.locator('[data-testid="goals-panel"]').evaluate((panel) => {
+    const panelRect = panel.getBoundingClientRect();
+    const summary = panel.querySelector('[data-testid="achievement-summary"]');
+    if (!(summary instanceof HTMLElement)) {
+      return {
+        count: 0,
+        descriptionVisible: false,
+        panel: { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom },
+        summary: null,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        text: '',
+      };
+    }
+
     const summaryRect = summary.getBoundingClientRect();
     const cards = [...summary.querySelectorAll('[data-achievement-id]')];
     const descriptionVisible = cards.some((card) => {
@@ -340,6 +362,7 @@ async function assertMobileTitleAchievements(page: Page): Promise<void> {
     return {
       count: cards.length,
       descriptionVisible,
+      panel: { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom },
       summary: { left: summaryRect.left, right: summaryRect.right, top: summaryRect.top, bottom: summaryRect.bottom },
       viewport: { width: window.innerWidth, height: window.innerHeight },
       text: summary.textContent?.replace(/\s+/g, ' ').trim() ?? '',
@@ -352,13 +375,21 @@ async function assertMobileTitleAchievements(page: Page): Promise<void> {
     !state.text.includes('Circuit Complete') ||
     !state.text.includes('Perfect Shadow') ||
     !state.text.includes('Second Sweep') ||
+    state.panel.left < 0 ||
+    state.panel.top < 0 ||
+    state.panel.right > state.viewport.width ||
+    state.panel.bottom > state.viewport.height ||
+    state.summary === null ||
     state.summary.left < 0 ||
     state.summary.top < 0 ||
     state.summary.right > state.viewport.width ||
     state.summary.bottom > state.viewport.height
   ) {
-    throw new Error(`Expected compact mobile title achievements, got ${JSON.stringify(state)}`);
+    throw new Error(`Expected compact mobile goals panel, got ${JSON.stringify(state)}`);
   }
+
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
+  await expectVisible(page, 'text=Move unseen through the facility');
 }
 
 async function assertMobileBriefingSimplified(page: Page): Promise<void> {

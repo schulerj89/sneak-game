@@ -62,7 +62,7 @@ try {
   if (initialTitleTrackId !== 'title-on-patrol') {
     throw new Error(`Expected title menu music, got ${initialTitleTrackId}`);
   }
-  await assertTitleAchievements();
+  await assertTitleGoalsPanel();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
   await expectLoadingCover('loading hero roster');
   await expectVisible('[data-testid="character-select-panel"]');
@@ -124,7 +124,7 @@ try {
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-briefing.png`, fullPage: true });
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Title' }).click();
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-menu.png`, fullPage: true });
-  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Level Select' }).click();
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Levels' }).click();
   await expectVisible('text=Signal Vault');
   const objectiveHintCount = await page.locator('.level-card-objectives').count();
   if (objectiveHintCount !== 12) {
@@ -718,11 +718,17 @@ async function assertVersionBadge(): Promise<void> {
   }
 }
 
-async function assertTitleAchievements(): Promise<void> {
-  await expectVisible('[data-testid="achievement-summary"]');
+async function assertTitleGoalsPanel(): Promise<void> {
+  const inlineAchievementSummaryCount = await page.locator('[data-testid="achievement-summary"]').count();
+  if (inlineAchievementSummaryCount !== 0) {
+    throw new Error(`Expected title screen to keep goals in a separate panel, found ${inlineAchievementSummaryCount} inline summaries`);
+  }
+
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Goals' }).click();
+  await expectVisible('[data-testid="goals-panel"]');
   const achievementCardCount = await page.locator('[data-achievement-id]').count();
   if (achievementCardCount !== 3) {
-    throw new Error(`Expected 3 title achievement rows, found ${achievementCardCount}`);
+    throw new Error(`Expected 3 goals rows, found ${achievementCardCount}`);
   }
 
   const achievementText = await page.locator('[data-testid="achievement-summary"]').innerText();
@@ -743,6 +749,17 @@ async function assertTitleAchievements(): Promise<void> {
   if (!achievementState || achievementState.length !== 3 || achievementState.some((achievement) => achievement.progress !== 0)) {
     throw new Error(`Expected empty initial achievement progress, got ${JSON.stringify(achievementState)}`);
   }
+
+  const goalsPhase = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
+    return debugWindow.__shadowCircuitDebug?.phase();
+  });
+  if (goalsPhase !== 'goals') {
+    throw new Error(`Expected Goals button to open goals phase, got ${goalsPhase}`);
+  }
+
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
+  await expectVisible('text=Move unseen through the facility');
 }
 
 async function expectLoadingCover(context: string): Promise<void> {

@@ -35,7 +35,7 @@ try {
   await page.screenshot({ path: `${outputDir}/shadow-circuit-settings.png`, fullPage: true });
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
 
-  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Level Select' }).click();
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Levels' }).click();
   await page.locator('[data-level-index="11"]').waitFor({ state: 'visible', timeout: 8000 });
   await page.screenshot({ path: `${outputDir}/shadow-circuit-level-select.png`, fullPage: true });
 

@@ -17,6 +17,7 @@ type UiCallbacks = {
   onConfirmHero: () => void;
   onResume: () => void;
   onSettings: () => void;
+  onGoals: () => void;
   onMenu: () => void;
   onTitle: () => void;
   onLevelSelect: () => void;
@@ -149,7 +150,7 @@ export class GameUi {
     this.achievementToast.hidden = !achievementTitle;
     this.achievementToast.innerHTML = achievementTitle
       ? `
-        <span class="achievement-toast-star" aria-hidden="true">★</span>
+        <span class="achievement-toast-star" aria-hidden="true">&#9733;</span>
         <span>
           <strong>Achievement unlocked</strong>
           <span>${achievementTitle}</span>
@@ -205,29 +206,22 @@ export class GameUi {
           <p>Move unseen through the facility, read patrol lights, and break the circuit before the sentries close in.</p>
           <div class="panel-actions">
             <button type="button" data-action="start">Start Run</button>
-            <button type="button" data-action="level-select">Level Select</button>
+            <button type="button" data-action="level-select">Levels</button>
+            <button type="button" data-action="goals">Goals</button>
             <button type="button" data-action="settings">Settings</button>
           </div>
-          <section class="achievement-summary" data-testid="achievement-summary" aria-label="Achievements">
-            <div class="achievement-summary-head">
-              <strong>Achievements</strong>
-              <span>${achievements.filter((achievement) => achievement.unlocked).length} / ${achievements.length}</span>
-            </div>
-            <div class="achievement-list">
-              ${achievements.map((achievement) => `
-                <article class="achievement-card ${achievement.unlocked ? 'is-unlocked' : ''}" data-achievement-id="${achievement.id}">
-                  <div class="achievement-card-copy">
-                    <strong>${achievement.title}</strong>
-                    <span>${achievement.description}</span>
-                  </div>
-                  <span class="achievement-card-progress">${achievementProgressLabel(achievement)}</span>
-                  <span class="achievement-progress-bar" aria-hidden="true">
-                    <span style="width: ${achievementPercent(achievement)}%"></span>
-                  </span>
-                </article>
-              `).join('')}
-            </div>
+        </div>
+      `;
+    } else if (phase === 'goals') {
+      this.overlay.innerHTML = `
+        <div class="panel goals-panel" data-testid="goals-panel">
+          <h1>Goals</h1>
+          <section class="achievement-summary" data-testid="achievement-summary" aria-label="Goals">
+            ${achievementList(achievements)}
           </section>
+          <div class="panel-actions">
+            <button type="button" data-action="menu">Back</button>
+          </div>
         </div>
       `;
     } else if (phase === 'character-select') {
@@ -508,6 +502,7 @@ export class GameUi {
     this.overlay.querySelectorAll('[data-action="settings"]').forEach((button) =>
       button.addEventListener('click', this.callbacks.onSettings),
     );
+    this.overlay.querySelector('[data-action="goals"]')?.addEventListener('click', this.callbacks.onGoals);
     this.overlay.querySelector('[data-action="menu"]')?.addEventListener('click', this.callbacks.onMenu);
     this.overlay.querySelector('[data-action="title"]')?.addEventListener('click', this.callbacks.onTitle);
     this.overlay.querySelector('[data-action="restart"]')?.addEventListener('click', this.callbacks.onRestart);
@@ -545,6 +540,29 @@ function statusLabel(phase: GamePhase, suspicion: SuspicionState, objectives: Ob
 
 function selectedTrack(soundtrackId: GameSettings['soundtrackId']): (typeof soundtrackOptions)[number] {
   return soundtrackOptions.find((track) => track.id === soundtrackId) ?? soundtrackOptions[0];
+}
+
+function achievementList(achievements: readonly AchievementProgress[]): string {
+  return `
+    <div class="achievement-summary-head">
+      <strong>Unlocked</strong>
+      <span>${achievements.filter((achievement) => achievement.unlocked).length} / ${achievements.length}</span>
+    </div>
+    <div class="achievement-list">
+      ${achievements.map((achievement) => `
+        <article class="achievement-card ${achievement.unlocked ? 'is-unlocked' : ''}" data-achievement-id="${achievement.id}">
+          <div class="achievement-card-copy">
+            <strong>${achievement.title}</strong>
+            <span>${achievement.description}</span>
+          </div>
+          <span class="achievement-card-progress">${achievementProgressLabel(achievement)}</span>
+          <span class="achievement-progress-bar" aria-hidden="true">
+            <span style="width: ${achievementPercent(achievement)}%"></span>
+          </span>
+        </article>
+      `).join('')}
+    </div>
+  `;
 }
 
 function achievementPercent(achievement: AchievementProgress): number {
