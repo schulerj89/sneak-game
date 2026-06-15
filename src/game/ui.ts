@@ -3,6 +3,9 @@ import { levelThumbnailSvg } from './assets';
 import { heroOptions, type HeroId } from './heroes';
 import { isLoadingPhase, isPlayingPhase } from './phase';
 import type { GamePhase, GameSettings, LevelDefinition, LoadingProgress, ObjectiveProgress, RunSummary, SuspicionState, Vec2 } from './types';
+import packageInfo from '../../package.json';
+
+const appVersion = packageInfo.version;
 
 type UiCallbacks = {
   onStart: () => void;
@@ -59,6 +62,7 @@ export class GameUi {
           <strong>Rotate to landscape</strong>
           <span>Shadow Circuit is tuned for a wider view on mobile.</span>
         </section>
+        <span class="app-version" data-testid="app-version" aria-label="Shadow Circuit version">v${appVersion}</span>
         <section class="overlay" data-testid="overlay"></section>
       </main>
     `;
@@ -307,10 +311,6 @@ export class GameUi {
               <option value="sharp" ${this.settings.detectionLeniency === 'sharp' ? 'selected' : ''}>Sharp</option>
             </select>
           </label>
-          <label class="check-row">
-            <input type="checkbox" data-setting="debug" ${this.settings.debugEnabled ? 'checked' : ''}/>
-            Debug tools
-          </label>
           <label>Volume
             <input type="range" min="0" max="1" step="0.01" value="${this.settings.masterVolume}" data-setting="volume"/>
           </label>
@@ -488,9 +488,6 @@ export class GameUi {
         ...this.settings,
         detectionLeniency: (event.target as HTMLSelectElement).value as GameSettings['detectionLeniency'],
       });
-    });
-    this.overlay.querySelector('[data-setting="debug"]')?.addEventListener('change', (event) => {
-      this.callbacks.onSettingsChange({ ...this.settings, debugEnabled: (event.target as HTMLInputElement).checked });
     });
     this.overlay.querySelector('[data-setting="volume"]')?.addEventListener('input', (event) => {
       this.callbacks.onSettingsChange({ ...this.settings, masterVolume: Number((event.target as HTMLInputElement).value) });

@@ -1,10 +1,12 @@
 import { chromium, type ConsoleMessage } from 'playwright';
 import { mkdir } from 'node:fs/promises';
 import { PNG } from 'pngjs';
+import packageInfo from '../package.json';
 
 const baseUrl = process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
 const screenshotDir = 'artifacts';
 const headless = process.env.SMOKE_HEADLESS === 'true';
+const expectedVersionLabel = `v${packageInfo.version}`;
 
 const browser = await chromium.launch({
   headless,
@@ -26,6 +28,7 @@ try {
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await expectVisible('[data-testid="overlay"]');
+  await assertVersionBadge();
   await expectVisible('text=Move unseen through the facility');
   const titleObjectiveTextCount = await page.getByText('Collect yellow keycards and blue terminals').count();
   if (titleObjectiveTextCount !== 0) {
@@ -189,9 +192,13 @@ try {
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Menu' }).click();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
   await expectVisible('text=Render quality');
+  const debugSettingCount = await page.locator('[data-setting="debug"]').count();
+  const debugToolsTextCount = await page.getByText('Debug tools', { exact: true }).count();
+  if (debugSettingCount !== 0 || debugToolsTextCount !== 0) {
+    throw new Error(`Expected debug tools checkbox to be hidden, found setting=${debugSettingCount} text=${debugToolsTextCount}`);
+  }
+  await page.locator('[data-testid="debug-panel"]').waitFor({ state: 'hidden', timeout: 8000 });
   await page.selectOption('[data-setting="quality"]', 'cinematic');
-  await page.locator('[data-setting="debug"]').check();
-  await page.locator('[data-testid="debug-panel"]').waitFor({ state: 'visible', timeout: 8000 });
   const selectedRenderQuality = await page.evaluate(() => {
     const select = document.querySelector('[data-setting="quality"]') as HTMLSelectElement | null;
     return select?.value;
@@ -339,6 +346,8 @@ try {
     throw new Error(`Screenshot pixel check failed: visiblePixels=${visiblePixels}`);
   }
 
+  await page.keyboard.press('F1');
+  await page.locator('[data-testid="debug-panel"]').waitFor({ state: 'visible', timeout: 8000 });
   await page.waitForTimeout(1400);
   const debugText = await page.locator('[data-testid="debug-panel"]').innerText();
   if (!debugText.includes('FPS') || !debugText.includes('Target FPS') || !debugText.includes('Memory') || !debugText.includes('Quality')) {
@@ -678,6 +687,14 @@ try {
 
 async function expectVisible(selector: string): Promise<void> {
   await page.locator(selector).waitFor({ state: 'visible', timeout: 8000 });
+}
+
+async function assertVersionBadge(): Promise<void> {
+  await expectVisible('[data-testid="app-version"]');
+  const versionText = await page.locator('[data-testid="app-version"]').innerText();
+  if (versionText.trim() !== expectedVersionLabel) {
+    throw new Error(`Expected version badge ${expectedVersionLabel}, got ${versionText}`);
+  }
 }
 
 async function expectLoadingCover(context: string): Promise<void> {

@@ -458,6 +458,22 @@ button:hover {
   line-height: 1.35;
 }
 
+.app-version {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 10;
+  border: 1px solid rgba(127, 160, 190, 0.26);
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: rgba(217, 231, 241, 0.72);
+  background: rgba(3, 5, 10, 0.58);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
 .orientation-device {
   width: 72px;
   height: 112px;
@@ -1074,6 +1090,13 @@ button:hover {
     padding: 8px;
     font-size: 10px;
     overflow: auto;
+  }
+
+  .app-version {
+    right: max(7px, env(safe-area-inset-right));
+    bottom: max(5px, env(safe-area-inset-bottom));
+    padding: 2px 6px;
+    font-size: 9px;
   }
 
   .touch-controls {

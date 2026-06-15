@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { chromium, webkit, type Page } from 'playwright';
+import packageInfo from '../package.json';
 import { levels } from '../src/game/levels';
 
 const baseUrl = process.env.MOBILE_SMOKE_URL ?? process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
@@ -7,6 +8,7 @@ const screenshotDir = 'artifacts';
 const headless = process.env.MOBILE_SMOKE_HEADLESS === 'true';
 const browserName = process.env.MOBILE_SMOKE_BROWSER ?? 'chromium';
 const playingTimeoutMs = Number(process.env.MOBILE_SMOKE_PLAYING_TIMEOUT_MS ?? 45000);
+const expectedVersionLabel = `v${packageInfo.version}`;
 const emulateIos = process.env.MOBILE_SMOKE_IOS === 'true' || browserName === 'webkit';
 const iphoneUserAgent =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
@@ -51,12 +53,14 @@ try {
   });
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await expectVisible(page, '[data-testid="overlay"]');
+  await assertVersionBadge(page);
   await expectVisible(page, '[data-testid="orientation-reminder"]');
   await assertDefaultDebugHidden(page);
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-mobile-portrait-rotate.png`, fullPage: true });
 
   await page.setViewportSize({ width: 932, height: 430 });
   await page.locator('[data-testid="orientation-reminder"]').waitFor({ state: 'hidden', timeout: 8000 });
+  await assertVersionBadge(page);
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
@@ -140,6 +144,30 @@ try {
 
 async function expectVisible(page: Page, selector: string): Promise<void> {
   await page.locator(selector).waitFor({ state: 'visible', timeout: 12000 });
+}
+
+async function assertVersionBadge(page: Page): Promise<void> {
+  await expectVisible(page, '[data-testid="app-version"]');
+  const layout = await page.locator('[data-testid="app-version"]').evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      text: element.textContent?.trim() ?? '',
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+    };
+  });
+  if (
+    layout.text !== expectedVersionLabel ||
+    layout.left < 0 ||
+    layout.top < 0 ||
+    layout.right > layout.viewport.width ||
+    layout.bottom > layout.viewport.height
+  ) {
+    throw new Error(`Expected visible mobile version badge ${expectedVersionLabel}, got ${JSON.stringify(layout)}`);
+  }
 }
 
 async function assertPlayingPhase(page: Page): Promise<void> {
