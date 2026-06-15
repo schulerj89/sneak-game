@@ -172,6 +172,10 @@ export class CharacterAssetLibrary {
     return this.cinematicAssets.has(heroAssetKey(heroId));
   }
 
+  loadedHeroIds(): readonly HeroId[] {
+    return heroOptions.filter((hero) => this.cinematicAssets.has(heroAssetKey(hero.id))).map((hero) => hero.id);
+  }
+
   releaseUnselectedHeroes(selectedHeroId: HeroId): void {
     for (const [key, asset] of this.cinematicAssets) {
       if (!key.startsWith('hero:') || key === heroAssetKey(selectedHeroId)) continue;

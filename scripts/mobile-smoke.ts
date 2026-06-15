@@ -300,15 +300,21 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
         selectedHero: () => string;
         titleHero: () => { visible: boolean; inCamera: boolean; cinematic: boolean; activeState: string | null; x: number | null };
         heroAssetQuality: () => string;
+        heroRoster: () => readonly string[];
+        loadedHeroAssets: () => readonly string[];
       };
     };
     const debug = debugWindow.__shadowCircuitDebug;
     const titleHero = debug?.titleHero();
     const expectsCinematic = debug?.heroAssetQuality() === 'cinematic';
+    const roster = debug?.heroRoster() ?? [];
+    const loadedHeroes = new Set<string>(debug?.loadedHeroAssets() ?? []);
+    const loadedRoster = !expectsCinematic || roster.every((id) => loadedHeroes.has(id));
     return Boolean(
       debug?.selectedHero() === heroId &&
         titleHero?.visible &&
         titleHero.x !== null &&
+        loadedRoster &&
         (!expectsCinematic || (titleHero.cinematic && titleHero.activeState === 'idle')),
     );
   }, expectedHeroId, { timeout: 22000 });
@@ -334,6 +340,8 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
         runtimeQuality: () => string;
         heroAssetQuality: () => string;
         enemyAssetQuality: () => string;
+        heroRoster: () => readonly string[];
+        loadedHeroAssets: () => readonly string[];
       };
     };
     return {
@@ -346,13 +354,18 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
       runtimeQuality: debugWindow.__shadowCircuitDebug?.runtimeQuality(),
       heroAssetQuality: debugWindow.__shadowCircuitDebug?.heroAssetQuality(),
       enemyAssetQuality: debugWindow.__shadowCircuitDebug?.enemyAssetQuality(),
+      heroRoster: debugWindow.__shadowCircuitDebug?.heroRoster() ?? [],
+      loadedHeroAssets: debugWindow.__shadowCircuitDebug?.loadedHeroAssets() ?? [],
     };
   });
   const expectedCinematic = state.heroAssetQuality === 'cinematic';
+  const loadedHeroes = new Set<string>(state.loadedHeroAssets);
+  const allHeroesLoaded = !expectedCinematic || state.heroRoster.every((heroId) => loadedHeroes.has(heroId));
 
   if (
     !state.pickerVisible ||
     !state.gridHidden ||
+    !allHeroesLoaded ||
     state.selectedHero !== expectedHeroId ||
     !state.titleHero?.visible ||
     !state.titleHero.inCamera ||
@@ -367,15 +380,13 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
 }
 
 async function completeDockAndAdvance(page: Page): Promise<void> {
+  await movePlayerTo(page, { x: -1.0, z: -1.2 });
+  await assertObjectiveNoticeHidden(page);
+  await movePlayerTo(page, { x: 2.4, z: -3.4 });
+  await assertObjectiveNoticeHidden(page);
+  await movePlayerTo(page, { x: 5, z: -3.2 });
   await page.evaluate(() => {
-    const debugWindow = window as Window & {
-      __shadowCircuitDebug?: {
-        movePlayerTo: (point: { x: number; z: number }) => void;
-      };
-    };
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: -1.0, z: -1.2 });
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 2.4, z: -3.4 });
-    debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5, z: -3.2 });
+    document.querySelector('[data-testid="overlay"]')?.scrollIntoView({ block: 'center', inline: 'center' });
   });
   await expectVisible(page, 'text=Exit Reached');
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
@@ -398,6 +409,30 @@ async function completeDockAndAdvance(page: Page): Promise<void> {
 
   if (levelState.levelId !== 'archive-lanes' || levelState.phase !== 'playing') {
     throw new Error(`Expected Next Level to enter Archive Lanes without reset, got ${JSON.stringify(levelState)}`);
+  }
+}
+
+async function movePlayerTo(page: Page, point: { x: number; z: number }): Promise<void> {
+  await page.evaluate((target) => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        movePlayerTo: (point: { x: number; z: number }) => void;
+      };
+    };
+    debugWindow.__shadowCircuitDebug?.movePlayerTo(target);
+  }, point);
+}
+
+async function assertObjectiveNoticeHidden(page: Page): Promise<void> {
+  const visible = await page.evaluate(() => {
+    const notice = document.querySelector('.objective-notice');
+    if (!(notice instanceof HTMLElement)) return false;
+
+    const style = window.getComputedStyle(notice);
+    return style.display !== 'none' && style.visibility !== 'hidden' && Boolean(notice.textContent?.trim());
+  });
+  if (visible) {
+    throw new Error('Expected mobile objective pickup notice to stay hidden');
   }
 }
 

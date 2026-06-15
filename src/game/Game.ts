@@ -129,6 +129,7 @@ declare global {
       setEnemyDebugView: (enabled: boolean) => void;
       selectedHero: () => HeroId;
       heroRoster: () => readonly string[];
+      loadedHeroAssets: () => readonly HeroId[];
       activeTrackId: () => ActiveTrackId | null;
       musicPlayback: () => {
         activeTrackId: ActiveTrackId | null;
@@ -281,7 +282,7 @@ export class Game {
   }
 
   private async confirmHeroSelection(): Promise<void> {
-    this.characterAssets.releaseUnselectedHeroes(this.selectedHeroId);
+    this.releaseCharacterSelectRoster();
     if (this.levelIndex === 0 && !this.firstLevelBriefingSeen) {
       this.setPhase('briefing');
       return;
@@ -335,6 +336,7 @@ export class Game {
   private openMenu(): void {
     if (this.isTransitioning()) return;
 
+    this.releaseCharacterSelectRoster();
     this.showTitleScene();
     this.setPhase('menu');
     void this.music.playMenu(this.settings);
@@ -438,6 +440,7 @@ export class Game {
   private returnToTitle(): void {
     if (this.isTransitioning()) return;
 
+    this.releaseCharacterSelectRoster();
     this.showTitleScene();
     this.setPhase('menu');
     void this.music.playMenu(this.settings);
@@ -513,19 +516,17 @@ export class Game {
   }
 
   private async preloadCharacterSelectAssets(): Promise<void> {
-    if (this.memorySafeAssets) {
-      if (this.heroAssetQuality() === 'cinematic') {
-        const selectedIndex = Math.max(0, heroOptions.findIndex((hero) => hero.id === this.selectedHeroId));
-        const nextHero = heroOptions[(selectedIndex + 1) % heroOptions.length];
-        await Promise.all([
-          this.characterAssets.preloadHero(this.selectedHeroId),
-          nextHero ? this.characterAssets.preloadHero(nextHero.id) : Promise.resolve(),
-        ]);
-      }
+    if (this.heroAssetQuality() !== 'cinematic') {
       return;
     }
 
     await this.characterAssets.preloadHeroRoster();
+  }
+
+  private releaseCharacterSelectRoster(): void {
+    if (this.memorySafeAssets) {
+      this.characterAssets.releaseUnselectedHeroes(this.selectedHeroId);
+    }
   }
 
   private async preloadCharacterAssets(): Promise<void> {
@@ -586,9 +587,6 @@ export class Game {
     }
 
     this.installTitleHeroPreview(heroId);
-    if (this.memorySafeAssets) {
-      this.characterAssets.releaseUnselectedHeroes(heroId);
-    }
     if (this.phase === 'menu' || this.phase === 'character-select') {
       this.fitCameraToTitle();
     }
@@ -670,6 +668,14 @@ export class Game {
   private isCompactLandscapeViewport(): boolean {
     const bounds = this.ui.root.getBoundingClientRect();
     return bounds.width > bounds.height && bounds.width <= 960 && bounds.height <= 500;
+  }
+
+  private shouldShowObjectiveNotice(): boolean {
+    return !this.isMobileInterface();
+  }
+
+  private isMobileInterface(): boolean {
+    return this.memorySafeAssets || window.matchMedia('(pointer: coarse)').matches || this.isCompactLandscapeViewport();
   }
 
   private loadLevel(index: number): void {
@@ -1208,10 +1214,15 @@ export class Game {
     const meshMs = performance.now() - meshStartedAt;
     const objective = (this.level.objectives ?? []).find((candidate) => collectedNow.includes(candidate.id));
     const progress = this.objectiveProgress();
-    this.objectiveNotice = progress.exitUnlocked
-      ? `Collected ${objective?.label ?? 'objective'} - exit unlocked`
-      : `Collected ${objective?.label ?? 'objective'}`;
-    this.objectiveNoticeUntil = performance.now() + 2600;
+    if (this.shouldShowObjectiveNotice()) {
+      this.objectiveNotice = progress.exitUnlocked
+        ? `Collected ${objective?.label ?? 'objective'} - exit unlocked`
+        : `Collected ${objective?.label ?? 'objective'}`;
+      this.objectiveNoticeUntil = performance.now() + 2600;
+    } else {
+      this.objectiveNotice = '';
+      this.objectiveNoticeUntil = 0;
+    }
     const audioStartedAt = performance.now();
     const audioDebug = this.music.playPickup(audioSettings, { log: logAudio });
     const audioMs = performance.now() - audioStartedAt;
@@ -1537,6 +1548,7 @@ export class Game {
       rendererMemory: () => ({ ...this.renderer.info.memory }),
       selectedHero: () => this.selectedHeroId,
       heroRoster: () => heroOptions.map((hero) => hero.id),
+      loadedHeroAssets: () => this.characterAssets.loadedHeroIds(),
     };
   }
 
@@ -1887,22 +1899,40 @@ function prepareTitleHeroPreviewMaterials(object: THREE.Object3D, boosted: boole
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
 
+    child.frustumCulled = false;
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     const previewMaterials = materials.map((material) => {
-      if (!(material instanceof THREE.MeshStandardMaterial) && !(material instanceof THREE.MeshPhysicalMaterial)) {
-        return material;
-      }
-
       const preview = material.clone();
       markTransientMaterial(preview);
-      preview.color.lerp(lift, boosted ? 0.24 : 0.1);
-      preview.emissive.lerp(accent, boosted ? 0.6 : 0.32);
-      preview.emissiveIntensity = Math.max(preview.emissiveIntensity, boosted ? 1.35 : 0.45);
+      boostPreviewMaterial(preview, accent, lift, boosted);
       preview.needsUpdate = true;
       return preview;
     });
     child.material = Array.isArray(child.material) ? previewMaterials : previewMaterials[0];
   });
+}
+
+function boostPreviewMaterial(material: THREE.Material, accent: THREE.Color, lift: THREE.Color, boosted: boolean): void {
+  const colorMaterial = material as THREE.Material & { color?: THREE.Color };
+  if (colorMaterial.color instanceof THREE.Color) {
+    colorMaterial.color.lerp(lift, boosted ? 0.38 : 0.14);
+  }
+
+  const emissiveMaterial = material as THREE.Material & { emissive?: THREE.Color; emissiveIntensity?: number };
+  if (emissiveMaterial.emissive instanceof THREE.Color) {
+    emissiveMaterial.emissive.lerp(accent, boosted ? 0.82 : 0.38);
+    emissiveMaterial.emissiveIntensity = Math.max(emissiveMaterial.emissiveIntensity ?? 0, boosted ? 2.4 : 0.75);
+  }
+
+  const physicallyLit = material as THREE.Material & { roughness?: number; metalness?: number };
+  if (typeof physicallyLit.roughness === 'number') {
+    physicallyLit.roughness = Math.min(physicallyLit.roughness, boosted ? 0.5 : 0.64);
+  }
+  if (typeof physicallyLit.metalness === 'number') {
+    physicallyLit.metalness = Math.min(physicallyLit.metalness, boosted ? 0.45 : 0.7);
+  }
+
+  material.toneMapped = !boosted;
 }
 
 function markTransientMaterial(material: THREE.Material): void {
