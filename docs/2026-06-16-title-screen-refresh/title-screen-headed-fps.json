@@ -1,0 +1,82 @@
+[
+  {
+    "fps": 59.978642433894464,
+    "frameMs": 16.69999998807907,
+    "usedMemoryMb": 78.72739791870117,
+    "memoryCapMb": 320,
+    "reservedMemoryMb": 64,
+    "memoryPressure": "ok",
+    "drawCalls": 14,
+    "triangles": 96271
+  },
+  {
+    "fps": 60.02437172844691,
+    "frameMs": 16.599999964237213,
+    "usedMemoryMb": 79.32183837890625,
+    "memoryCapMb": 320,
+    "reservedMemoryMb": 64,
+    "memoryPressure": "ok",
+    "drawCalls": 14,
+    "triangles": 96271
+  },
+  {
+    "fps": 60.0451008027397,
+    "frameMs": 16.600000023841858,
+    "usedMemoryMb": 80.0181770324707,
+    "memoryCapMb": 320,
+    "reservedMemoryMb": 64,
+    "memoryPressure": "ok",
+    "drawCalls": 14,
+    "triangles": 96271
+  },
+  {
+    "fps": 60.02515610561083,
+    "frameMs": 16.599999964237213,
+    "usedMemoryMb": 80.62294387817383,
+    "memoryCapMb": 320,
+    "reservedMemoryMb": 64,
+    "memoryPressure": "ok",
+    "drawCalls": 14,
+    "triangles": 96271
+  },
+  {
+    "fps": 59.973409338179074,
+    "frameMs": 16.69999998807907,
+    "usedMemoryMb": 81.19287872314453,
+    "memoryCapMb": 320,
+    "reservedMemoryMb": 64,
+    "memoryPressure": "ok",
+    "drawCalls": 14,
+    "triangles": 96271
+  },
+  {
+    "fps": 59.986650157971425,
+    "frameMs": 16.80000001192093,
+    "usedMemoryMb": 81.80211639404297,
+    "memoryCapMb": 320,
+    "reservedMemoryMb": 64,
+    "memoryPressure": "ok",
+    "drawCalls": 14,
+    "triangles": 96271
+  },
+  {
+    "fps": 60.01590066431594,
+    "frameMs": 16.69999998807907,
+    "usedMemoryMb": 79.15636444091797,
+    "memoryCapMb": 320,
+    "reservedMemoryMb": 64,
+    "memoryPressure": "ok",
+    "drawCalls": 14,
+    "triangles": 96271
+  },
+  {
+    "fps": 60.0203317134294,
+    "frameMs": 16.599999964237213,
+    "usedMemoryMb": 79.80497741699219,
+    "memoryCapMb": 320,
+    "reservedMemoryMb": 64,
+    "memoryPressure": "ok",
+    "drawCalls": 14,
+    "triangles": 96271
+  }
+]

@@ -246,17 +246,26 @@ export class GameUi {
       `;
     } else if (phase === 'menu') {
       this.overlay.innerHTML = `
-        <div class="panel menu-panel">
+        <div class="panel menu-panel" data-testid="title-panel">
+          <div class="title-status-row" aria-hidden="true">
+            <span>Signal breach</span>
+            <span>Route live</span>
+          </div>
           <h1 class="title-wordmark" aria-label="Shadow Circuit">
             <span>Shadow</span>
             <span>Circuit</span>
           </h1>
-          <p>Move unseen through the facility, read patrol lights, and break the circuit before the sentries close in.</p>
-          <div class="panel-actions">
-            <button type="button" data-action="start">Start Run</button>
-            <button type="button" data-action="level-select">Levels</button>
-            <button type="button" data-action="goals">Goals</button>
-            <button type="button" data-action="settings">Settings</button>
+          <p class="title-tagline">Break the circuit before sentries close in.</p>
+          <div class="title-command-stack">
+            <button type="button" class="title-primary-button" data-action="start" aria-label="Start Run">
+              <span>Start Run</span>
+              <small>Choose operative</small>
+            </button>
+            <div class="panel-actions title-secondary-actions">
+              <button type="button" data-action="level-select">Levels</button>
+              <button type="button" data-action="goals">Goals</button>
+              <button type="button" data-action="settings">Settings</button>
+            </div>
           </div>
         </div>
       `;

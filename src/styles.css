@@ -271,7 +271,38 @@ button:hover {
 
 .overlay.is-title {
   justify-content: flex-start;
-  background: linear-gradient(90deg, #000 0%, #000 35%, rgba(0, 0, 0, 0.42) 56%, rgba(0, 0, 0, 0.08) 100%);
+  align-items: flex-end;
+  padding: max(26px, env(safe-area-inset-top)) max(26px, env(safe-area-inset-right)) max(34px, env(safe-area-inset-bottom)) max(26px, env(safe-area-inset-left));
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.78) 32%, rgba(0, 0, 0, 0.24) 62%, rgba(0, 0, 0, 0.04) 100%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.86) 0%, rgba(0, 0, 0, 0.2) 42%, rgba(0, 0, 0, 0) 100%);
+}
+
+.overlay.is-title::before,
+.overlay.is-title::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+}
+
+.overlay.is-title::before {
+  opacity: 0.24;
+  background-image:
+    linear-gradient(rgba(125, 252, 198, 0.11) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(90, 215, 255, 0.08) 1px, transparent 1px);
+  background-size: 72px 72px, 72px 72px;
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 44%, transparent 76%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 44%, transparent 76%);
+}
+
+.overlay.is-title::after {
+  opacity: 0.42;
+  background:
+    linear-gradient(180deg, transparent 0%, rgba(125, 252, 198, 0.08) 48%, transparent 52%),
+    linear-gradient(90deg, transparent 0%, rgba(255, 212, 90, 0.08) 50%, transparent 100%);
+  background-size: 100% 180px, 100% 100%;
+  mix-blend-mode: screen;
 }
 
 .overlay[hidden],
@@ -743,8 +774,10 @@ button:hover {
 }
 
 .overlay.is-title .menu-panel {
-  width: min(520px, calc(100vw - 40px));
-  margin-left: clamp(8px, 5vw, 78px);
+  position: relative;
+  z-index: 1;
+  width: min(520px, calc(100vw - 56px));
+  margin-left: clamp(8px, 4vw, 64px);
   border-color: transparent;
   background: transparent;
   box-shadow: none;
@@ -752,8 +785,86 @@ button:hover {
 }
 
 .overlay.is-title .panel p {
-  max-width: 420px;
+  max-width: 380px;
   color: #aebdca;
+}
+
+.title-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: #7dfcc6;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.title-status-row span {
+  border: 1px solid rgba(125, 252, 198, 0.28);
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(5, 18, 18, 0.58);
+}
+
+.title-status-row span:last-child {
+  color: #ffd45a;
+  border-color: rgba(255, 212, 90, 0.32);
+  background: rgba(24, 20, 6, 0.52);
+}
+
+.title-tagline {
+  margin-bottom: 22px;
+  font-size: 18px;
+  line-height: 1.38;
+}
+
+.title-command-stack {
+  display: grid;
+  gap: 12px;
+  width: min(390px, 100%);
+}
+
+.title-primary-button {
+  display: grid;
+  min-height: 66px;
+  justify-items: start;
+  border-color: rgba(125, 252, 198, 0.72);
+  padding: 11px 16px;
+  color: #03120f;
+  background: #7dfcc6;
+  box-shadow: 0 0 28px rgba(125, 252, 198, 0.22), 0 14px 38px rgba(0, 0, 0, 0.34);
+}
+
+.title-primary-button:hover {
+  border-color: #eff8ff;
+  background: #9fffd9;
+}
+
+.title-primary-button span {
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.title-primary-button small {
+  margin-top: 5px;
+  color: rgba(3, 18, 15, 0.72);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.title-secondary-actions {
+  gap: 8px;
+}
+
+.title-secondary-actions button {
+  min-height: 38px;
+  border-color: rgba(127, 160, 190, 0.3);
+  color: #d9e7f1;
+  background: rgba(4, 9, 15, 0.62);
 }
 
 .achievement-summary {
@@ -1354,6 +1465,14 @@ button:hover {
     font-size: 40px;
   }
 
+  .title-status-row {
+    margin-bottom: 10px;
+  }
+
+  .title-tagline {
+    font-size: 16px;
+  }
+
   .achievement-summary {
     gap: 7px;
     margin-top: 14px;
@@ -1547,6 +1666,15 @@ button:hover {
     padding: 10px;
   }
 
+  .overlay.is-title {
+    align-items: flex-end;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      max(14px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+  }
+
   .panel {
     max-height: calc(100vh - 20px);
     padding: 14px;
@@ -1603,17 +1731,62 @@ button:hover {
   }
 
   .overlay.is-title .menu-panel {
-    width: min(360px, 46vw);
-    margin-left: clamp(8px, 4vw, 36px);
+    width: min(360px, 45vw);
+    margin-left: clamp(4px, 3vw, 28px);
   }
 
   .title-wordmark {
-    margin-bottom: 14px;
-    font-size: 36px;
+    margin-bottom: 10px;
+    font-size: 34px;
   }
 
   .overlay.is-title .panel p {
-    max-width: 320px;
+    max-width: 300px;
+  }
+
+  .title-status-row {
+    gap: 6px;
+    margin-bottom: 8px;
+    font-size: 9px;
+  }
+
+  .title-status-row span {
+    padding: 4px 6px;
+  }
+
+  .title-tagline {
+    margin: 6px 0 12px;
+    font-size: 13px;
+    line-height: 1.28;
+  }
+
+  .title-command-stack {
+    gap: 8px;
+    width: min(320px, 100%);
+  }
+
+  .title-primary-button {
+    min-height: 48px;
+    padding: 8px 11px;
+  }
+
+  .title-primary-button span {
+    font-size: 16px;
+  }
+
+  .title-primary-button small {
+    margin-top: 2px;
+    font-size: 9px;
+  }
+
+  .title-secondary-actions {
+    gap: 6px;
+  }
+
+  .title-secondary-actions button {
+    min-height: 31px;
+    padding: 0 8px;
+    font-size: 11px;
   }
 
   .achievement-summary {

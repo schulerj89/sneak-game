@@ -78,6 +78,7 @@ const enemyHoverBaseY = 0.72;
 const enemyHoverAmplitude = 0.12;
 const enemyHoverSpeed = 1.45;
 const titleHeroBaseX = 1.45;
+const titleHeroMenuBaseX = 1.72;
 const characterSelectHeroBaseX = 2.35;
 const compactCharacterSelectHeroBaseX = 1.35;
 const titleHeroBaseY = 0.24;
@@ -680,6 +681,7 @@ export class Game {
     platform.renderOrder = -2;
 
     const compactPreview = this.useCompactTitleHeroPreview();
+    const operationStage = createTitleOperationStage(this.titleHeroPreviewX(), compactPreview);
     const key = new THREE.DirectionalLight('#e7fbff', compactPreview ? 2.4 : 5.2);
     key.position.set(2.7, 3.6, 3.2);
     key.name = 'title-hero-key-light';
@@ -707,7 +709,7 @@ export class Game {
     this.titleHeroVisual.rotation.y = -0.26;
     this.titleHeroVisual.scale.multiplyScalar(compactPreview ? compactCharacterSelectHeroScale : 1);
 
-    this.titlePreview.add(platform, key, ambient, rim, fill, this.titleHeroVisual);
+    this.titlePreview.add(operationStage, platform, key, ambient, rim, fill, this.titleHeroVisual);
     this.layoutTitleHeroPreview();
   }
 
@@ -735,7 +737,7 @@ export class Game {
   }
 
   private titleHeroPreviewX(): number {
-    if (this.phase !== 'character-select') return titleHeroBaseX;
+    if (this.phase !== 'character-select') return titleHeroMenuBaseX;
     return this.isCompactLandscapeViewport() ? compactCharacterSelectHeroBaseX : characterSelectHeroBaseX;
   }
 
@@ -753,6 +755,19 @@ export class Game {
     this.titleHeroVisual.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(this.titleHeroVisual);
     return Number.isFinite(bounds.min.y) ? bounds.min.y + 0.015 : fallbackY - 0.02;
+  }
+
+  private updateTitlePreviewAtmosphere(time: number): void {
+    const sweep = this.titlePreview.getObjectByName('title-patrol-sweep');
+    if (sweep) {
+      sweep.rotation.y = -0.18 + Math.sin(time * 0.85) * 0.26;
+    }
+
+    const pulse = this.titlePreview.getObjectByName('title-objective-pulse');
+    if (pulse) {
+      const scale = 1 + Math.sin(time * 2.4) * 0.08;
+      pulse.scale.set(scale, scale, scale);
+    }
   }
 
   private isCompactLandscapeViewport(): boolean {
@@ -1578,6 +1593,7 @@ export class Game {
         const time = now / 1000;
         this.layoutTitleHeroPreview();
         this.titleHeroVisual.position.y = this.titleHeroPreviewY() + Math.sin(time * 2.2) * 0.015;
+        this.updateTitlePreviewAtmosphere(time);
       }
       return;
     }
@@ -2163,6 +2179,143 @@ function createContactShadow(width: number, depth: number, opacity: number): THR
   shadow.scale.set(width, depth, 1);
   shadow.name = 'contact-shadow';
   return shadow;
+}
+
+function createTitleOperationStage(centerX: number, compactPreview: boolean): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'title-operation-stage';
+  const width = compactPreview ? 3.8 : 5.6;
+  const depth = compactPreview ? 2.25 : 3.2;
+
+  group.add(createTitleFloorGrid(centerX, width, depth, compactPreview ? 0.42 : 0.52));
+  group.add(createTitleRouteLine(centerX));
+  group.add(createTitleSecurityBars(centerX));
+  group.add(createTitleObjectiveNode(centerX - 1.35, 0.72, '#ffd45a', 'title-keycard-node', false));
+  group.add(createTitleObjectiveNode(centerX + 0.88, -0.52, '#5ad7ff', 'title-objective-pulse', true));
+  group.add(createTitleSentrySweep(centerX + 1.72, -0.9));
+
+  return group;
+}
+
+function createTitleFloorGrid(centerX: number, width: number, depth: number, step: number): THREE.LineSegments {
+  const positions: number[] = [];
+  const startX = centerX - width / 2;
+  const endX = centerX + width / 2;
+  const startZ = -depth / 2;
+  const endZ = depth / 2;
+
+  for (let x = startX; x <= endX + 0.001; x += step) {
+    positions.push(x, 0.018, startZ, x, 0.018, endZ);
+  }
+  for (let z = startZ; z <= endZ + 0.001; z += step) {
+    positions.push(startX, 0.018, z, endX, 0.018, z);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const material = transientLineMaterial('#5ad7ff', 0.16);
+  const grid = new THREE.LineSegments(geometry, material);
+  grid.name = 'title-floor-grid';
+  grid.renderOrder = -8;
+  return grid;
+}
+
+function createTitleRouteLine(centerX: number): THREE.Line {
+  const points = [
+    new THREE.Vector3(centerX - 2.15, 0.042, 0.94),
+    new THREE.Vector3(centerX - 1.22, 0.042, -0.18),
+    new THREE.Vector3(centerX - 0.22, 0.042, 0.22),
+    new THREE.Vector3(centerX + 1.44, 0.042, -0.78),
+  ];
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const route = new THREE.Line(geometry, transientLineMaterial('#ffd45a', 0.6));
+  route.name = 'title-route-line';
+  route.renderOrder = -5;
+  return route;
+}
+
+function createTitleSecurityBars(centerX: number): THREE.LineSegments {
+  const positions: number[] = [];
+  for (let index = 0; index < 6; index += 1) {
+    const x = centerX - 1.7 + index * 0.62;
+    positions.push(x, 0.08, -1.28, x, 1.14, -1.28);
+  }
+  positions.push(centerX - 1.95, 0.08, -1.28, centerX + 1.95, 0.08, -1.28);
+  positions.push(centerX - 1.95, 1.14, -1.28, centerX + 1.95, 1.14, -1.28);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const bars = new THREE.LineSegments(geometry, transientLineMaterial('#7dfcc6', 0.18));
+  bars.name = 'title-security-bars';
+  bars.renderOrder = -7;
+  return bars;
+}
+
+function createTitleObjectiveNode(x: number, z: number, color: THREE.ColorRepresentation, name: string, pulse: boolean): THREE.Group {
+  const group = new THREE.Group();
+  group.name = name;
+
+  const coreMaterial = transientBasicMaterial({ color, transparent: true, opacity: 0.82 });
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.04, 16), coreMaterial);
+  core.position.set(x, 0.058, z);
+  core.name = `${name}:core`;
+
+  const ringMaterial = transientBasicMaterial({ color, transparent: true, opacity: pulse ? 0.32 : 0.22, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.19, 24), ringMaterial);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, 0.064, z);
+  ring.name = `${name}:ring`;
+
+  group.add(core, ring);
+  return group;
+}
+
+function createTitleSentrySweep(x: number, z: number): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'title-patrol-sweep';
+  group.position.set(x, 0.052, z);
+  group.rotation.y = -0.18;
+
+  const bodyMaterial = transientBasicMaterial({ color: '#ff5964', transparent: true, opacity: 0.78 });
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.34, 5), bodyMaterial);
+  body.position.y = 0.2;
+  body.rotation.x = Math.PI;
+  body.name = 'title-sentry-marker';
+
+  const coneGeometry = new THREE.BufferGeometry();
+  coneGeometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute([
+      0, 0.012, 0,
+      -0.66, 0.012, -1.18,
+      0.66, 0.012, -1.18,
+    ], 3),
+  );
+  coneGeometry.setIndex([0, 1, 2]);
+  coneGeometry.computeVertexNormals();
+  const cone = new THREE.Mesh(coneGeometry, transientBasicMaterial({ color: '#ff5964', transparent: true, opacity: 0.16, side: THREE.DoubleSide }));
+  cone.name = 'title-sentry-vision';
+  cone.renderOrder = -4;
+
+  group.add(cone, body);
+  return group;
+}
+
+function transientBasicMaterial(parameters: THREE.MeshBasicMaterialParameters): THREE.MeshBasicMaterial {
+  const material = new THREE.MeshBasicMaterial({ depthWrite: false, ...parameters });
+  markTransientMaterial(material);
+  return material;
+}
+
+function transientLineMaterial(color: THREE.ColorRepresentation, opacity: number): THREE.LineBasicMaterial {
+  const material = new THREE.LineBasicMaterial({
+    color,
+    opacity,
+    transparent: true,
+    depthWrite: false,
+  });
+  markTransientMaterial(material);
+  return material;
 }
 
 function prepareTitleHeroPreviewMaterials(object: THREE.Object3D, boosted: boolean): void {

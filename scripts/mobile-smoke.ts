@@ -465,7 +465,7 @@ async function assertMobileGoalsPanel(page: Page): Promise<void> {
   }
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
-  await expectVisible(page, 'text=Move unseen through the facility');
+  await expectVisible(page, 'text=Break the circuit before sentries close in.');
 }
 
 async function assertMobileBriefingSimplified(page: Page): Promise<void> {
@@ -585,7 +585,7 @@ async function assertCompactMobileSettings(page: Page): Promise<void> {
 
   await assertActionButtonsFit(page, '.settings-panel');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
-  await expectVisible(page, 'text=Move unseen through the facility');
+  await expectVisible(page, 'text=Break the circuit before sentries close in.');
 }
 
 async function assertCharacterPicker(page: Page, expectedHeroId: string): Promise<void> {

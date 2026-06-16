@@ -30,7 +30,7 @@ try {
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await expectVisible('[data-testid="overlay"]');
   await assertVersionBadge();
-  await expectVisible('text=Move unseen through the facility');
+  await expectVisible('text=Break the circuit before sentries close in.');
   const titleObjectiveTextCount = await page.getByText('Collect yellow keycards and blue terminals').count();
   if (titleObjectiveTextCount !== 0) {
     throw new Error('Title screen should not show objective briefing text');
@@ -761,7 +761,7 @@ async function assertTitleGoalsPanel(): Promise<void> {
   }
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
-  await expectVisible('text=Move unseen through the facility');
+  await expectVisible('text=Break the circuit before sentries close in.');
 }
 
 async function expectLoadingCover(context: string): Promise<void> {

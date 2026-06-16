@@ -1,0 +1,137 @@
+[
+  {
+    "browser": "chromium-desktop",
+    "version": "v1.0.0",
+    "phase": "menu",
+    "titleHero": {
+      "visible": true,
+      "inCamera": true,
+      "cinematic": true,
+      "activeState": "idle",
+      "clipNames": [
+        "Armature|Idle_3|baselayer",
+        "Armature|Run_02|baselayer"
+      ],
+      "x": 1.72,
+      "y": 0.22513313130589438,
+      "screen": {
+        "x": 824.0945454690154,
+        "y": 576.0878225021506
+      }
+    },
+    "rendererMemory": {
+      "geometries": 11,
+      "textures": 2
+    },
+    "performance": {
+      "fps": 17.479307930639603,
+      "frameMs": 94.39999997615814,
+      "usedMemoryMb": 73.05145263671875,
+      "memoryCapMb": 320,
+      "reservedMemoryMb": 64,
+      "memoryPressure": "ok",
+      "drawCalls": 14,
+      "triangles": 96271
+    },
+    "buttons": [
+      "Start Run Choose operative",
+      "Levels",
+      "Goals",
+      "Settings"
+    ],
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    }
+  },
+  {
+    "browser": "chromium-mobile",
+    "version": "v1.0.0",
+    "phase": "menu",
+    "titleHero": {
+      "visible": true,
+      "inCamera": true,
+      "cinematic": true,
+      "activeState": "idle",
+      "clipNames": [
+        "Armature|Idle_3|baselayer",
+        "Armature|Run_02|baselayer"
+      ],
+      "x": 1.72,
+      "y": 0.2252317498662254,
+      "screen": {
+        "x": 515.7342675187907,
+        "y": 275.22905477333967
+      }
+    },
+    "rendererMemory": {
+      "geometries": 11,
+      "textures": 2
+    },
+    "performance": {
+      "fps": 18.753464649857072,
+      "frameMs": 84.19999998807907,
+      "usedMemoryMb": 73.05145263671875,
+      "memoryCapMb": 320,
+      "reservedMemoryMb": 64,
+      "memoryPressure": "ok",
+      "drawCalls": 14,
+      "triangles": 96271
+    },
+    "buttons": [
+      "Start Run Choose operative",
+      "Levels",
+      "Goals",
+      "Settings"
+    ],
+    "viewport": {
+      "width": 932,
+      "height": 430
+    }
+  },
+  {
+    "browser": "webkit-mobile",
+    "version": "v1.0.0",
+    "phase": "menu",
+    "titleHero": {
+      "visible": true,
+      "inCamera": true,
+      "cinematic": true,
+      "activeState": "idle",
+      "clipNames": [
+        "Armature|Idle_3|baselayer",
+        "Armature|Run_02|baselayer"
+      ],
+      "x": 1.72,
+      "y": 0.23599056760510925,
+      "screen": {
+        "x": 515.7568503065914,
+        "y": 273.82054983986615
+      }
+    },
+    "rendererMemory": {
+      "geometries": 11,
+      "textures": 2
+    },
+    "performance": {
+      "fps": 26.312194503707765,
+      "frameMs": 315,
+      "usedMemoryMb": null,
+      "memoryCapMb": 320,
+      "reservedMemoryMb": 64,
+      "memoryPressure": "unknown",
+      "drawCalls": 14,
+      "triangles": 96271
+    },
+    "buttons": [
+      "Start Run Choose operative",
+      "Levels",
+      "Goals",
+      "Settings"
+    ],
+    "viewport": {
+      "width": 932,
+      "height": 430
+    }
+  }
+]
