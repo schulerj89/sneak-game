@@ -225,6 +225,7 @@ export class Game {
   private firstLevelBriefingSeen = false;
   private heroDebugView = false;
   private enemyDebugView = false;
+  private characterSelectRosterLoadToken = 0;
   private animationId = 0;
   private disposed = false;
 
@@ -299,6 +300,7 @@ export class Game {
     if (this.disposed) return;
 
     this.setPhase('character-select');
+    this.preloadCharacterSelectRosterInBackground();
     await this.music.playMenu(this.settings);
   }
 
@@ -502,13 +504,13 @@ export class Game {
   }
 
   private async loadCharacterSelectWithTransition(): Promise<void> {
-    this.loadingProgress = { value: 0, label: 'Loading hero roster' };
+    this.loadingProgress = { value: 0, label: 'Loading selected operative' };
     this.setPhase('loading');
 
     await runLoadingSequence({
       tasks: [
         { label: 'Loading menu music', run: () => this.music.preloadMenuTrack() },
-        { label: 'Loading hero roster', run: () => this.preloadCharacterSelectAssets() },
+        { label: 'Loading selected operative', run: () => this.preloadCharacterSelectAssets() },
         { label: 'Preparing selected operative', run: () => this.prepareTitlePreview() },
       ],
       onProgress: (progress) => this.updateLoadingProgress(progress),
@@ -556,10 +558,48 @@ export class Game {
       return;
     }
 
-    await this.characterAssets.preloadHeroRoster();
+    try {
+      await withTimeout(this.characterAssets.preloadHero(this.selectedHeroId), 12000);
+    } catch (error: unknown) {
+      console.warn(`[assets] selected hero preview timed out: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private preloadCharacterSelectRosterInBackground(): void {
+    if (this.heroAssetQuality() !== 'cinematic') {
+      return;
+    }
+
+    const token = ++this.characterSelectRosterLoadToken;
+    const orderedHeroIds = [
+      this.selectedHeroId,
+      ...heroOptions.map((hero) => hero.id).filter((heroId) => heroId !== this.selectedHeroId),
+    ];
+
+    void (async () => {
+      for (const heroId of orderedHeroIds) {
+        if (!this.shouldContinueCharacterSelectRosterLoad(token)) return;
+
+        try {
+          await withTimeout(this.characterAssets.preloadHero(heroId), 18000);
+        } catch (error: unknown) {
+          console.warn(`[assets] background hero preload skipped ${heroId}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        if (!this.shouldContinueCharacterSelectRosterLoad(token)) return;
+        if (heroId === this.selectedHeroId) {
+          void this.prepareTitlePreview();
+        }
+      }
+    })();
+  }
+
+  private shouldContinueCharacterSelectRosterLoad(token: number): boolean {
+    return !this.disposed && this.phase === 'character-select' && token === this.characterSelectRosterLoadToken;
   }
 
   private releaseCharacterSelectRoster(): void {
+    this.characterSelectRosterLoadToken += 1;
     if (this.memorySafeAssets) {
       this.characterAssets.releaseUnselectedHeroes(this.selectedHeroId);
     }
@@ -2097,6 +2137,22 @@ function isLevelMusicPhase(phase: GamePhase, settingsReturnPhase: GamePhase): bo
     phase === 'complete' ||
     (phase === 'level-select' && settingsReturnPhase !== 'menu' && settingsReturnPhase !== 'character-select')
   );
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      },
+    );
+  });
 }
 
 function createContactShadow(width: number, depth: number, opacity: number): THREE.Mesh {

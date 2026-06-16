@@ -602,16 +602,14 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
           screen: { x: number; y: number } | null;
         };
         heroAssetQuality: () => string;
-        heroRoster: () => readonly string[];
         loadedHeroAssets: () => readonly string[];
       };
     };
     const debug = debugWindow.__shadowCircuitDebug;
     const titleHero = debug?.titleHero();
     const expectsCinematic = debug?.heroAssetQuality() === 'cinematic';
-    const roster = debug?.heroRoster() ?? [];
     const loadedHeroes = new Set<string>(debug?.loadedHeroAssets() ?? []);
-    const loadedRoster = !expectsCinematic || roster.every((id) => loadedHeroes.has(id));
+    const selectedHeroLoaded = !expectsCinematic || loadedHeroes.has(heroId);
     return Boolean(
       debug?.selectedHero() === heroId &&
         titleHero?.visible &&
@@ -619,7 +617,7 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
         titleHero.screen !== null &&
         titleHero.screen.y > 185 &&
         titleHero.screen.y < 250 &&
-        loadedRoster &&
+        selectedHeroLoaded &&
         (!expectsCinematic || (titleHero.cinematic && titleHero.activeState === 'idle')),
     );
   }, expectedHeroId, { timeout: 22000 });
@@ -645,7 +643,6 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
         runtimeQuality: () => string;
         heroAssetQuality: () => string;
         enemyAssetQuality: () => string;
-        heroRoster: () => readonly string[];
         loadedHeroAssets: () => readonly string[];
       };
     };
@@ -659,18 +656,17 @@ async function assertCharacterPicker(page: Page, expectedHeroId: string): Promis
       runtimeQuality: debugWindow.__shadowCircuitDebug?.runtimeQuality(),
       heroAssetQuality: debugWindow.__shadowCircuitDebug?.heroAssetQuality(),
       enemyAssetQuality: debugWindow.__shadowCircuitDebug?.enemyAssetQuality(),
-      heroRoster: debugWindow.__shadowCircuitDebug?.heroRoster() ?? [],
       loadedHeroAssets: debugWindow.__shadowCircuitDebug?.loadedHeroAssets() ?? [],
     };
   });
   const expectedCinematic = state.heroAssetQuality === 'cinematic';
   const loadedHeroes = new Set<string>(state.loadedHeroAssets);
-  const allHeroesLoaded = !expectedCinematic || state.heroRoster.every((heroId) => loadedHeroes.has(heroId));
+  const selectedHeroLoaded = !expectedCinematic || loadedHeroes.has(expectedHeroId);
 
   if (
     !state.pickerVisible ||
     !state.gridHidden ||
-    !allHeroesLoaded ||
+    !selectedHeroLoaded ||
     state.selectedHero !== expectedHeroId ||
     !state.titleHero?.visible ||
     !state.titleHero.inCamera ||
