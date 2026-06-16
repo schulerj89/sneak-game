@@ -571,7 +571,7 @@ try {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { movePlayerTo: (point: { x: number; z: number }) => void } };
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5, z: -3.2 });
   });
-  await expectVisible('text=Exit Reached');
+  await expectVisible('text=Level 1 Completed');
   const pickupChimeCount = logs.filter((line) => line.includes('[audio] pickup chime')).length;
   if (pickupChimeCount < 2) {
     throw new Error(`Expected pickup chime for both objectives, got ${pickupChimeCount}. Logs: ${logs.join('\n')}`);
@@ -614,7 +614,7 @@ try {
 
   await seedSecondSweepAchievementUnlock();
   await completeFinalLevel();
-  await expectVisible('text=Game Complete');
+  await expectVisible(`text=Level ${levels.length} Completed`);
   await expectVisible('[data-testid="achievement-toast"]');
   const achievementToastText = await page.locator('[data-testid="achievement-toast"]').innerText();
   const normalizedAchievementToastText = achievementToastText.toLowerCase();

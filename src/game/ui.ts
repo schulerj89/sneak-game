@@ -414,7 +414,7 @@ export class GameUi {
     } else if (phase === 'complete') {
       this.overlay.innerHTML = `
         <div class="panel">
-          <h1>${isFinalLevel ? 'Game Complete' : 'Exit Reached'}</h1>
+          <h1>Level ${levelIndex + 1} Completed</h1>
           ${runSummary ? `
             <div class="run-summary" aria-label="Run summary">
               <div class="run-grade grade-${runSummary.grade.toLowerCase()}">

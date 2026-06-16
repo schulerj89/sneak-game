@@ -692,7 +692,7 @@ async function completeDockAndAdvance(page: Page): Promise<void> {
   await page.evaluate(() => {
     document.querySelector('[data-testid="overlay"]')?.scrollIntoView({ block: 'center', inline: 'center' });
   });
-  await expectVisible(page, 'text=Exit Reached');
+  await expectVisible(page, 'text=Level 1 Completed');
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Next Level' }).click();
   await expectVisible(page, '[data-testid="loading-panel"]');
@@ -755,7 +755,7 @@ async function completeCurrentLevelAndAdvance(page: Page, levelIndex: number, ex
     };
     route.forEach((point) => debugWindow.__shadowCircuitDebug?.movePlayerTo(point));
   }, level.validationRoute);
-  await expectVisible(page, 'text=Exit Reached');
+  await expectVisible(page, `text=Level ${levelIndex + 1} Completed`);
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Next Level' }).click();
   await expectVisible(page, '[data-testid="loading-panel"]');
