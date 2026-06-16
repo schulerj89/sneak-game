@@ -1,4 +1,0 @@
-interface:
-  display_name: "Mobile Game Intro Director"
-  short_description: "Review mobile game title screens"
-  default_prompt: "Use $mobile-game-intro-director to review and improve a mobile-friendly game title screen."

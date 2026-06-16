@@ -65,6 +65,31 @@ describe('achievements', () => {
     expect(result.unlocked.map((achievement) => achievement.id)).toContain('s-rank-all-levels');
   });
 
+  it('unlocks Clean Entry after the first S grade on any level', () => {
+    const storage = new MemoryStorage();
+
+    let result = recordLevelAchievementClear({ levelId: levelIds[0], grade: 'A', levelIds, storage });
+    expect(result.progress.find((achievement) => achievement.id === 'clean-entry')?.progress).toBe(0);
+    expect(result.unlocked.map((achievement) => achievement.id)).not.toContain('clean-entry');
+
+    result = recordLevelAchievementClear({ levelId: levelIds[1], grade: 'S', levelIds, storage });
+    const cleanEntry = result.progress.find((achievement) => achievement.id === 'clean-entry');
+
+    expect(cleanEntry?.progress).toBe(1);
+    expect(cleanEntry?.target).toBe(1);
+    expect(cleanEntry?.unlocked).toBe(true);
+    expect(result.unlocked.map((achievement) => achievement.id)).toContain('clean-entry');
+  });
+
+  it('renders locked Clean Entry when storage is unavailable', () => {
+    const progress = loadAchievementProgress(levelIds, null);
+    const cleanEntry = progress.find((achievement) => achievement.id === 'clean-entry');
+
+    expect(cleanEntry?.progress).toBe(0);
+    expect(cleanEntry?.target).toBe(1);
+    expect(cleanEntry?.unlocked).toBe(false);
+  });
+
   it('requires two clears per level for the second sweep achievement', () => {
     const storage = new MemoryStorage();
 

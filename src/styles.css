@@ -313,10 +313,10 @@ button:hover {
 }
 
 .achievement-toast {
-  position: absolute;
+  position: fixed;
   top: 88px;
   left: 50%;
-  z-index: 12;
+  z-index: 30;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;

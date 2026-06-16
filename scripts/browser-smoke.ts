@@ -729,12 +729,12 @@ async function assertTitleGoalsPanel(): Promise<void> {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Goals' }).click();
   await expectVisible('[data-testid="goals-panel"]');
   const achievementCardCount = await page.locator('[data-achievement-id]').count();
-  if (achievementCardCount !== 3) {
-    throw new Error(`Expected 3 goals rows, found ${achievementCardCount}`);
+  if (achievementCardCount !== 4) {
+    throw new Error(`Expected 4 goals rows, found ${achievementCardCount}`);
   }
 
   const achievementText = await page.locator('[data-testid="achievement-summary"]').innerText();
-  for (const label of ['Circuit Complete', 'Perfect Shadow', 'Second Sweep']) {
+  for (const label of ['Circuit Complete', 'Clean Entry', 'Perfect Shadow', 'Second Sweep']) {
     if (!achievementText.includes(label)) {
       throw new Error(`Missing achievement label ${label}: ${achievementText}`);
     }
@@ -748,7 +748,7 @@ async function assertTitleGoalsPanel(): Promise<void> {
     };
     return debugWindow.__shadowCircuitDebug?.achievements();
   });
-  if (!achievementState || achievementState.length !== 3 || achievementState.some((achievement) => achievement.progress !== 0)) {
+  if (!achievementState || achievementState.length !== 4 || achievementState.some((achievement) => achievement.progress !== 0)) {
     throw new Error(`Expected empty initial achievement progress, got ${JSON.stringify(achievementState)}`);
   }
 

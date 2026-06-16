@@ -2126,7 +2126,7 @@ export class Game {
     if (!nextNotice) return;
 
     this.achievementNotice = nextNotice;
-    this.achievementNoticeUntil = now + 3600;
+    this.achievementNoticeUntil = now + 8000;
   }
 
   private recordAlertTransition(previous: SuspicionState['status'], next: SuspicionState['status']): void {

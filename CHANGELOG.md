@@ -6,6 +6,13 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v1.1.0 - 2026-06-16
+
+- Added the `Clean Entry` goal badge for earning an S grade on any level, including Goals progress and the existing achievement toast.
+- Kept achievement toasts visible longer and above completion overlays so badge unlocks are easier to notice on mobile.
+- Broadened the repo-local mobile expert skill from title-screen review into `mobile-game-director` for future mobile gameplay, goals, settings, and incentive passes.
+- Documented the mobile game update decision and before/after screenshots in `docs/2026-06-16-mobile-game-update/`.
+
 ## v1.0.0 - 2026-06-16
 
 - Rebuilt the title screen into a full-screen mission command layout with one dominant `Start Run` action and secondary menu controls.

@@ -446,9 +446,10 @@ async function assertMobileGoalsPanel(page: Page): Promise<void> {
   });
 
   if (
-    state.count !== 3 ||
+    state.count !== 4 ||
     state.descriptionVisible ||
     !state.text.includes('Circuit Complete') ||
+    !state.text.includes('Clean Entry') ||
     !state.text.includes('Perfect Shadow') ||
     !state.text.includes('Second Sweep') ||
     state.panel.left < 0 ||

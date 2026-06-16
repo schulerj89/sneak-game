@@ -2,7 +2,7 @@ import type { RunGrade } from './types';
 
 const achievementsKey = 'shadow-circuit-achievements-v1';
 
-export type AchievementId = 'complete-all-levels' | 's-rank-all-levels' | 'clear-all-levels-twice';
+export type AchievementId = 'complete-all-levels' | 'clean-entry' | 's-rank-all-levels' | 'clear-all-levels-twice';
 
 export type AchievementProgress = Readonly<{
   id: AchievementId;
@@ -64,6 +64,7 @@ function buildAchievementProgress(levelIds: readonly string[], records: Achievem
   const clearedLevels = levelIds.filter((levelId) => (records[levelId]?.clears ?? 0) > 0).length;
   const sRankLevels = levelIds.filter((levelId) => records[levelId]?.bestGrade === 'S').length;
   const doubleClearProgress = levelIds.reduce((total, levelId) => total + Math.min(records[levelId]?.clears ?? 0, 2), 0);
+  const cleanEntryProgress = sRankLevels > 0 ? 1 : 0;
 
   return [
     {
@@ -73,6 +74,14 @@ function buildAchievementProgress(levelIds: readonly string[], records: Achievem
       progress: clearedLevels,
       target: totalLevels,
       unlocked: totalLevels > 0 && clearedLevels >= totalLevels,
+    },
+    {
+      id: 'clean-entry',
+      title: 'Clean Entry',
+      description: 'Earn an S grade on any level.',
+      progress: cleanEntryProgress,
+      target: 1,
+      unlocked: cleanEntryProgress === 1,
     },
     {
       id: 's-rank-all-levels',

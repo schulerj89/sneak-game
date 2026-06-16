@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mobile Game Director"
+  short_description: "Improve mobile browser game loops"
+  default_prompt: "Use $mobile-game-director to review and improve a mobile-friendly browser game experience."
