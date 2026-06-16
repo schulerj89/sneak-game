@@ -130,6 +130,21 @@ export type ObjectiveProgress = Readonly<{
   }>[];
 }>;
 
+export type IntelPulseUiState = Readonly<{
+  charges: number;
+  maxCharges: number;
+  active: boolean;
+  available: boolean;
+  cooldownMs: number;
+  cooldownProgress: number;
+  activeProgress: number;
+  mobileSimplified: boolean;
+  objectiveTargets: number;
+  exitTargets: number;
+  patrolRoutes: number;
+  waypointTargets: number;
+}>;
+
 export type RunGrade = 'S' | 'A' | 'B' | 'C';
 
 export type RunSummary = Readonly<{

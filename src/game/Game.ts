@@ -6,6 +6,7 @@ import { collidesWithEnemies, collidesWithObstacles, enemyRadius, playerRadius }
 import { DebugPanel } from './debug';
 import { advanceSuspicion, emptySuspicion, getDetectionState, isSightBlocked } from './detection';
 import { defaultHeroId, heroOptions, isHeroId, type HeroId } from './heroes';
+import { createIntelPulsePlan, type IntelPulseMarker, type IntelPulsePatrolRoute, type IntelPulsePlan } from './intelPulse';
 import { InputController } from './input';
 import { levels } from './levels';
 import { runLoadingSequence, type LoadingTask } from './loading';
@@ -31,6 +32,7 @@ import type {
   EnemySpec,
   GamePhase,
   GameSettings,
+  IntelPulseUiState,
   LevelDefinition,
   ObjectiveDefinition,
   ObjectiveProgress,
@@ -83,6 +85,10 @@ const compactCharacterSelectHeroScale = 1.12;
 const compactLandscapeLevelCameraScale = 0.9;
 const achievementLevelIds = levels.map((level) => level.id);
 const silentPickupWarmupVolume = 0.0001;
+const intelPulseMaxCharges = 3;
+const intelPulseDurationMs = 5200;
+const intelPulseCooldownMs = 8500;
+const intelPulseFloorY = 0.07;
 
 declare global {
   interface Window {
@@ -148,6 +154,8 @@ declare global {
       enemyAssetQuality: () => RenderQuality;
       rendererMemory: () => { geometries: number; textures: number };
       achievements: () => readonly AchievementProgress[];
+      intelPulse: () => IntelPulseUiState;
+      triggerIntelPulse: () => void;
     };
   }
 }
@@ -195,6 +203,14 @@ export class Game {
   private achievementNoticeUntil = 0;
   private readonly achievementNoticeQueue: string[] = [];
   private debugRays = new THREE.Group();
+  private readonly intelPulseGroup = new THREE.Group();
+  private intelPulsePlan: IntelPulsePlan | null = null;
+  private intelPulseCharges = intelPulseMaxCharges;
+  private intelPulseStartedAt = 0;
+  private intelPulseActiveUntil = 0;
+  private intelPulseCooldownUntil = 0;
+  private intelPulseMobileSimplified = false;
+  private intelPulseLastAvailable = true;
   private currentDetection: DetectionState = { spotted: false, enemyId: null, rayBlocked: false, distance: Infinity };
   private currentSuspicion: SuspicionState = emptySuspicion();
   private runStartedAt = 0;
@@ -233,6 +249,7 @@ export class Game {
       onNextLevel: () => void this.nextLevel(),
       onStartOver: () => void this.startOver(),
       onToggleMute: () => void this.toggleMute(),
+      onIntelPulse: () => this.triggerIntelPulse(),
       onTouchMove: (movement) => this.input.setVirtualMovement(movement),
       onTouchEnd: () => this.input.clearVirtualMovement(),
       onSettingsChange: (settings) => void this.applySettings(settings),
@@ -436,6 +453,7 @@ export class Game {
     this.collectedObjectiveIds.clear();
     this.objectiveNotice = '';
     this.objectiveNoticeUntil = 0;
+    this.resetIntelPulseForRun();
     this.updateObjectiveMeshes();
     console.info(`[level] restarted ${this.level.id}`);
   }
@@ -527,6 +545,7 @@ export class Game {
       { label: `Loading ${targetLevel.name}`, run: () => this.loadLevel(levelIndex) },
       { label: 'Loading soundtrack', run: () => this.music.preload(this.settings, soundtrackIdForLevel(levelIndex)) },
       { label: 'Compiling level materials', run: () => this.warmupRenderStates() },
+      { label: 'Priming intel pulse', run: () => this.warmupIntelPulse() },
       { label: 'Priming objective states', run: () => this.warmupObjectiveStates() },
       { label: 'Warming pickup audio', run: () => this.music.warmupEffects(this.settings) },
       { label: 'Simulating collectible pickups', run: () => this.warmupPickupCollections() },
@@ -822,8 +841,10 @@ export class Game {
     this.camera.lookAt(0, 0, 0);
 
     const ambient = new THREE.AmbientLight('#253044', 0.18);
+    this.intelPulseGroup.name = 'intel-pulse';
     this.scene.add(ambient);
     this.scene.add(this.debugRays);
+    this.scene.add(this.intelPulseGroup);
   }
 
   private createFloorTiles(level: LevelDefinition): THREE.InstancedMesh {
@@ -892,6 +913,13 @@ export class Game {
     this.renderer.compile(this.scene, this.camera);
   }
 
+  private warmupIntelPulse(): void {
+    this.rebuildIntelPulseVisuals(true);
+    this.renderer.compile(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera);
+    this.clearIntelPulseVisuals();
+  }
+
   private warmupObjectiveStates(): void {
     const previousCollectedIds = new Set(this.collectedObjectiveIds);
     const previousNotice = this.objectiveNotice;
@@ -957,6 +985,142 @@ export class Game {
     this.updateObjectiveMeshes();
     this.renderUi();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private triggerIntelPulse(): void {
+    const now = performance.now();
+    if (!this.canTriggerIntelPulse(now)) return;
+
+    this.intelPulseCharges = Math.max(0, this.intelPulseCharges - 1);
+    this.intelPulseStartedAt = now;
+    this.intelPulseActiveUntil = now + intelPulseDurationMs;
+    this.intelPulseCooldownUntil = now + intelPulseCooldownMs;
+    this.intelPulseMobileSimplified = this.isMobileInterface();
+    this.rebuildIntelPulseVisuals(!this.intelPulseMobileSimplified);
+    this.intelPulseLastAvailable = false;
+    this.renderUi();
+    console.info(
+      `[intel] pulse active objectives=${this.intelPulsePlan?.objectiveMarkers.length ?? 0} patrols=${this.intelPulsePlan?.patrolRoutes.length ?? 0} mobile=${this.intelPulseMobileSimplified}`,
+    );
+  }
+
+  private canTriggerIntelPulse(now = performance.now()): boolean {
+    return this.canUpdateRun() && !this.isIntelPulseActive(now) && this.intelPulseCharges > 0 && now >= this.intelPulseCooldownUntil;
+  }
+
+  private isIntelPulseActive(now = performance.now()): boolean {
+    return this.intelPulseActiveUntil > now;
+  }
+
+  private resetIntelPulseForRun(disposal: ResourceDisposalState = createResourceDisposalState()): void {
+    this.clearIntelPulseVisuals(disposal);
+    this.intelPulseCharges = intelPulseMaxCharges;
+    this.intelPulseStartedAt = 0;
+    this.intelPulseActiveUntil = 0;
+    this.intelPulseCooldownUntil = 0;
+    this.intelPulseMobileSimplified = false;
+    this.intelPulseLastAvailable = true;
+  }
+
+  private rebuildIntelPulseVisuals(includePatrols: boolean): void {
+    this.clearIntelPulseVisuals();
+    this.intelPulsePlan = createIntelPulsePlan(this.level, this.collectedObjectiveIds, { includePatrols });
+
+    if (!this.scene.children.includes(this.intelPulseGroup)) {
+      this.scene.add(this.intelPulseGroup);
+    }
+
+    for (const marker of this.intelPulsePlan.objectiveMarkers) {
+      this.intelPulseGroup.add(this.createIntelPulseMarker(marker));
+    }
+    this.intelPulseGroup.add(this.createIntelPulseMarker(this.intelPulsePlan.exitMarker));
+
+    for (const route of this.intelPulsePlan.patrolRoutes) {
+      this.intelPulseGroup.add(this.createIntelPulseRoute(route));
+    }
+  }
+
+  private clearIntelPulseVisuals(disposal: ResourceDisposalState = createResourceDisposalState()): void {
+    disposeTransientObjectResources(this.intelPulseGroup, disposal);
+    this.intelPulseGroup.clear();
+    this.intelPulsePlan = null;
+  }
+
+  private createIntelPulseMarker(marker: IntelPulseMarker): THREE.Group {
+    const color = marker.type === 'exit' ? '#7dff9b' : marker.type === 'keycard' ? '#ffd45a' : '#5ad7ff';
+    const group = new THREE.Group();
+    group.position.set(marker.position.x, intelPulseFloorY, marker.position.z);
+    group.name = `intel-marker:${marker.id}`;
+
+    const ringRadius = Math.max(0.42, marker.radius + 0.14);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(ringRadius, ringRadius + 0.12, 40),
+      intelPulseMaterial(color, 0.9),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.name = `intel-ring:${marker.id}`;
+
+    const disk = new THREE.Mesh(
+      new THREE.CircleGeometry(ringRadius * 0.68, 32),
+      intelPulseMaterial(color, marker.type === 'exit' ? 0.18 : 0.14),
+    );
+    disk.rotation.x = -Math.PI / 2;
+    disk.name = `intel-disk:${marker.id}`;
+
+    const beacon = new THREE.Mesh(
+      new THREE.CylinderGeometry(ringRadius * 0.28, ringRadius * 0.54, 1.35, 28, 1, true),
+      intelPulseMaterial(color, marker.type === 'exit' ? 0.24 : 0.18),
+    );
+    beacon.position.y = 0.7;
+    beacon.name = `intel-beacon:${marker.id}`;
+
+    group.add(disk, ring, beacon);
+    return group;
+  }
+
+  private createIntelPulseRoute(route: IntelPulsePatrolRoute): THREE.Group {
+    const group = new THREE.Group();
+    group.name = `intel-route:${route.enemyId}`;
+    const points = route.points.map((point) => new THREE.Vector3(point.x, intelPulseFloorY + 0.015, point.z));
+    if (points.length >= 3) {
+      points.push(points[0].clone());
+    }
+
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(points),
+      intelPulseLineMaterial('#ffcf5a', 0.72),
+    );
+    line.name = `intel-route-line:${route.enemyId}`;
+    group.add(line);
+
+    const waypointGeometry = new THREE.RingGeometry(0.12, 0.18, 18);
+    for (const point of route.points) {
+      const waypoint = new THREE.Mesh(waypointGeometry, intelPulseMaterial('#ffcf5a', 0.72));
+      waypoint.position.set(point.x, intelPulseFloorY + 0.025, point.z);
+      waypoint.rotation.x = -Math.PI / 2;
+      waypoint.name = `intel-waypoint:${route.enemyId}`;
+      group.add(waypoint);
+    }
+
+    return group;
+  }
+
+  private updateIntelPulse(now: number): void {
+    if (this.intelPulseActiveUntil > 0 && now >= this.intelPulseActiveUntil) {
+      this.intelPulseStartedAt = 0;
+      this.intelPulseActiveUntil = 0;
+      this.clearIntelPulseVisuals();
+      this.renderUi();
+    } else if (this.isIntelPulseActive(now)) {
+      const shimmer = 0.78 + Math.sin(now * 0.007) * 0.16;
+      applyIntelPulseOpacity(this.intelPulseGroup, shimmer);
+    }
+
+    const available = this.canTriggerIntelPulse(now);
+    if (available !== this.intelPulseLastAvailable) {
+      this.intelPulseLastAvailable = available;
+      this.renderUi();
+    }
   }
 
   private pickupWarmupSettings(): GameSettings {
@@ -1243,6 +1407,9 @@ export class Game {
     this.collectedObjectiveIds = next;
     const meshStartedAt = performance.now();
     this.updateObjectiveMeshes();
+    if (this.isIntelPulseActive()) {
+      this.rebuildIntelPulseVisuals(!this.intelPulseMobileSimplified);
+    }
     const meshMs = performance.now() - meshStartedAt;
     const objective = (this.level.objectives ?? []).find((candidate) => collectedNow.includes(candidate.id));
     const progress = this.objectiveProgress();
@@ -1396,8 +1563,9 @@ export class Game {
   private clearLevelObjects(): void {
     this.playerAnimator?.dispose();
     this.enemies.forEach((enemy) => enemy.animator?.dispose());
-    const persistent = new Set<THREE.Object3D>([this.debugRays]);
+    const persistent = new Set<THREE.Object3D>([this.debugRays, this.intelPulseGroup]);
     const disposal = createResourceDisposalState();
+    this.resetIntelPulseForRun(disposal);
     for (const child of [...this.scene.children]) {
       if (persistent.has(child) || child instanceof THREE.AmbientLight) continue;
       this.scene.remove(child);
@@ -1478,6 +1646,7 @@ export class Game {
     this.updateDetection(delta);
     this.updateDebugRays();
     this.updateCharacterAnimations(now, delta);
+    this.updateIntelPulse(now);
     if (this.objectiveNotice && now > this.objectiveNoticeUntil) {
       this.objectiveNotice = '';
       this.renderUi();
@@ -1493,6 +1662,7 @@ export class Game {
       if (hudSecond !== this.lastHudSecond) {
         this.lastHudSecond = hudSecond;
         this.ui.updateRunHud(this.currentRunElapsedMs(), this.runAlertCount);
+        this.ui.renderIntelPulse(this.phase, this.intelPulseUiState(now));
       }
     }
     this.goalMesh.rotation.y += delta * 0.9;
@@ -1551,6 +1721,10 @@ export class Game {
       event.preventDefault();
       void this.applySettings({ ...this.settings, debugEnabled: !this.settings.debugEnabled });
     }
+    if (event.code === 'KeyQ') {
+      event.preventDefault();
+      this.triggerIntelPulse();
+    }
   };
 
   private installDebugHooks(): void {
@@ -1591,6 +1765,8 @@ export class Game {
       heroRoster: () => heroOptions.map((hero) => hero.id),
       loadedHeroAssets: () => this.characterAssets.loadedHeroIds(),
       achievements: () => this.achievementProgress,
+      intelPulse: () => this.intelPulseUiState(),
+      triggerIntelPulse: () => this.triggerIntelPulse(),
     };
   }
 
@@ -1860,6 +2036,7 @@ export class Game {
       runElapsedMs,
       this.runAlertCount,
     );
+    this.ui.renderIntelPulse(this.phase, this.intelPulseUiState(performance.now()));
     this.ui.renderOverlay(
       this.phase,
       this.level,
@@ -1884,6 +2061,31 @@ export class Game {
 
   private objectiveProgress(): ObjectiveProgress {
     return getObjectiveProgress(this.level, this.collectedObjectiveIds);
+  }
+
+  private intelPulseUiState(now = performance.now()): IntelPulseUiState {
+    const active = this.isIntelPulseActive(now);
+    const cooldownMs = Math.max(0, this.intelPulseCooldownUntil - now);
+    const activeProgress = active ? clamp01((this.intelPulseActiveUntil - now) / intelPulseDurationMs) : 0;
+    const cooldownProgress = cooldownMs > 0 ? 1 - clamp01(cooldownMs / intelPulseCooldownMs) : 1;
+    const potentialPlan =
+      this.intelPulsePlan ??
+      createIntelPulsePlan(this.level, this.collectedObjectiveIds, { includePatrols: !this.isMobileInterface() });
+
+    return {
+      charges: this.intelPulseCharges,
+      maxCharges: intelPulseMaxCharges,
+      active,
+      available: this.canTriggerIntelPulse(now),
+      cooldownMs,
+      cooldownProgress,
+      activeProgress,
+      mobileSimplified: this.intelPulseMobileSimplified || this.isMobileInterface(),
+      objectiveTargets: potentialPlan.objectiveMarkers.length,
+      exitTargets: 1,
+      patrolRoutes: this.intelPulseMobileSimplified ? 0 : potentialPlan.patrolRoutes.length,
+      waypointTargets: this.intelPulseMobileSimplified ? 0 : potentialPlan.waypointCount,
+    };
   }
 
   private beginRun(): void {
@@ -1921,6 +2123,9 @@ export class Game {
     this.runSummary = summary;
     this.objectiveNotice = '';
     this.objectiveNoticeUntil = 0;
+    this.clearIntelPulseVisuals();
+    this.intelPulseStartedAt = 0;
+    this.intelPulseActiveUntil = 0;
     this.setPhase('complete');
   }
 
@@ -1975,6 +2180,41 @@ function createContactShadow(width: number, depth: number, opacity: number): THR
   shadow.scale.set(width, depth, 1);
   shadow.name = 'contact-shadow';
   return shadow;
+}
+
+function intelPulseMaterial(color: string, opacity: number): THREE.MeshBasicMaterial {
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  material.userData.intelPulseOpacity = opacity;
+  return material;
+}
+
+function intelPulseLineMaterial(color: string, opacity: number): THREE.LineBasicMaterial {
+  const material = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+  });
+  material.userData.intelPulseOpacity = opacity;
+  return material;
+}
+
+function applyIntelPulseOpacity(object: THREE.Object3D, factor: number): void {
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh || child instanceof THREE.Line)) return;
+
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    for (const material of materials) {
+      const baseOpacity = typeof material.userData.intelPulseOpacity === 'number' ? material.userData.intelPulseOpacity : material.opacity;
+      material.opacity = baseOpacity * factor;
+    }
+  });
 }
 
 function prepareTitleHeroPreviewMaterials(object: THREE.Object3D, boosted: boolean): void {
@@ -2091,4 +2331,8 @@ function isInsideSharedCachedAsset(object: THREE.Object3D, root: THREE.Object3D)
 function dampAngle(current: number, target: number, factor: number): number {
   const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
   return current + delta * factor;
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }

@@ -348,6 +348,8 @@ try {
     throw new Error(`Screenshot pixel check failed: visiblePixels=${visiblePixels}`);
   }
 
+  await assertDesktopIntelPulse();
+
   await page.keyboard.press('F1');
   await page.locator('[data-testid="debug-panel"]').waitFor({ state: 'visible', timeout: 8000 });
   await page.waitForTimeout(1400);
@@ -803,6 +805,58 @@ async function selectDebugLevel(levelIndex: number): Promise<void> {
     await debugWindow.__shadowCircuitDebug?.selectLevel(targetLevelIndex);
   }, levelIndex);
   await assertPlayingPhase(`after debug selecting level ${levelIndex}`);
+}
+
+async function assertDesktopIntelPulse(): Promise<void> {
+  await page.locator('[data-testid="intel-pulse-dock"]').getByRole('button', { name: 'Mission Intel Pulse' }).click();
+  await page.waitForFunction(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        intelPulse: () => {
+          active: boolean;
+          charges: number;
+          mobileSimplified: boolean;
+          objectiveTargets: number;
+          exitTargets: number;
+          patrolRoutes: number;
+          waypointTargets: number;
+        };
+      };
+    };
+    const state = debugWindow.__shadowCircuitDebug?.intelPulse();
+    return Boolean(
+      state?.active &&
+        state.charges === 2 &&
+        state.mobileSimplified === false &&
+        state.objectiveTargets > 0 &&
+        state.exitTargets === 1 &&
+        state.patrolRoutes > 0 &&
+        state.waypointTargets >= state.patrolRoutes * 2,
+    );
+  }, undefined, { timeout: 8000 });
+
+  const dockLayout = await page.locator('[data-testid="intel-pulse-dock"]').evaluate((dock) => {
+    const rect = dock.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      text: dock.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    };
+  });
+  if (
+    dockLayout.left < 0 ||
+    dockLayout.top < 0 ||
+    dockLayout.right > dockLayout.viewport.width ||
+    dockLayout.bottom > dockLayout.viewport.height ||
+    !dockLayout.text.includes('Intel Pulse')
+  ) {
+    throw new Error(`Expected desktop intel pulse dock to fit and show label, got ${JSON.stringify(dockLayout)}`);
+  }
+
+  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-intel-pulse.png`, fullPage: true });
 }
 
 async function completeFinalLevel(): Promise<void> {

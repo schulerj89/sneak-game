@@ -92,6 +92,7 @@ try {
   await assertDefaultDebugHidden(page);
   await assertHudButtonsFit(page);
   await assertTouchLayout(page);
+  await assertMobileIntelPulse(page);
 
   const before = await playerPosition(page);
   const padBox = await page.locator('[data-testid="touch-pad"]').boundingBox();
@@ -294,6 +295,81 @@ async function assertHudButtonsFit(page: Page): Promise<void> {
   if (clipped.length > 0) {
     throw new Error(`Expected HUD buttons to fit in landscape viewport: ${JSON.stringify({ ...layout, clipped })}`);
   }
+}
+
+async function assertMobileIntelPulse(page: Page): Promise<void> {
+  const layout = await page.evaluate(() => {
+    const dock = document.querySelector('[data-testid="intel-pulse-dock"]');
+    const touch = document.querySelector('[data-testid="touch-controls"]');
+    const button = dock?.querySelector('button');
+    const dockRect = dock instanceof HTMLElement ? dock.getBoundingClientRect() : null;
+    const buttonRect = button instanceof HTMLElement ? button.getBoundingClientRect() : null;
+    const touchRect = touch instanceof HTMLElement ? touch.getBoundingClientRect() : null;
+    const copy = dock?.querySelector('.intel-pulse-copy');
+    const copyStyle = copy instanceof HTMLElement ? window.getComputedStyle(copy) : null;
+
+    return {
+      dock: dockRect
+        ? { left: dockRect.left, right: dockRect.right, top: dockRect.top, bottom: dockRect.bottom, width: dockRect.width, height: dockRect.height }
+        : null,
+      button: buttonRect
+        ? { left: buttonRect.left, right: buttonRect.right, top: buttonRect.top, bottom: buttonRect.bottom, width: buttonRect.width, height: buttonRect.height }
+        : null,
+      touch: touchRect ? { left: touchRect.left, right: touchRect.right, top: touchRect.top, bottom: touchRect.bottom } : null,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      copyVisible: Boolean(copyStyle && copyStyle.display !== 'none' && copyStyle.visibility !== 'hidden'),
+    };
+  });
+  const overlapsTouch = Boolean(
+    layout.dock &&
+      layout.touch &&
+      layout.dock.left < layout.touch.right &&
+      layout.dock.right > layout.touch.left &&
+      layout.dock.top < layout.touch.bottom &&
+      layout.dock.bottom > layout.touch.top,
+  );
+
+  if (
+    !layout.dock ||
+    !layout.button ||
+    layout.button.width < 50 ||
+    layout.button.height < 50 ||
+    layout.dock.left < 0 ||
+    layout.dock.top < 0 ||
+    layout.dock.right > layout.viewport.width ||
+    layout.dock.bottom > layout.viewport.height ||
+    layout.copyVisible ||
+    overlapsTouch
+  ) {
+    throw new Error(`Expected compact mobile intel pulse dock away from joystick, got ${JSON.stringify({ ...layout, overlapsTouch })}`);
+  }
+
+  await page.locator('[data-testid="intel-pulse-dock"]').getByRole('button', { name: 'Mission Intel Pulse' }).click();
+  await page.waitForFunction(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        intelPulse: () => {
+          active: boolean;
+          charges: number;
+          mobileSimplified: boolean;
+          objectiveTargets: number;
+          exitTargets: number;
+          patrolRoutes: number;
+          waypointTargets: number;
+        };
+      };
+    };
+    const state = debugWindow.__shadowCircuitDebug?.intelPulse();
+    return Boolean(
+      state?.active &&
+        state.charges === 2 &&
+        state.mobileSimplified &&
+        state.objectiveTargets > 0 &&
+        state.exitTargets === 1 &&
+        state.patrolRoutes === 0 &&
+        state.waypointTargets === 0,
+    );
+  }, undefined, { timeout: 8000 });
 }
 
 async function assertActionButtonsFit(page: Page, containerSelector: string): Promise<void> {

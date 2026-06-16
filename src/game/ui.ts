@@ -3,7 +3,17 @@ import { levelThumbnailSvg } from './assets';
 import type { AchievementProgress } from './achievements';
 import { heroOptions, type HeroId } from './heroes';
 import { isLoadingPhase, isPlayingPhase } from './phase';
-import type { GamePhase, GameSettings, LevelDefinition, LoadingProgress, ObjectiveProgress, RunSummary, SuspicionState, Vec2 } from './types';
+import type {
+  GamePhase,
+  GameSettings,
+  IntelPulseUiState,
+  LevelDefinition,
+  LoadingProgress,
+  ObjectiveProgress,
+  RunSummary,
+  SuspicionState,
+  Vec2,
+} from './types';
 import packageInfo from '../../package.json';
 
 const appVersion = packageInfo.version;
@@ -27,6 +37,7 @@ type UiCallbacks = {
   onNextLevel: () => void;
   onStartOver: () => void;
   onToggleMute: () => void;
+  onIntelPulse: () => void;
   onTouchMove: (movement: Vec2) => void;
   onTouchEnd: () => void;
   onSettingsChange: (settings: GameSettings) => void;
@@ -38,6 +49,7 @@ export class GameUi {
   readonly debug: HTMLElement;
   readonly overlay: HTMLElement;
   readonly achievementToast: HTMLElement;
+  readonly intelPulse: HTMLElement;
   readonly touchControls: HTMLElement;
   private readonly touchPad: HTMLElement;
   private activeTouchPointerId: number | null = null;
@@ -54,6 +66,7 @@ export class GameUi {
         <section class="hud" data-testid="hud"></section>
         <section class="debug" data-testid="debug-panel"></section>
         <section class="achievement-toast" data-testid="achievement-toast" hidden></section>
+        <section class="intel-pulse-dock" data-testid="intel-pulse-dock"></section>
         <section class="touch-controls" data-testid="touch-controls" hidden aria-label="Movement joystick">
           <div class="touch-pad" data-testid="touch-pad">
             <span class="touch-pad-line touch-pad-line-horizontal" aria-hidden="true"></span>
@@ -75,6 +88,7 @@ export class GameUi {
     this.debug = required(mount, '.debug');
     this.overlay = required(mount, '.overlay');
     this.achievementToast = required(mount, '.achievement-toast');
+    this.intelPulse = required(mount, '.intel-pulse-dock');
     this.touchControls = required(mount, '.touch-controls');
     this.touchPad = required(mount, '.touch-pad');
     required(mount, '.touch-stick');
@@ -137,6 +151,40 @@ export class GameUi {
       ${objectiveNotice ? `<div class="objective-notice" role="status">${objectiveNotice}</div>` : ''}
     `;
     this.bindHud();
+  }
+
+  renderIntelPulse(phase: GamePhase, state: IntelPulseUiState): void {
+    if (!isPlayingPhase(phase)) {
+      this.intelPulse.innerHTML = '';
+      return;
+    }
+
+    const status = intelPulseStatus(state);
+    const meterWidth = Math.round((state.active ? state.activeProgress : state.cooldownProgress) * 100);
+    const disabled = state.available ? '' : ' disabled';
+    this.intelPulse.classList.toggle('is-active', state.active);
+    this.intelPulse.classList.toggle('is-mobile-simplified', state.mobileSimplified);
+    this.intelPulse.innerHTML = `
+      <button
+        type="button"
+        class="intel-pulse-button"
+        data-action="intel-pulse"
+        aria-label="Mission Intel Pulse"
+        title="Mission Intel Pulse (Q)"
+        ${disabled}
+      >
+        <span class="intel-pulse-symbol" aria-hidden="true"></span>
+        <span class="intel-pulse-label">Pulse</span>
+        <span class="intel-pulse-count" aria-hidden="true">${state.charges}</span>
+      </button>
+      <div class="intel-pulse-copy" aria-hidden="true">
+        <strong>Intel Pulse</strong>
+        <span>${status}</span>
+        <kbd>Q</kbd>
+        <span class="intel-pulse-meter"><span style="width: ${meterWidth}%"></span></span>
+      </div>
+    `;
+    this.bindIntelPulse();
   }
 
   updateRunHud(runElapsedMs: number, runAlertCount: number): void {
@@ -417,6 +465,10 @@ export class GameUi {
     this.hud.querySelector('[data-action="menu"]')?.addEventListener('click', this.callbacks.onMenu);
   }
 
+  private bindIntelPulse(): void {
+    this.intelPulse.querySelector('[data-action="intel-pulse"]')?.addEventListener('click', this.callbacks.onIntelPulse);
+  }
+
   private bindTouchControls(): void {
     this.touchPad.addEventListener('pointerdown', (event) => {
       if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -536,6 +588,17 @@ function statusLabel(phase: GamePhase, suspicion: SuspicionState, objectives: Ob
   if (suspicion.status === 'suspicious') return 'Suspicious';
   if (!objectives.exitUnlocked) return 'Exit locked';
   return 'Stay hidden';
+}
+
+function intelPulseStatus(state: IntelPulseUiState): string {
+  if (state.active) {
+    return state.mobileSimplified
+      ? `Showing ${state.objectiveTargets + state.exitTargets} targets`
+      : `Showing ${state.objectiveTargets + state.exitTargets} targets, ${state.patrolRoutes} patrols`;
+  }
+  if (state.charges <= 0) return 'Spent';
+  if (state.cooldownMs > 0) return `${Math.ceil(state.cooldownMs / 1000)}s recharge`;
+  return `${state.charges}/${state.maxCharges} ready`;
 }
 
 function selectedTrack(soundtrackId: GameSettings['soundtrackId']): (typeof soundtrackOptions)[number] {
