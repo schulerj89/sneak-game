@@ -639,19 +639,19 @@ export class Game {
     platform.name = 'title-hero-platform';
     platform.renderOrder = -2;
 
-    const key = new THREE.DirectionalLight('#e7fbff', 5.2);
+    const compactPreview = this.useCompactTitleHeroPreview();
+    const key = new THREE.DirectionalLight('#e7fbff', compactPreview ? 2.4 : 5.2);
     key.position.set(2.7, 3.6, 3.2);
     key.name = 'title-hero-key-light';
 
-    const compactPreview = this.useCompactTitleHeroPreview();
-    const ambient = new THREE.HemisphereLight('#e7fbff', '#172331', compactPreview ? 5.6 : 2.2);
+    const ambient = new THREE.HemisphereLight('#e7fbff', '#172331', 2.2);
     ambient.name = 'title-hero-ambient-light';
 
-    const rim = new THREE.PointLight('#53ffe2', compactPreview ? 8.5 : 5.6, 4.8);
+    const rim = new THREE.PointLight('#53ffe2', compactPreview ? 2.4 : 5.6, 4.8);
     rim.position.set(0.55, 1.35, 1.35);
     rim.name = 'title-hero-rim-light';
 
-    const fill = new THREE.PointLight('#fff2d0', compactPreview ? 7.2 : 4.6, 4.4);
+    const fill = new THREE.PointLight('#fff2d0', compactPreview ? 1.8 : 4.6, 4.4);
     fill.position.set(1.35, 1.15, 2.15);
     fill.name = 'title-hero-fill-light';
 
@@ -2113,6 +2113,11 @@ function prepareTitleHeroPreviewMaterials(object: THREE.Object3D, boosted: boole
   const accent = new THREE.Color('#53ffe2');
   const lift = new THREE.Color('#dffcff');
   object.traverse((child) => {
+    if (child instanceof THREE.PointLight && child.name.startsWith('character-accent-light')) {
+      child.intensity = Math.min(child.intensity, boosted ? 0.85 : 1.8);
+      return;
+    }
+
     if (!(child instanceof THREE.Mesh)) return;
 
     child.frustumCulled = false;
@@ -2131,24 +2136,24 @@ function prepareTitleHeroPreviewMaterials(object: THREE.Object3D, boosted: boole
 function boostPreviewMaterial(material: THREE.Material, accent: THREE.Color, lift: THREE.Color, boosted: boolean): void {
   const colorMaterial = material as THREE.Material & { color?: THREE.Color };
   if (colorMaterial.color instanceof THREE.Color) {
-    colorMaterial.color.lerp(lift, boosted ? 0.38 : 0.14);
+    colorMaterial.color.lerp(lift, boosted ? 0.12 : 0.14);
   }
 
   const emissiveMaterial = material as THREE.Material & { emissive?: THREE.Color; emissiveIntensity?: number };
   if (emissiveMaterial.emissive instanceof THREE.Color) {
-    emissiveMaterial.emissive.lerp(accent, boosted ? 0.82 : 0.38);
-    emissiveMaterial.emissiveIntensity = Math.max(emissiveMaterial.emissiveIntensity ?? 0, boosted ? 2.4 : 0.75);
+    emissiveMaterial.emissive.lerp(accent, boosted ? 0.24 : 0.38);
+    emissiveMaterial.emissiveIntensity = Math.max(emissiveMaterial.emissiveIntensity ?? 0, boosted ? 0.45 : 0.75);
   }
 
   const physicallyLit = material as THREE.Material & { roughness?: number; metalness?: number };
   if (typeof physicallyLit.roughness === 'number') {
-    physicallyLit.roughness = Math.min(physicallyLit.roughness, boosted ? 0.5 : 0.64);
+    physicallyLit.roughness = Math.min(physicallyLit.roughness, boosted ? 0.62 : 0.64);
   }
   if (typeof physicallyLit.metalness === 'number') {
-    physicallyLit.metalness = Math.min(physicallyLit.metalness, boosted ? 0.45 : 0.7);
+    physicallyLit.metalness = Math.min(physicallyLit.metalness, boosted ? 0.68 : 0.7);
   }
 
-  material.toneMapped = !boosted;
+  material.toneMapped = true;
 }
 
 function markTransientMaterial(material: THREE.Material): void {
