@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRunSummary, loadBestTime, saveBestTime } from './runStats';
+import { createRunSummary, loadBestTime, loadRunRecordProgress, saveBestTime } from './runStats';
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -70,6 +70,10 @@ describe('run stats', () => {
 
     expect(loadBestTime('dock-blackout', storage)).toBe(31_234);
     expect(loadBestTime('archive-lanes', storage)).toBe(null);
+    expect(loadRunRecordProgress(['dock-blackout', 'archive-lanes'], storage)).toEqual([
+      { levelId: 'dock-blackout', bestTimeMs: 31_234 },
+      { levelId: 'archive-lanes', bestTimeMs: null },
+    ]);
   });
 
   it('does not interrupt completion when storage writes are blocked', () => {

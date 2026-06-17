@@ -8,6 +8,11 @@ type RunRecord = Readonly<{
 
 type RunRecords = Record<string, RunRecord>;
 
+export type RunRecordProgress = Readonly<{
+  levelId: string;
+  bestTimeMs: number | null;
+}>;
+
 export function createRunSummary(params: {
   elapsedMs: number;
   parSeconds: number;
@@ -36,6 +41,17 @@ export function loadBestTime(levelId: string, storage: Storage | null = browserS
 
   const records = loadRecords(storage);
   return records[levelId]?.bestTimeMs ?? null;
+}
+
+export function loadRunRecordProgress(
+  levelIds: readonly string[],
+  storage: Storage | null = browserStorage(),
+): readonly RunRecordProgress[] {
+  const records = storage ? loadRecords(storage) : {};
+  return levelIds.map((levelId) => ({
+    levelId,
+    bestTimeMs: records[levelId]?.bestTimeMs ?? null,
+  }));
 }
 
 export function saveBestTime(levelId: string, elapsedMs: number, storage: Storage | null = browserStorage()): void {

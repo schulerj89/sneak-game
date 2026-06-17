@@ -63,6 +63,7 @@ try {
   await assertVersionBadge(page);
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
   await assertMobileGoalsPanel(page);
+  await assertMobileLevelSelectMastery(page);
   await assertCompactMobileSettings(page);
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
@@ -413,10 +414,14 @@ async function assertMobileGoalsPanel(page: Page): Promise<void> {
   const state = await page.locator('[data-testid="goals-panel"]').evaluate((panel) => {
     const panelRect = panel.getBoundingClientRect();
     const summary = panel.querySelector('[data-testid="achievement-summary"]');
+    const mastery = panel.querySelector('[data-testid="mastery-summary"]');
+    const masteryRect = mastery instanceof HTMLElement ? mastery.getBoundingClientRect() : null;
     if (!(summary instanceof HTMLElement)) {
       return {
         count: 0,
         descriptionVisible: false,
+        masteryText: mastery?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+        mastery: masteryRect,
         panel: { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom },
         summary: null,
         viewport: { width: window.innerWidth, height: window.innerHeight },
@@ -438,6 +443,10 @@ async function assertMobileGoalsPanel(page: Page): Promise<void> {
     return {
       count: cards.length,
       descriptionVisible,
+      masteryText: mastery?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      mastery: masteryRect
+        ? { left: masteryRect.left, right: masteryRect.right, top: masteryRect.top, bottom: masteryRect.bottom }
+        : null,
       panel: { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom },
       summary: { left: summaryRect.left, right: summaryRect.right, top: summaryRect.top, bottom: summaryRect.bottom },
       viewport: { width: window.innerWidth, height: window.innerHeight },
@@ -448,6 +457,8 @@ async function assertMobileGoalsPanel(page: Page): Promise<void> {
   if (
     state.count !== 4 ||
     state.descriptionVisible ||
+    !state.masteryText.toLowerCase().includes('mastery circuit') ||
+    !state.masteryText.toLowerCase().includes('0 / 12 mastered') ||
     !state.text.includes('Circuit Complete') ||
     !state.text.includes('Clean Entry') ||
     !state.text.includes('Perfect Shadow') ||
@@ -457,6 +468,12 @@ async function assertMobileGoalsPanel(page: Page): Promise<void> {
     state.panel.right > state.viewport.width ||
     state.panel.bottom > state.viewport.height ||
     state.summary === null ||
+    state.mastery === null ||
+    state.mastery.left < 0 ||
+    state.mastery.top < 0 ||
+    state.mastery.right > state.viewport.width ||
+    state.mastery.bottom > state.viewport.height ||
+    state.mastery.bottom > state.summary.top ||
     state.summary.left < 0 ||
     state.summary.top < 0 ||
     state.summary.right > state.viewport.width ||
@@ -465,6 +482,56 @@ async function assertMobileGoalsPanel(page: Page): Promise<void> {
     throw new Error(`Expected compact mobile goals panel, got ${JSON.stringify(state)}`);
   }
 
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
+  await expectVisible(page, 'text=Break the circuit before sentries close in.');
+}
+
+async function assertMobileLevelSelectMastery(page: Page): Promise<void> {
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Levels' }).click();
+  await expectVisible(page, 'text=Level Select');
+
+  const state = await page.locator('.level-select-panel').evaluate((panel) => {
+    const panelRect = panel.getBoundingClientRect();
+    const cards = [...panel.querySelectorAll('[data-level-index]')];
+    const chips = [...panel.querySelectorAll('.level-mastery-chip')];
+    const firstMastery = panel.querySelector('[data-testid="level-mastery-dock-blackout"]');
+    const firstMasteryRect = firstMastery instanceof HTMLElement ? firstMastery.getBoundingClientRect() : null;
+    const clippedCards = cards.filter((card) => {
+      const rect = card.getBoundingClientRect();
+      return rect.left < 0 || rect.right > window.innerWidth || rect.width < 120;
+    }).length;
+
+    return {
+      cardCount: cards.length,
+      chipCount: chips.length,
+      firstText: firstMastery?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      firstMastery: firstMasteryRect
+        ? { left: firstMasteryRect.left, right: firstMasteryRect.right, top: firstMasteryRect.top, bottom: firstMasteryRect.bottom }
+        : null,
+      panel: { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      clippedCards,
+      scrollable: panel.scrollHeight > panel.clientHeight,
+    };
+  });
+
+  if (
+    state.cardCount !== 12 ||
+    state.chipCount !== 48 ||
+    !state.firstText.includes('Clear the route') ||
+    state.firstMastery === null ||
+    state.firstMastery.left < 0 ||
+    state.firstMastery.right > state.viewport.width ||
+    state.clippedCards > 0 ||
+    !state.scrollable ||
+    state.panel.left < 0 ||
+    state.panel.right > state.viewport.width
+  ) {
+    throw new Error(`Expected compact mobile mastery cards, got ${JSON.stringify(state)}`);
+  }
+
+  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-mobile-level-select-mastery.png`, fullPage: true });
+  await page.locator('[data-action="level-select-back"]').scrollIntoViewIfNeeded();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await expectVisible(page, 'text=Break the circuit before sentries close in.');
 }
@@ -694,6 +761,11 @@ async function completeDockAndAdvance(page: Page): Promise<void> {
     document.querySelector('[data-testid="overlay"]')?.scrollIntoView({ block: 'center', inline: 'center' });
   });
   await expectVisible(page, 'text=Level 1 Completed');
+  await expectVisible(page, '[data-testid="retry-target"]');
+  const retryTargetText = await page.locator('[data-testid="retry-target"]').innerText();
+  if (!retryTargetText.includes('Retry for S') && !retryTargetText.includes('Second clear ready')) {
+    throw new Error(`Expected mobile context-aware Retry Target after first clear, got ${retryTargetText}`);
+  }
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Next Level' }).click();
   await expectVisible(page, '[data-testid="loading-panel"]');

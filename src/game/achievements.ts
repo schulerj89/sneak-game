@@ -20,6 +20,12 @@ type LevelAchievementRecord = Readonly<{
 
 type AchievementRecords = Record<string, LevelAchievementRecord>;
 
+export type LevelAchievementProgress = Readonly<{
+  levelId: string;
+  clears: number;
+  bestGrade: RunGrade | null;
+}>;
+
 const gradeRank: Record<RunGrade, number> = {
   C: 1,
   B: 2,
@@ -32,6 +38,18 @@ export function loadAchievementProgress(
   storage: Storage | null = browserStorage(),
 ): readonly AchievementProgress[] {
   return buildAchievementProgress(levelIds, storage ? loadRecords(storage, levelIds) : {});
+}
+
+export function loadLevelAchievementRecords(
+  levelIds: readonly string[],
+  storage: Storage | null = browserStorage(),
+): readonly LevelAchievementProgress[] {
+  const records = storage ? loadRecords(storage, levelIds) : {};
+  return levelIds.map((levelId) => ({
+    levelId,
+    clears: records[levelId]?.clears ?? 0,
+    bestGrade: records[levelId]?.bestGrade ?? null,
+  }));
 }
 
 export function recordLevelAchievementClear(params: {

@@ -6,6 +6,14 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.0.0 - 2026-06-16
+
+- Added `Mastery Circuit` replay progress to Level Select, with per-level marks for Clear, S, Par, and 2x plus the next replay target.
+- Added a compact Mastery Circuit summary to Goals so players can see total replay progress at a glance.
+- Added `Retry Target` prompts to level-complete screens, guiding the next replay attempt such as S rank, second clear, or best-time chase.
+- Added focused unit and smoke coverage for mastery records, retry prompts, desktop Level Select, mobile Level Select, and mobile completion layout.
+- Documented the replay-value decision and before/after screenshots in `docs/2026-06-16-replay-value-update/`.
+
 ## v1.1.0 - 2026-06-16
 
 - Added the `Clean Entry` goal badge for earning an S grade on any level, including Goals progress and the existing achievement toast.

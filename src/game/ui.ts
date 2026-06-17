@@ -2,6 +2,7 @@ import { soundtrackOptions } from './audio';
 import { levelThumbnailSvg } from './assets';
 import type { AchievementProgress } from './achievements';
 import { heroOptions, type HeroId } from './heroes';
+import { buildMasterySummary, type LevelMasteryProgress, type RetryTarget } from './mastery';
 import { isLoadingPhase, isPlayingPhase } from './phase';
 import type {
   GamePhase,
@@ -224,6 +225,8 @@ export class GameUi {
     loadingProgress: LoadingProgress,
     selectedHeroId: HeroId,
     achievements: readonly AchievementProgress[],
+    mastery: readonly LevelMasteryProgress[],
+    retryTarget: RetryTarget | null,
   ): void {
     this.overlay.classList.toggle('is-loading', isLoadingPhase(phase));
     this.overlay.classList.toggle('is-title', phase === 'menu' || phase === 'character-select');
@@ -273,6 +276,7 @@ export class GameUi {
       this.overlay.innerHTML = `
         <div class="panel goals-panel" data-testid="goals-panel">
           <h1>Goals</h1>
+          ${masterySummaryCard(mastery)}
           <section class="achievement-summary" data-testid="achievement-summary" aria-label="Goals">
             ${achievementList(achievements)}
           </section>
@@ -355,16 +359,20 @@ export class GameUi {
         <div class="panel level-select-panel">
           <h1>Level Select</h1>
           <div class="level-grid">
-            ${levels.map((candidate, index) => `
+            ${levels.map((candidate, index) => {
+              const progress = mastery.find((candidateProgress) => candidateProgress.levelId === candidate.id);
+              return `
               <button type="button" class="level-card ${index === levelIndex ? 'is-active' : ''}" data-level-index="${index}">
                 <span class="level-thumb">${levelThumbnailSvg(candidate, index + 1)}</span>
                 <span class="level-card-title">${candidate.name}</span>
+                ${progress ? levelMasteryCard(progress) : ''}
                 <span class="level-card-copy">${candidate.briefing}</span>
                 ${candidate.objectives?.length ? `
                   <span class="level-card-objectives">${candidate.objectives.length} objectives unlock the exit</span>
                 ` : ''}
               </button>
-            `).join('')}
+            `;
+            }).join('')}
           </div>
           <div class="panel-actions">
             <button type="button" data-action="level-select-back">Back</button>
@@ -450,6 +458,12 @@ export class GameUi {
               </dl>
             </div>
             <p class="record-note">${bestTimeLabel(runSummary)}</p>
+            ${retryTarget ? `
+              <p class="retry-target" data-testid="retry-target">
+                <strong>${retryTarget.label}</strong>
+                <span>${retryTarget.detail}</span>
+              </p>
+            ` : ''}
           ` : `<p>${level.briefing}</p>`}
           <div class="panel-actions">
             ${isFinalLevel ? `
@@ -612,6 +626,45 @@ function intelPulseStatus(state: IntelPulseUiState): string {
 
 function selectedTrack(soundtrackId: GameSettings['soundtrackId']): (typeof soundtrackOptions)[number] {
   return soundtrackOptions.find((track) => track.id === soundtrackId) ?? soundtrackOptions[0];
+}
+
+function masterySummaryCard(mastery: readonly LevelMasteryProgress[]): string {
+  const summary = buildMasterySummary(mastery);
+  const percent = summary.totalMarks <= 0 ? 0 : Math.round((summary.completedMarks / summary.totalMarks) * 100);
+
+  return `
+    <section class="mastery-summary" data-testid="mastery-summary" aria-label="Mastery Circuit">
+      <div class="mastery-summary-head">
+        <strong>Mastery Circuit</strong>
+        <span>${summary.masteredLevels} / ${summary.totalLevels} mastered</span>
+      </div>
+      <p>Replay levels to fill Clear, S, Par, and 2x marks.</p>
+      <span class="mastery-progress-bar" aria-hidden="true">
+        <span style="width: ${percent}%"></span>
+      </span>
+      <span class="mastery-summary-count">${summary.completedMarks} / ${summary.totalMarks} marks</span>
+    </section>
+  `;
+}
+
+function levelMasteryCard(progress: LevelMasteryProgress): string {
+  return `
+    <span class="level-mastery" data-testid="level-mastery-${progress.levelId}">
+      <span class="level-mastery-chips" aria-label="Mastery marks">
+        ${progress.marks.map((mark) => `
+          <span class="level-mastery-chip ${mark.complete ? 'is-complete' : ''}" data-mastery-mark="${mark.id}">${mark.label}</span>
+        `).join('')}
+      </span>
+      <span class="level-mastery-target">${progress.nextTarget}</span>
+      <span class="level-mastery-record">${levelMasteryRecord(progress)}</span>
+    </span>
+  `;
+}
+
+function levelMasteryRecord(progress: LevelMasteryProgress): string {
+  const grade = progress.bestGrade ?? '-';
+  const best = progress.bestTimeMs === null ? '-:--' : formatRunTime(progress.bestTimeMs);
+  return `Best ${grade} / ${best}`;
 }
 
 function achievementList(achievements: readonly AchievementProgress[]): string {

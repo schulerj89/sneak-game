@@ -12,6 +12,12 @@ import { InputController } from './input';
 import { levels } from './levels';
 import { runLoadingSequence, type LoadingTask } from './loading';
 import { add, clampToRoom, distance, normalize, scale, subtract } from './math';
+import {
+  loadLevelMasteryProgress,
+  retryTargetForCompletion,
+  type LevelMasteryProgress,
+  type RetryTarget,
+} from './mastery';
 import { collectNearbyObjectives, getObjectiveProgress } from './objectives';
 import { ObjectiveAssetLibrary } from './objectiveAssets';
 import { isLoadingPhase, isPlayingPhase } from './phase';
@@ -155,6 +161,7 @@ declare global {
       enemyAssetQuality: () => RenderQuality;
       rendererMemory: () => { geometries: number; textures: number };
       achievements: () => readonly AchievementProgress[];
+      mastery: () => readonly LevelMasteryProgress[];
       intelPulse: () => IntelPulseUiState;
       triggerIntelPulse: () => void;
     };
@@ -200,6 +207,8 @@ export class Game {
   private objectiveNotice = '';
   private objectiveNoticeUntil = 0;
   private achievementProgress: readonly AchievementProgress[] = loadAchievementProgress(achievementLevelIds);
+  private levelMastery: readonly LevelMasteryProgress[] = loadLevelMasteryProgress(levels);
+  private retryTarget: RetryTarget | null = null;
   private achievementNotice = '';
   private achievementNoticeUntil = 0;
   private readonly achievementNoticeQueue: string[] = [];
@@ -1748,6 +1757,7 @@ export class Game {
       heroRoster: () => heroOptions.map((hero) => hero.id),
       loadedHeroAssets: () => this.characterAssets.loadedHeroIds(),
       achievements: () => this.achievementProgress,
+      mastery: () => this.levelMastery,
       intelPulse: () => this.intelPulseUiState(),
       triggerIntelPulse: () => this.triggerIntelPulse(),
     };
@@ -2029,6 +2039,8 @@ export class Game {
       this.loadingProgress,
       this.selectedHeroId,
       this.achievementProgress,
+      this.levelMastery,
+      this.retryTarget,
     );
     this.ui.renderAchievementNotice(this.achievementNotice);
     this.ui.setTouchControlsVisible(this.canUpdateRun());
@@ -2075,6 +2087,7 @@ export class Game {
     this.runStartedAt = performance.now();
     this.runAlertCount = 0;
     this.runSummary = null;
+    this.retryTarget = null;
     this.lastHudSecond = -1;
   }
 
@@ -2102,6 +2115,9 @@ export class Game {
     });
     this.achievementProgress = achievements.progress;
     this.queueAchievementNotices(achievements.unlocked);
+    this.levelMastery = loadLevelMasteryProgress(levels);
+    const currentMastery = this.levelMastery.find((mastery) => mastery.levelId === this.level.id);
+    this.retryTarget = currentMastery ? retryTargetForCompletion(this.level, summary, currentMastery) : null;
 
     this.runSummary = summary;
     this.objectiveNotice = '';

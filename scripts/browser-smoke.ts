@@ -130,6 +130,15 @@ try {
   if (objectiveHintCount !== 12) {
     throw new Error(`Expected objective hints on all 12 level cards, found ${objectiveHintCount}`);
   }
+  const masteryCardCount = await page.locator('.level-mastery').count();
+  const masteryChipCount = await page.locator('.level-mastery-chip').count();
+  if (masteryCardCount !== 12 || masteryChipCount !== 48) {
+    throw new Error(`Expected mastery chips on all level cards, got cards=${masteryCardCount} chips=${masteryChipCount}`);
+  }
+  const firstMasteryText = await page.locator('[data-testid="level-mastery-dock-blackout"]').innerText();
+  if (!firstMasteryText.includes('Clear the route') || !firstMasteryText.includes('Best - / -:--')) {
+    throw new Error(`Expected empty Dock Blackout mastery target, got ${firstMasteryText}`);
+  }
   const levelCardCount = await page.locator('[data-level-index]').count();
   if (levelCardCount !== 12) {
     throw new Error(`Expected 12 level cards, found ${levelCardCount}`);
@@ -572,6 +581,11 @@ try {
     debugWindow.__shadowCircuitDebug?.movePlayerTo({ x: 5, z: -3.2 });
   });
   await expectVisible('text=Level 1 Completed');
+  await expectVisible('[data-testid="retry-target"]');
+  const retryTargetText = await page.locator('[data-testid="retry-target"]').innerText();
+  if (!retryTargetText.includes('Retry for S') && !retryTargetText.includes('Second clear ready')) {
+    throw new Error(`Expected context-aware Retry Target after first clear, got ${retryTargetText}`);
+  }
   const pickupChimeCount = logs.filter((line) => line.includes('[audio] pickup chime')).length;
   if (pickupChimeCount < 2) {
     throw new Error(`Expected pickup chime for both objectives, got ${pickupChimeCount}. Logs: ${logs.join('\n')}`);
@@ -728,6 +742,12 @@ async function assertTitleGoalsPanel(): Promise<void> {
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Goals' }).click();
   await expectVisible('[data-testid="goals-panel"]');
+  await expectVisible('[data-testid="mastery-summary"]');
+  const masterySummaryText = await page.locator('[data-testid="mastery-summary"]').innerText();
+  const normalizedMasterySummaryText = masterySummaryText.toLowerCase();
+  if (!normalizedMasterySummaryText.includes('mastery circuit') || !normalizedMasterySummaryText.includes('0 / 12 mastered')) {
+    throw new Error(`Expected initial Mastery Circuit summary, got ${masterySummaryText}`);
+  }
   const achievementCardCount = await page.locator('[data-achievement-id]').count();
   if (achievementCardCount !== 4) {
     throw new Error(`Expected 4 goals rows, found ${achievementCardCount}`);

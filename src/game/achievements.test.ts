@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadAchievementProgress, recordLevelAchievementClear } from './achievements';
+import { loadAchievementProgress, loadLevelAchievementRecords, recordLevelAchievementClear } from './achievements';
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -108,5 +108,23 @@ describe('achievements', () => {
 
     expect(progress?.progress).toBe(6);
     expect(result.unlocked.map((achievement) => achievement.id)).toContain('clear-all-levels-twice');
+  });
+
+  it('loads per-level records for replay mastery without exposing unknown stored levels', () => {
+    const storage = new MemoryStorage();
+
+    storage.setItem(
+      'shadow-circuit-achievements-v1',
+      JSON.stringify({
+        [levelIds[0]]: { clears: 2, bestGrade: 'S' },
+        unknown: { clears: 9, bestGrade: 'S' },
+      }),
+    );
+
+    expect(loadLevelAchievementRecords(levelIds, storage)).toEqual([
+      { levelId: levelIds[0], clears: 2, bestGrade: 'S' },
+      { levelId: levelIds[1], clears: 0, bestGrade: null },
+      { levelId: levelIds[2], clears: 0, bestGrade: null },
+    ]);
   });
 });
