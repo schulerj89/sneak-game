@@ -7,6 +7,8 @@ export class InputController {
   constructor() {
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
+    window.addEventListener('blur', this.clearMovement);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
   movement(): Vec2 {
@@ -35,6 +37,8 @@ export class InputController {
   dispose(): void {
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
+    window.removeEventListener('blur', this.clearMovement);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
   private keyboardMovement(): Vec2 {
@@ -52,5 +56,16 @@ export class InputController {
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {
     this.pressed.delete(event.code);
+  };
+
+  private readonly clearMovement = (): void => {
+    this.pressed.clear();
+    this.clearVirtualMovement();
+  };
+
+  private readonly handleVisibilityChange = (): void => {
+    if (document.hidden) {
+      this.clearMovement();
+    }
   };
 }

@@ -558,7 +558,7 @@ export class Game {
       shouldCancel: () => this.disposed,
       minDurationMs: 950,
       minTaskMs: 150,
-      readyDelayMs: 140,
+      readyDelayMs: 0,
     });
   }
 

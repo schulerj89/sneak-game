@@ -54,7 +54,9 @@ export async function runLoadingSequence({
   if (shouldCancel()) return;
 
   onProgress({ value: 1, label: 'Ready' });
-  await delay(readyDelayMs);
+  if (readyDelayMs > 0) {
+    await delay(readyDelayMs);
+  }
 }
 
 function nextFrame(): Promise<void> {

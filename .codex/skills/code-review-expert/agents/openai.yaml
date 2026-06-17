@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review Expert"
+  short_description: "Patch-safe bug and refactor reviewer"
+  default_prompt: "Use $code-review-expert to identify patch-safe bugs, logic fixes, and small refactors."

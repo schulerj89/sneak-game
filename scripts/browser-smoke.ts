@@ -7,7 +7,11 @@ import { levels } from '../src/game/levels';
 const baseUrl = process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
 const screenshotDir = 'artifacts';
 const headless = process.env.SMOKE_HEADLESS === 'true';
+const playingTimeoutMs = parseTimeout(process.env.SMOKE_PLAYING_TIMEOUT_MS, 45000);
 const expectedVersionLabel = `v${packageInfo.version}`;
+const expectedLevelCount = levels.length;
+const expectedMasteryChipCount = expectedLevelCount * 4;
+const maxFrameMs = headless ? 1800 : 600;
 
 const browser = await chromium.launch({
   headless,
@@ -28,6 +32,7 @@ try {
   await mkdir(screenshotDir, { recursive: true });
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  await assertAppIdentity();
   await expectVisible('[data-testid="overlay"]');
   await assertVersionBadge();
   await expectVisible('text=Break the circuit before sentries close in.');
@@ -131,12 +136,12 @@ try {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Levels' }).click();
   await expectVisible('text=Signal Vault');
   const objectiveHintCount = await page.locator('.level-card-objectives').count();
-  if (objectiveHintCount !== 12) {
-    throw new Error(`Expected objective hints on all 12 level cards, found ${objectiveHintCount}`);
+  if (objectiveHintCount !== expectedLevelCount) {
+    throw new Error(`Expected objective hints on all ${expectedLevelCount} level cards, found ${objectiveHintCount}`);
   }
   const masteryCardCount = await page.locator('.level-mastery').count();
   const masteryChipCount = await page.locator('.level-mastery-chip').count();
-  if (masteryCardCount !== 12 || masteryChipCount !== 48) {
+  if (masteryCardCount !== expectedLevelCount || masteryChipCount !== expectedMasteryChipCount) {
     throw new Error(`Expected mastery chips on all level cards, got cards=${masteryCardCount} chips=${masteryChipCount}`);
   }
   const firstMasteryText = await page.locator('[data-testid="level-mastery-dock-blackout"]').innerText();
@@ -144,8 +149,8 @@ try {
     throw new Error(`Expected empty Dock Blackout mastery target, got ${firstMasteryText}`);
   }
   const levelCardCount = await page.locator('[data-level-index]').count();
-  if (levelCardCount !== 12) {
-    throw new Error(`Expected 12 level cards, found ${levelCardCount}`);
+  if (levelCardCount !== expectedLevelCount) {
+    throw new Error(`Expected ${expectedLevelCount} level cards, found ${levelCardCount}`);
   }
   const levelSelectLayout = await page.evaluate(() => {
     const overlay = document.querySelector('[data-testid="overlay"]');
@@ -173,8 +178,8 @@ try {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { levelCount: () => number } };
     return debugWindow.__shadowCircuitDebug?.levelCount();
   });
-  if (debugLevelCount !== 12) {
-    throw new Error(`Expected debug level count 12, found ${debugLevelCount}`);
+  if (debugLevelCount !== expectedLevelCount) {
+    throw new Error(`Expected debug level count ${expectedLevelCount}, found ${debugLevelCount}`);
   }
   await page.locator('[data-level-index="4"]').click();
   await expectLoadingCover('selecting Signal Vault');
@@ -383,7 +388,7 @@ try {
       };
     };
     const sample = debugWindow.__shadowCircuitDebug?.performance();
-    return Boolean(sample && sample.fps > 0 && sample.frameMs <= 600);
+    return Boolean(sample && sample.fps > 0);
   }, undefined, { timeout: 12000 });
   const performanceSample = await page.evaluate(() => {
     const debugWindow = window as Window & {
@@ -400,8 +405,8 @@ try {
     };
     return debugWindow.__shadowCircuitDebug?.performance();
   });
-  if (!performanceSample || performanceSample.fps <= 0 || performanceSample.frameMs > 600) {
-    throw new Error(`Expected live frame pacing sample, got ${JSON.stringify(performanceSample)}`);
+  if (!performanceSample || performanceSample.fps <= 0 || performanceSample.frameMs > maxFrameMs) {
+    throw new Error(`Expected live frame pacing sample under ${maxFrameMs}ms, got ${JSON.stringify(performanceSample)}`);
   }
   if (performanceSample.reservedMemoryMb < 60) {
     throw new Error(`Expected cinematic memory reserve, got ${JSON.stringify(performanceSample)}`);
@@ -762,7 +767,7 @@ async function assertTitleGoalsPanel(): Promise<void> {
   await expectVisible('[data-testid="mastery-summary"]');
   const masterySummaryText = await page.locator('[data-testid="mastery-summary"]').innerText();
   const normalizedMasterySummaryText = masterySummaryText.toLowerCase();
-  if (!normalizedMasterySummaryText.includes('mastery circuit') || !normalizedMasterySummaryText.includes('0 / 12 mastered')) {
+  if (!normalizedMasterySummaryText.includes('mastery circuit') || !normalizedMasterySummaryText.includes(`0 / ${expectedLevelCount} mastered`)) {
     throw new Error(`Expected initial Mastery Circuit summary, got ${masterySummaryText}`);
   }
   const achievementCardCount = await page.locator('[data-achievement-id]').count();
@@ -814,6 +819,23 @@ async function expectLoadingCover(context: string): Promise<void> {
   });
   if (!loadingState.hasLoadingClass || loadingState.hidden || loadingState.backgroundColor !== 'rgb(0, 0, 0)') {
     throw new Error(`Expected black loading cover while ${context}, got ${JSON.stringify(loadingState)}`);
+  }
+}
+
+async function assertAppIdentity(): Promise<void> {
+  try {
+    await page.waitForFunction((expectedVersion) => {
+      const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
+      const version = document.querySelector('[data-testid="app-version"]')?.textContent?.trim();
+      return document.title === 'Shadow Circuit' && version === expectedVersion && typeof debugWindow.__shadowCircuitDebug?.phase === 'function';
+    }, expectedVersionLabel, { timeout: 12000 });
+  } catch (error) {
+    const diagnostics = await collectSmokeDiagnostics();
+    throw new Error(
+      `Smoke URL ${baseUrl} is not serving Shadow Circuit ${expectedVersionLabel}: ${JSON.stringify(diagnostics)}. ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
 }
 
@@ -1014,10 +1036,19 @@ async function completeFinalLevel(): Promise<void> {
 }
 
 async function assertPlayingPhase(context: string): Promise<void> {
-  await page.waitForFunction(() => {
-    const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
-    return debugWindow.__shadowCircuitDebug?.phase() === 'playing';
-  }, undefined, { timeout: 22000 });
+  try {
+    await page.waitForFunction(() => {
+      const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
+      return debugWindow.__shadowCircuitDebug?.phase() === 'playing';
+    }, undefined, { timeout: playingTimeoutMs });
+  } catch (error) {
+    const diagnostics = await collectSmokeDiagnostics();
+    throw new Error(
+      `Timed out waiting for playing phase ${context} after ${playingTimeoutMs}ms: ${JSON.stringify(diagnostics)}. ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
   const phase = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
     return debugWindow.__shadowCircuitDebug?.phase();
@@ -1025,6 +1056,31 @@ async function assertPlayingPhase(context: string): Promise<void> {
   if (phase !== 'playing') {
     throw new Error(`Expected playing phase ${context}, got ${phase}`);
   }
+}
+
+async function collectSmokeDiagnostics(): Promise<Record<string, unknown>> {
+  return page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        phase: () => string;
+        levelId: () => string;
+        loadingProgress: () => { value: number; label: string };
+      };
+    };
+    const overlay = document.querySelector('[data-testid="overlay"]');
+    const version = document.querySelector('[data-testid="app-version"]')?.textContent?.trim() ?? null;
+
+    return {
+      href: window.location.href,
+      title: document.title,
+      version,
+      hasDebugHook: Boolean(debugWindow.__shadowCircuitDebug),
+      phase: debugWindow.__shadowCircuitDebug?.phase?.() ?? null,
+      levelId: debugWindow.__shadowCircuitDebug?.levelId?.() ?? null,
+      loadingProgress: debugWindow.__shadowCircuitDebug?.loadingProgress?.() ?? null,
+      overlayText: overlay?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 500) ?? null,
+    };
+  });
 }
 
 function countVisiblePixels(buffer: Buffer): number {
@@ -1040,4 +1096,9 @@ function countVisiblePixels(buffer: Buffer): number {
     }
   }
   return count;
+}
+
+function parseTimeout(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }

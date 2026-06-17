@@ -9,6 +9,8 @@ const headless = process.env.MOBILE_SMOKE_HEADLESS === 'true';
 const browserName = process.env.MOBILE_SMOKE_BROWSER ?? 'chromium';
 const playingTimeoutMs = Number(process.env.MOBILE_SMOKE_PLAYING_TIMEOUT_MS ?? 45000);
 const expectedVersionLabel = `v${packageInfo.version}`;
+const expectedLevelCount = levels.length;
+const expectedMasteryChipCount = expectedLevelCount * 4;
 const emulateIos = process.env.MOBILE_SMOKE_IOS === 'true' || browserName === 'webkit';
 const iphoneUserAgent =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
@@ -464,7 +466,7 @@ async function assertMobileGoalsPanel(page: Page): Promise<void> {
     state.count !== 4 ||
     state.descriptionVisible ||
     !state.masteryText.toLowerCase().includes('mastery circuit') ||
-    !state.masteryText.toLowerCase().includes('0 / 12 mastered') ||
+    !state.masteryText.toLowerCase().includes(`0 / ${expectedLevelCount} mastered`) ||
     !state.text.includes('Circuit Complete') ||
     !state.text.includes('Clean Entry') ||
     !state.text.includes('Perfect Shadow') ||
@@ -522,8 +524,8 @@ async function assertMobileLevelSelectMastery(page: Page): Promise<void> {
   });
 
   if (
-    state.cardCount !== 12 ||
-    state.chipCount !== 48 ||
+    state.cardCount !== expectedLevelCount ||
+    state.chipCount !== expectedMasteryChipCount ||
     !state.firstText.includes('Clear the route') ||
     state.firstMastery === null ||
     state.firstMastery.left < 0 ||

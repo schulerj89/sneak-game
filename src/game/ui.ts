@@ -163,30 +163,41 @@ export class GameUi {
 
     const status = intelPulseStatus(state);
     const meterWidth = Math.round((state.active ? state.activeProgress : state.cooldownProgress) * 100);
-    const disabled = state.available ? '' : ' disabled';
     this.intelPulse.classList.toggle('is-active', state.active);
     this.intelPulse.classList.toggle('is-mobile-simplified', state.mobileSimplified);
-    this.intelPulse.innerHTML = `
+
+    let button = this.intelPulse.querySelector<HTMLButtonElement>('[data-action="intel-pulse"]');
+    if (!button) {
+      this.intelPulse.innerHTML = `
       <button
         type="button"
         class="intel-pulse-button"
         data-action="intel-pulse"
         aria-label="Mission Intel Pulse"
         title="Mission Intel Pulse (Q)"
-        ${disabled}
       >
         <span class="intel-pulse-symbol" aria-hidden="true"></span>
         <span class="intel-pulse-label">Pulse</span>
-        <span class="intel-pulse-count" aria-hidden="true">${state.charges}</span>
+        <span class="intel-pulse-count" aria-hidden="true"></span>
       </button>
       <div class="intel-pulse-copy" aria-hidden="true">
         <strong>Intel Pulse</strong>
-        <span>${status}</span>
+        <span data-intel-pulse-status></span>
         <kbd>Q</kbd>
-        <span class="intel-pulse-meter"><span style="width: ${meterWidth}%"></span></span>
+        <span class="intel-pulse-meter"><span></span></span>
       </div>
     `;
-    this.bindIntelPulse();
+      button = this.intelPulse.querySelector<HTMLButtonElement>('[data-action="intel-pulse"]');
+      this.bindIntelPulse();
+    }
+
+    if (button) {
+      button.disabled = !state.available;
+      button.querySelector('.intel-pulse-count')?.replaceChildren(String(state.charges));
+    }
+    this.intelPulse.querySelector('[data-intel-pulse-status]')?.replaceChildren(status);
+    const meter = this.intelPulse.querySelector<HTMLElement>('.intel-pulse-meter span');
+    if (meter) meter.style.width = `${meterWidth}%`;
   }
 
   updateRunHud(runElapsedMs: number, runAlertCount: number): void {

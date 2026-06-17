@@ -6,6 +6,22 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.4.3 - 2026-06-17
+
+- Cleared keyboard and virtual movement input on window blur or hidden-document transitions so controls cannot drift after focus loss.
+- Added focused input tests for focus-loss cleanup.
+
+## v2.4.2 - 2026-06-17
+
+- Hardened desktop smoke tests with a Shadow Circuit preflight, configurable playing timeout, and richer phase/loading diagnostics.
+- Replaced hardcoded smoke level counts with values derived from the level registry.
+- Removed the extra level-ready delay after the required loading duration to prevent transitions from lingering on `Ready`.
+
+## v2.4.1 - 2026-06-17
+
+- Stabilized Intel Pulse mobile controls by updating the existing button in place instead of replacing its DOM each HUD refresh.
+- Kept the mobile pulse button tappable during live status, charge, cooldown, and meter updates.
+
 ## v2.4.0 - 2026-06-17
 
 - Added `Detected Retry Target`, a compact detected-screen reminder of the current level's open mastery target.
