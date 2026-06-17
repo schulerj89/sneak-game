@@ -132,6 +132,7 @@ try {
 
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Menu' }).click();
   await page.locator('[data-testid="touch-controls"]').waitFor({ state: 'hidden', timeout: 8000 });
+  await assertMobileEncorePick(page);
 
   console.info(`[mobile-smoke] ok browser=${browserName} url=${baseUrl}`);
   console.info(`[mobile-smoke] screenshots=${screenshotDir}/shadow-circuit-mobile-portrait-rotate.png, ${screenshotDir}/shadow-circuit-mobile-character-select.png, ${screenshotDir}/shadow-circuit-mobile-touch.png`);
@@ -534,6 +535,73 @@ async function assertMobileLevelSelectMastery(page: Page): Promise<void> {
   await page.locator('[data-action="level-select-back"]').scrollIntoViewIfNeeded();
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await expectVisible(page, 'text=Break the circuit before sentries close in.');
+}
+
+async function assertMobileEncorePick(page: Page): Promise<void> {
+  await page.addInitScript((allLevels) => {
+    const achievementRecords = Object.fromEntries(
+      allLevels.map((level: { id: string }) => [level.id, { clears: 2, bestGrade: 'S' }]),
+    );
+    const runRecords = Object.fromEntries(
+      allLevels.map((level: { id: string; parSeconds: number }, index: number) => [
+        level.id,
+        { bestTimeMs: level.parSeconds * 1000 - (index === 1 ? 500 : 3500 + index * 50) },
+      ]),
+    );
+
+    window.localStorage.clear();
+    window.localStorage.setItem('shadow-circuit-achievements-v1', JSON.stringify(achievementRecords));
+    window.localStorage.setItem('shadow-circuit-run-records-v1', JSON.stringify(runRecords));
+  }, levels);
+  await page.goto(`${baseUrl}?mobile-encore-smoke=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+  await expectVisible(page, '[data-testid="title-panel"]');
+
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Goals' }).click();
+  await expectVisible(page, '[data-testid="encore-pick"]');
+  await assertActionButtonsFit(page, '[data-testid="goals-panel"]');
+  const goalsEncore = await page.locator('[data-testid="encore-pick"]').evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      text: element.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+    };
+  });
+  if (
+    !goalsEncore.text.toLowerCase().includes('encore pick') ||
+    !goalsEncore.text.includes('Archive Lanes') ||
+    goalsEncore.left < 0 ||
+    goalsEncore.right > goalsEncore.viewport.width ||
+    goalsEncore.bottom > goalsEncore.viewport.height
+  ) {
+    throw new Error(`Expected compact mobile Goals Encore Pick, got ${JSON.stringify(goalsEncore)}`);
+  }
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
+  await expectVisible(page, '[data-testid="title-panel"]');
+
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Levels' }).click();
+  await expectVisible(page, '[data-testid="encore-pick"]');
+  const levelSelectState = await page.locator('.level-select-panel').evaluate((panel) => ({
+    text: panel.querySelector('[data-testid="encore-pick"]')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    highlighted: panel.querySelectorAll('.level-card.is-encore[data-level-index="1"]').length,
+  }));
+  if (!levelSelectState.text.includes('Beat best') || levelSelectState.highlighted !== 1) {
+    throw new Error(`Expected mobile Level Select Encore Pick, got ${JSON.stringify(levelSelectState)}`);
+  }
+
+  await page.locator('[data-testid="encore-pick"]').getByRole('button', { name: 'Beat best' }).click();
+  await expectVisible(page, '[data-testid="loading-panel"]');
+  await assertPlayingPhase(page);
+  const loadedLevelId = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { levelId: () => string } };
+    return debugWindow.__shadowCircuitDebug?.levelId();
+  });
+  if (loadedLevelId !== 'archive-lanes') {
+    throw new Error(`Expected mobile Encore Pick to load Archive Lanes, got ${loadedLevelId}`);
+  }
 }
 
 async function assertMobileBriefingSimplified(page: Page): Promise<void> {

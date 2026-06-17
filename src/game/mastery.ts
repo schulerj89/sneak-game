@@ -33,6 +33,18 @@ export type RetryTarget = Readonly<{
   detail: string;
 }>;
 
+export type EncorePick = Readonly<{
+  levelId: string;
+  levelIndex: number;
+  levelName: string;
+  label: string;
+  detail: string;
+  actionLabel: string;
+  bestTimeMs: number | null;
+  parTimeMs: number;
+  marginMs: number | null;
+}>;
+
 const sRank: RunGrade = 'S';
 
 export function loadLevelMasteryProgress(
@@ -85,6 +97,53 @@ export function buildMasterySummary(mastery: readonly LevelMasteryProgress[]): M
     masteredLevels: mastery.filter((level) => level.completedMarks === level.totalMarks).length,
     totalLevels: mastery.length,
   };
+}
+
+export function buildEncorePick(
+  levels: readonly LevelDefinition[],
+  mastery: readonly LevelMasteryProgress[],
+): EncorePick | null {
+  if (levels.length === 0 || mastery.length < levels.length) return null;
+
+  const masteryById = new Map(mastery.map((level) => [level.levelId, level]));
+  const candidates = levels.map((level, levelIndex) => {
+    const progress = masteryById.get(level.id);
+    if (!progress || !isEncoreEligible(progress)) return null;
+
+    const parTimeMs = level.parSeconds * 1000;
+    const marginMs = progress.bestTimeMs === null ? null : parTimeMs - progress.bestTimeMs;
+    return { level, levelIndex, progress, parTimeMs, marginMs };
+  });
+
+  if (candidates.some((candidate) => candidate === null)) return null;
+
+  const [pick] = candidates
+    .filter((candidate): candidate is NonNullable<(typeof candidates)[number]> => candidate !== null)
+    .sort((a, b) => {
+      if (a.marginMs === null && b.marginMs !== null) return -1;
+      if (a.marginMs !== null && b.marginMs === null) return 1;
+      if (a.marginMs !== null && b.marginMs !== null && a.marginMs !== b.marginMs) return a.marginMs - b.marginMs;
+      return a.levelIndex - b.levelIndex;
+    });
+  if (!pick) return null;
+
+  const hasBestTime = pick.progress.bestTimeMs !== null;
+  return {
+    levelId: pick.level.id,
+    levelIndex: pick.levelIndex,
+    levelName: pick.level.name,
+    label: hasBestTime ? `Encore: Beat ${pick.level.name} ${formatRunTime(pick.progress.bestTimeMs ?? 0)}` : `Encore: Set ${pick.level.name} best`,
+    detail: hasBestTime ? encoreMarginDetail(pick.marginMs ?? 0) : 'No best time saved yet.',
+    actionLabel: hasBestTime ? 'Beat best' : 'Set best',
+    bestTimeMs: pick.progress.bestTimeMs,
+    parTimeMs: pick.parTimeMs,
+    marginMs: pick.marginMs,
+  };
+}
+
+function isEncoreEligible(progress: LevelMasteryProgress): boolean {
+  if (progress.completedMarks >= progress.totalMarks) return true;
+  return progress.clears >= 2 && progress.bestGrade === sRank && progress.bestTimeMs === null;
 }
 
 export function retryTargetForCompletion(
@@ -144,6 +203,11 @@ export function formatRunTime(milliseconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function encoreMarginDetail(marginMs: number): string {
+  if (marginMs <= 0) return 'Personal best is at par. Tighten the route.';
+  return `${formatRunTime(marginMs)} under par is the tightest margin.`;
 }
 
 function browserStorage(): Storage | null {

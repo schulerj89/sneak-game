@@ -6,6 +6,14 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.1.0 - 2026-06-17
+
+- Added `Encore Pick`, a mastered-profile replay prompt that recommends the weakest personal-best target after all Mastery Circuit marks are complete.
+- Added compact Encore prompts to Goals and Level Select, with a direct action that loads the recommended level.
+- Kept the feature derived from existing mastery and best-time records with no new assets, audio, levels, or storage keys.
+- Added unit and smoke coverage for hidden partial-progress state, full-mastery target choice, mobile layout fit, and direct Encore level loading.
+- Documented the expert decision and before/after screenshots in `docs/2026-06-17-replay-minor-update/`.
+
 ## v2.0.0 - 2026-06-16
 
 - Added `Mastery Circuit` replay progress to Level Select, with per-level marks for Clear, S, Par, and 2x plus the next replay target.

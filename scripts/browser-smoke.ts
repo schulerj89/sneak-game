@@ -713,6 +713,7 @@ try {
     debugWindow.__shadowCircuitDebug?.forceEnemyCollision();
   });
   await expectVisible('text=Retry Level');
+  await assertEncorePickForMasteredProfile();
 
   console.info(`[browser-smoke] ok url=${baseUrl}`);
   console.info(`[browser-smoke] screenshots=${screenshotDir}/shadow-circuit-menu.png, ${screenshotDir}/shadow-circuit-playing.png`);
@@ -813,6 +814,64 @@ async function seedSecondSweepAchievementUnlock(): Promise<void> {
   await page.evaluate((seedRecords) => {
     window.localStorage.setItem('shadow-circuit-achievements-v1', JSON.stringify(seedRecords));
   }, records);
+}
+
+async function assertEncorePickForMasteredProfile(): Promise<void> {
+  await page.addInitScript((allLevels) => {
+    const achievementRecords = Object.fromEntries(
+      allLevels.map((level: { id: string }) => [level.id, { clears: 2, bestGrade: 'S' }]),
+    );
+    const runRecords = Object.fromEntries(
+      allLevels.map((level: { id: string; parSeconds: number }, index: number) => [
+        level.id,
+        { bestTimeMs: level.parSeconds * 1000 - (index === 1 ? 500 : 3500 + index * 50) },
+      ]),
+    );
+
+    window.localStorage.clear();
+    window.localStorage.setItem('shadow-circuit-achievements-v1', JSON.stringify(achievementRecords));
+    window.localStorage.setItem('shadow-circuit-run-records-v1', JSON.stringify(runRecords));
+  }, levels);
+  await page.goto(`${baseUrl}?encore-smoke=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+  await expectVisible('[data-testid="title-panel"]');
+
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Goals' }).click();
+  await expectVisible('[data-testid="encore-pick"]');
+  const goalsEncoreText = await page.locator('[data-testid="encore-pick"]').innerText();
+  if (!goalsEncoreText.toLowerCase().includes('encore pick') || !goalsEncoreText.includes('Archive Lanes')) {
+    throw new Error(`Expected mastered Goals Encore Pick for Archive Lanes, got ${goalsEncoreText}`);
+  }
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
+  await expectVisible('[data-testid="title-panel"]');
+
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Levels' }).click();
+  await expectVisible('[data-testid="encore-pick"]');
+  const levelSelectEncoreText = await page.locator('[data-testid="encore-pick"]').innerText();
+  const highlightedEncoreCard = await page.locator('.level-card.is-encore[data-level-index="1"]').count();
+  if (!levelSelectEncoreText.includes('Beat best') || highlightedEncoreCard !== 1) {
+    throw new Error(
+      `Expected Level Select Encore Pick and highlighted Archive Lanes card, got text=${levelSelectEncoreText} highlighted=${highlightedEncoreCard}`,
+    );
+  }
+
+  await page.locator('[data-testid="encore-pick"]').getByRole('button', { name: 'Beat best' }).click();
+  await expectLoadingCover('encore pick');
+  await assertPlayingPhase('after selecting Encore Pick');
+  const encoreState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        levelId: () => string;
+        phase: () => string;
+      };
+    };
+    return {
+      levelId: debugWindow.__shadowCircuitDebug?.levelId(),
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+    };
+  });
+  if (encoreState.levelId !== 'archive-lanes' || encoreState.phase !== 'playing') {
+    throw new Error(`Expected Encore Pick to load Archive Lanes, got ${JSON.stringify(encoreState)}`);
+  }
 }
 
 async function selectDebugLevel(levelIndex: number): Promise<void> {

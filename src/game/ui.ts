@@ -2,7 +2,7 @@ import { soundtrackOptions } from './audio';
 import { levelThumbnailSvg } from './assets';
 import type { AchievementProgress } from './achievements';
 import { heroOptions, type HeroId } from './heroes';
-import { buildMasterySummary, type LevelMasteryProgress, type RetryTarget } from './mastery';
+import { buildMasterySummary, type EncorePick, type LevelMasteryProgress, type RetryTarget } from './mastery';
 import { isLoadingPhase, isPlayingPhase } from './phase';
 import type {
   GamePhase,
@@ -226,6 +226,7 @@ export class GameUi {
     selectedHeroId: HeroId,
     achievements: readonly AchievementProgress[],
     mastery: readonly LevelMasteryProgress[],
+    encorePick: EncorePick | null,
     retryTarget: RetryTarget | null,
   ): void {
     this.overlay.classList.toggle('is-loading', isLoadingPhase(phase));
@@ -274,9 +275,10 @@ export class GameUi {
       `;
     } else if (phase === 'goals') {
       this.overlay.innerHTML = `
-        <div class="panel goals-panel" data-testid="goals-panel">
+        <div class="panel goals-panel ${encorePick ? 'has-encore' : ''}" data-testid="goals-panel">
           <h1>Goals</h1>
           ${masterySummaryCard(mastery)}
+          ${encorePick ? encorePickCard(encorePick, 'goals') : ''}
           <section class="achievement-summary" data-testid="achievement-summary" aria-label="Goals">
             ${achievementList(achievements)}
           </section>
@@ -358,11 +360,12 @@ export class GameUi {
       this.overlay.innerHTML = `
         <div class="panel level-select-panel">
           <h1>Level Select</h1>
+          ${encorePick ? encorePickCard(encorePick, 'level-select') : ''}
           <div class="level-grid">
             ${levels.map((candidate, index) => {
               const progress = mastery.find((candidateProgress) => candidateProgress.levelId === candidate.id);
               return `
-              <button type="button" class="level-card ${index === levelIndex ? 'is-active' : ''}" data-level-index="${index}">
+              <button type="button" class="level-card ${index === levelIndex ? 'is-active' : ''} ${index === encorePick?.levelIndex ? 'is-encore' : ''}" data-level-index="${index}">
                 <span class="level-thumb">${levelThumbnailSvg(candidate, index + 1)}</span>
                 <span class="level-card-title">${candidate.name}</span>
                 ${progress ? levelMasteryCard(progress) : ''}
@@ -574,6 +577,11 @@ export class GameUi {
         this.callbacks.onSelectLevel(Number((button as HTMLElement).dataset.levelIndex));
       });
     });
+    this.overlay.querySelectorAll('[data-encore-level-index]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.callbacks.onSelectLevel(Number((button as HTMLElement).dataset.encoreLevelIndex));
+      });
+    });
     this.overlay.querySelectorAll('[data-action="settings"]').forEach((button) =>
       button.addEventListener('click', this.callbacks.onSettings),
     );
@@ -626,6 +634,19 @@ function intelPulseStatus(state: IntelPulseUiState): string {
 
 function selectedTrack(soundtrackId: GameSettings['soundtrackId']): (typeof soundtrackOptions)[number] {
   return soundtrackOptions.find((track) => track.id === soundtrackId) ?? soundtrackOptions[0];
+}
+
+function encorePickCard(encorePick: EncorePick, context: 'goals' | 'level-select'): string {
+  return `
+    <section class="encore-pick encore-pick-${context}" data-testid="encore-pick" aria-label="Encore Pick">
+      <span class="encore-pick-copy">
+        <strong>Encore Pick</strong>
+        <span>${encorePick.label}</span>
+        <small>${encorePick.detail}</small>
+      </span>
+      <button type="button" data-encore-level-index="${encorePick.levelIndex}">${encorePick.actionLabel}</button>
+    </section>
+  `;
 }
 
 function masterySummaryCard(mastery: readonly LevelMasteryProgress[]): string {

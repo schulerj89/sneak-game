@@ -13,8 +13,10 @@ import { levels } from './levels';
 import { runLoadingSequence, type LoadingTask } from './loading';
 import { add, clampToRoom, distance, normalize, scale, subtract } from './math';
 import {
+  buildEncorePick,
   loadLevelMasteryProgress,
   retryTargetForCompletion,
+  type EncorePick,
   type LevelMasteryProgress,
   type RetryTarget,
 } from './mastery';
@@ -162,6 +164,8 @@ declare global {
       rendererMemory: () => { geometries: number; textures: number };
       achievements: () => readonly AchievementProgress[];
       mastery: () => readonly LevelMasteryProgress[];
+      encorePick: () => EncorePick | null;
+      refreshReplayProgress: () => { achievements: readonly AchievementProgress[]; mastery: readonly LevelMasteryProgress[]; encorePick: EncorePick | null };
       intelPulse: () => IntelPulseUiState;
       triggerIntelPulse: () => void;
     };
@@ -208,6 +212,7 @@ export class Game {
   private objectiveNoticeUntil = 0;
   private achievementProgress: readonly AchievementProgress[] = loadAchievementProgress(achievementLevelIds);
   private levelMastery: readonly LevelMasteryProgress[] = loadLevelMasteryProgress(levels);
+  private encorePick: EncorePick | null = buildEncorePick(levels, this.levelMastery);
   private retryTarget: RetryTarget | null = null;
   private achievementNotice = '';
   private achievementNoticeUntil = 0;
@@ -1758,6 +1763,8 @@ export class Game {
       loadedHeroAssets: () => this.characterAssets.loadedHeroIds(),
       achievements: () => this.achievementProgress,
       mastery: () => this.levelMastery,
+      encorePick: () => this.encorePick,
+      refreshReplayProgress: () => this.refreshReplayProgress(),
       intelPulse: () => this.intelPulseUiState(),
       triggerIntelPulse: () => this.triggerIntelPulse(),
     };
@@ -2040,6 +2047,7 @@ export class Game {
       this.selectedHeroId,
       this.achievementProgress,
       this.levelMastery,
+      this.encorePick,
       this.retryTarget,
     );
     this.ui.renderAchievementNotice(this.achievementNotice);
@@ -2095,6 +2103,22 @@ export class Game {
     return this.runStartedAt > 0 ? performance.now() - this.runStartedAt : 0;
   }
 
+  private refreshReplayProgress(): {
+    achievements: readonly AchievementProgress[];
+    mastery: readonly LevelMasteryProgress[];
+    encorePick: EncorePick | null;
+  } {
+    this.achievementProgress = loadAchievementProgress(achievementLevelIds);
+    this.levelMastery = loadLevelMasteryProgress(levels);
+    this.encorePick = buildEncorePick(levels, this.levelMastery);
+
+    return {
+      achievements: this.achievementProgress,
+      mastery: this.levelMastery,
+      encorePick: this.encorePick,
+    };
+  }
+
   private completeLevel(): void {
     const previousBestTimeMs = loadBestTime(this.level.id);
     const summary = createRunSummary({
@@ -2116,6 +2140,7 @@ export class Game {
     this.achievementProgress = achievements.progress;
     this.queueAchievementNotices(achievements.unlocked);
     this.levelMastery = loadLevelMasteryProgress(levels);
+    this.encorePick = buildEncorePick(levels, this.levelMastery);
     const currentMastery = this.levelMastery.find((mastery) => mastery.levelId === this.level.id);
     this.retryTarget = currentMastery ? retryTargetForCompletion(this.level, summary, currentMastery) : null;
 

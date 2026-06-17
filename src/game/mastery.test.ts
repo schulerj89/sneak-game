@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { recordLevelAchievementClear } from './achievements';
-import { buildLevelMasteryProgress, loadLevelMasteryProgress, retryTargetForCompletion } from './mastery';
+import { buildEncorePick, buildLevelMasteryProgress, loadLevelMasteryProgress, retryTargetForCompletion } from './mastery';
 import { createRunSummary, saveBestTime } from './runStats';
 import type { LevelDefinition } from './types';
 
@@ -143,5 +143,57 @@ describe('mastery progress', () => {
     expect(
       retryTargetForCompletion(baseLevel, masteredSummary, buildLevelMasteryProgress(baseLevel, 2, 'S', 30_000)).label,
     ).toBe('Beat best 0:30');
+  });
+
+  it('hides Encore Pick until every level is mastered', () => {
+    const mastery = [
+      buildLevelMasteryProgress(baseLevel, 2, 'S', 30_000),
+      buildLevelMasteryProgress(secondLevel, 1, 'S', 34_000),
+    ];
+
+    expect(buildEncorePick(levels, mastery)).toBe(null);
+  });
+
+  it('chooses the mastered level with the weakest best-time margin', () => {
+    const mastery = [
+      buildLevelMasteryProgress(baseLevel, 2, 'S', 31_000),
+      buildLevelMasteryProgress(secondLevel, 2, 'S', 39_500),
+    ];
+
+    const pick = buildEncorePick(levels, mastery);
+
+    expect(pick).toMatchObject({
+      levelId: secondLevel.id,
+      levelIndex: 1,
+      label: 'Encore: Beat Archive Lanes 0:39',
+      actionLabel: 'Beat best',
+      marginMs: 500,
+    });
+  });
+
+  it('treats missing best time as the weakest encore target', () => {
+    const mastery = [
+      buildLevelMasteryProgress(baseLevel, 2, 'S', 31_000),
+      buildLevelMasteryProgress(secondLevel, 2, 'S', null),
+    ];
+
+    const pick = buildEncorePick(levels, mastery);
+
+    expect(pick).toMatchObject({
+      levelId: secondLevel.id,
+      label: 'Encore: Set Archive Lanes best',
+      actionLabel: 'Set best',
+      bestTimeMs: null,
+      marginMs: null,
+    });
+  });
+
+  it('uses stable level order when encore margins tie', () => {
+    const mastery = [
+      buildLevelMasteryProgress(baseLevel, 2, 'S', 34_000),
+      buildLevelMasteryProgress(secondLevel, 2, 'S', 39_000),
+    ];
+
+    expect(buildEncorePick(levels, mastery)?.levelId).toBe(baseLevel.id);
   });
 });
