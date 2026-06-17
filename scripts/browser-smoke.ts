@@ -31,6 +31,10 @@ try {
   await expectVisible('[data-testid="overlay"]');
   await assertVersionBadge();
   await expectVisible('text=Break the circuit before sentries close in.');
+  const initialNextRunCount = await page.locator('[data-testid="next-run"]').count();
+  if (initialNextRunCount !== 0) {
+    throw new Error(`Expected Next Run to stay hidden for empty profiles, found ${initialNextRunCount}`);
+  }
   const titleObjectiveTextCount = await page.getByText('Collect yellow keycards and blue terminals').count();
   if (titleObjectiveTextCount !== 0) {
     throw new Error('Title screen should not show objective briefing text');
@@ -582,6 +586,11 @@ try {
   });
   await expectVisible('text=Level 1 Completed');
   await expectVisible('[data-testid="retry-target"]');
+  await expectVisible('[data-testid="run-delta"]');
+  const runDeltaText = await page.locator('[data-testid="run-delta"]').innerText();
+  if (!runDeltaText.includes('Par ')) {
+    throw new Error(`Expected first completion Run Delta to compare against par, got ${runDeltaText}`);
+  }
   const retryTargetText = await page.locator('[data-testid="retry-target"]').innerText();
   if (!retryTargetText.includes('Retry for S') && !retryTargetText.includes('Second clear ready')) {
     throw new Error(`Expected context-aware Retry Target after first clear, got ${retryTargetText}`);
@@ -697,6 +706,11 @@ try {
     debugWindow.__shadowCircuitDebug?.forceCaught();
   });
   await expectVisible('text=Retry Level');
+  await expectVisible('[data-testid="caught-target"]');
+  const caughtTargetText = await page.locator('[data-testid="caught-target"]').innerText();
+  if (!caughtTargetText.toLowerCase().includes('still open')) {
+    throw new Error(`Expected detected panel to show a retry target, got ${caughtTargetText}`);
+  }
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Retry Level' }).click();
   await expectLoadingCover('retry level');
   await page.locator('[data-testid="overlay"]').waitFor({ state: 'hidden', timeout: 10000 });
@@ -713,6 +727,8 @@ try {
     debugWindow.__shadowCircuitDebug?.forceEnemyCollision();
   });
   await expectVisible('text=Retry Level');
+  await expectVisible('[data-testid="caught-target"]');
+  await assertNextRunForPartialProfile();
   await assertEncorePickForMasteredProfile();
 
   console.info(`[browser-smoke] ok url=${baseUrl}`);
@@ -814,6 +830,49 @@ async function seedSecondSweepAchievementUnlock(): Promise<void> {
   await page.evaluate((seedRecords) => {
     window.localStorage.setItem('shadow-circuit-achievements-v1', JSON.stringify(seedRecords));
   }, records);
+}
+
+async function assertNextRunForPartialProfile(): Promise<void> {
+  await page.addInitScript((allLevels) => {
+    const achievementRecords = {
+      [allLevels[0].id]: { clears: 2, bestGrade: 'S' },
+      [allLevels[1].id]: { clears: 1, bestGrade: 'A' },
+    };
+    const runRecords = {
+      [allLevels[0].id]: { bestTimeMs: allLevels[0].parSeconds * 1000 - 4000 },
+    };
+
+    window.localStorage.clear();
+    window.localStorage.setItem('shadow-circuit-achievements-v1', JSON.stringify(achievementRecords));
+    window.localStorage.setItem('shadow-circuit-run-records-v1', JSON.stringify(runRecords));
+  }, levels);
+  await page.goto(`${baseUrl}?next-run-smoke=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+  await expectVisible('[data-testid="title-panel"]');
+  await expectVisible('[data-testid="next-run"]');
+
+  const nextRunText = await page.locator('[data-testid="next-run"]').innerText();
+  if (!nextRunText.toLowerCase().includes('next run') || !nextRunText.includes('Archive Lanes') || !nextRunText.includes('Replay for S')) {
+    throw new Error(`Expected partial-progress Next Run for Archive Lanes, got ${nextRunText}`);
+  }
+
+  await page.locator('[data-testid="next-run"]').getByRole('button', { name: 'Run' }).click();
+  await expectVisible('[data-testid="loading-panel"]');
+  await assertPlayingPhase('after selecting Next Run');
+  const nextRunState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        levelId: () => string;
+        phase: () => string;
+      };
+    };
+    return {
+      levelId: debugWindow.__shadowCircuitDebug?.levelId(),
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+    };
+  });
+  if (nextRunState.levelId !== 'archive-lanes' || nextRunState.phase !== 'playing') {
+    throw new Error(`Expected Next Run to load Archive Lanes, got ${JSON.stringify(nextRunState)}`);
+  }
 }
 
 async function assertEncorePickForMasteredProfile(): Promise<void> {

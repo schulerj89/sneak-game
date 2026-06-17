@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRunSummary, loadBestTime, loadRunRecordProgress, saveBestTime } from './runStats';
+import { createRunSummary, loadBestTime, loadRunRecordProgress, runDeltaLabel, saveBestTime } from './runStats';
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -81,5 +81,79 @@ describe('run stats', () => {
 
     expect(() => saveBestTime('dock-blackout', 31_234.4, storage)).not.toThrow();
     expect(loadBestTime('dock-blackout', storage)).toBe(null);
+  });
+
+  it('labels a new best against the previous best', () => {
+    expect(
+      runDeltaLabel(
+        createRunSummary({
+          elapsedMs: 28_000,
+          parSeconds: 35,
+          alerts: 0,
+          previousBestTimeMs: 30_000,
+        }),
+      ),
+    ).toBe('Best -0:02');
+  });
+
+  it('labels a slower run against the previous best', () => {
+    expect(
+      runDeltaLabel(
+        createRunSummary({
+          elapsedMs: 33_000,
+          parSeconds: 35,
+          alerts: 0,
+          previousBestTimeMs: 30_000,
+        }),
+      ),
+    ).toBe('Best +0:03');
+  });
+
+  it('labels a first saved run against par', () => {
+    expect(
+      runDeltaLabel(
+        createRunSummary({
+          elapsedMs: 30_000,
+          parSeconds: 35,
+          alerts: 0,
+          previousBestTimeMs: null,
+        }),
+      ),
+    ).toBe('Par -0:05');
+
+    expect(
+      runDeltaLabel(
+        createRunSummary({
+          elapsedMs: 39_000,
+          parSeconds: 35,
+          alerts: 0,
+          previousBestTimeMs: null,
+        }),
+      ),
+    ).toBe('Par +0:04');
+  });
+
+  it('labels exact best and exact par runs', () => {
+    expect(
+      runDeltaLabel(
+        createRunSummary({
+          elapsedMs: 30_000,
+          parSeconds: 35,
+          alerts: 0,
+          previousBestTimeMs: 30_000,
+        }),
+      ),
+    ).toBe('Best even');
+
+    expect(
+      runDeltaLabel(
+        createRunSummary({
+          elapsedMs: 35_000,
+          parSeconds: 35,
+          alerts: 0,
+          previousBestTimeMs: null,
+        }),
+      ),
+    ).toBe('Par even');
   });
 });

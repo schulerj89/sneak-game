@@ -36,6 +36,18 @@ export function createRunSummary(params: {
   };
 }
 
+export function runDeltaLabel(summary: RunSummary): string {
+  if (summary.bestTimeMs !== null) {
+    const deltaMs = summary.elapsedMs - summary.bestTimeMs;
+    if (deltaMs === 0) return 'Best even';
+    return `Best ${deltaMs < 0 ? '-' : '+'}${formatRunTimeDelta(Math.abs(deltaMs))}`;
+  }
+
+  const deltaMs = summary.elapsedMs - summary.parSeconds * 1000;
+  if (deltaMs === 0) return 'Par even';
+  return `Par ${deltaMs < 0 ? '-' : '+'}${formatRunTimeDelta(Math.abs(deltaMs))}`;
+}
+
 export function loadBestTime(levelId: string, storage: Storage | null = browserStorage()): number | null {
   if (!storage) return null;
 
@@ -85,6 +97,13 @@ function loadRecords(storage: Storage): RunRecords {
   } catch {
     return {};
   }
+}
+
+function formatRunTimeDelta(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function gradeRun(score: number, alerts: number, elapsedSeconds: number, parSeconds: number): RunGrade {

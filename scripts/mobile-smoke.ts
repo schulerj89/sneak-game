@@ -61,6 +61,10 @@ try {
   await page.setViewportSize({ width: 932, height: 430 });
   await page.locator('[data-testid="orientation-reminder"]').waitFor({ state: 'hidden', timeout: 8000 });
   await assertVersionBadge(page);
+  const initialNextRunCount = await page.locator('[data-testid="next-run"]').count();
+  if (initialNextRunCount !== 0) {
+    throw new Error(`Expected mobile Next Run to stay hidden for empty profiles, found ${initialNextRunCount}`);
+  }
   await assertActionButtonsFit(page, '[data-testid="overlay"]');
   await assertMobileGoalsPanel(page);
   await assertMobileLevelSelectMastery(page);
@@ -133,6 +137,7 @@ try {
   await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Menu' }).click();
   await page.locator('[data-testid="touch-controls"]').waitFor({ state: 'hidden', timeout: 8000 });
   await assertMobileEncorePick(page);
+  await assertMobileNextRunShortcut(page);
 
   console.info(`[mobile-smoke] ok browser=${browserName} url=${baseUrl}`);
   console.info(`[mobile-smoke] screenshots=${screenshotDir}/shadow-circuit-mobile-portrait-rotate.png, ${screenshotDir}/shadow-circuit-mobile-character-select.png, ${screenshotDir}/shadow-circuit-mobile-touch.png`);
@@ -602,6 +607,71 @@ async function assertMobileEncorePick(page: Page): Promise<void> {
   if (loadedLevelId !== 'archive-lanes') {
     throw new Error(`Expected mobile Encore Pick to load Archive Lanes, got ${loadedLevelId}`);
   }
+
+  await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { forceCaught: () => void } };
+    debugWindow.__shadowCircuitDebug?.forceCaught();
+  });
+  await expectVisible(page, '[data-testid="caught-target"]');
+  const caughtTargetText = await page.locator('[data-testid="caught-target"]').innerText();
+  if (!caughtTargetText.toLowerCase().includes('still open') || !caughtTargetText.includes('Beat best')) {
+    throw new Error(`Expected mobile mastered caught target to chase best time, got ${caughtTargetText}`);
+  }
+  await assertActionButtonsFit(page, '[data-testid="overlay"]');
+}
+
+async function assertMobileNextRunShortcut(page: Page): Promise<void> {
+  await page.addInitScript((allLevels) => {
+    const achievementRecords = {
+      [allLevels[0].id]: { clears: 2, bestGrade: 'S' },
+      [allLevels[1].id]: { clears: 1, bestGrade: 'A' },
+    };
+    const runRecords = {
+      [allLevels[0].id]: { bestTimeMs: allLevels[0].parSeconds * 1000 - 4000 },
+    };
+
+    window.localStorage.clear();
+    window.localStorage.setItem('shadow-circuit-achievements-v1', JSON.stringify(achievementRecords));
+    window.localStorage.setItem('shadow-circuit-run-records-v1', JSON.stringify(runRecords));
+  }, levels);
+  await page.goto(`${baseUrl}?mobile-next-run-smoke=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+  await expectVisible(page, '[data-testid="title-panel"]');
+  await expectVisible(page, '[data-testid="next-run"]');
+  await assertActionButtonsFit(page, '[data-testid="title-panel"]');
+
+  const state = await page.locator('[data-testid="next-run"]').evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      text: element.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+    };
+  });
+  if (
+    !state.text.toLowerCase().includes('next run') ||
+    !state.text.includes('Archive Lanes') ||
+    !state.text.includes('Replay for S') ||
+    state.left < 0 ||
+    state.top < 0 ||
+    state.right > state.viewport.width ||
+    state.bottom > state.viewport.height
+  ) {
+    throw new Error(`Expected compact mobile Next Run shortcut, got ${JSON.stringify(state)}`);
+  }
+
+  await page.locator('[data-testid="next-run"]').getByRole('button', { name: 'Run' }).click();
+  await expectVisible(page, '[data-testid="loading-panel"]');
+  await assertPlayingPhase(page);
+  const loadedLevelId = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { levelId: () => string } };
+    return debugWindow.__shadowCircuitDebug?.levelId();
+  });
+  if (loadedLevelId !== 'archive-lanes') {
+    throw new Error(`Expected mobile Next Run to load Archive Lanes, got ${loadedLevelId}`);
+  }
 }
 
 async function assertMobileBriefingSimplified(page: Page): Promise<void> {
@@ -830,6 +900,11 @@ async function completeDockAndAdvance(page: Page): Promise<void> {
   });
   await expectVisible(page, 'text=Level 1 Completed');
   await expectVisible(page, '[data-testid="retry-target"]');
+  await expectVisible(page, '[data-testid="run-delta"]');
+  const runDeltaText = await page.locator('[data-testid="run-delta"]').innerText();
+  if (!runDeltaText.includes('Par ')) {
+    throw new Error(`Expected mobile first completion Run Delta to compare against par, got ${runDeltaText}`);
+  }
   const retryTargetText = await page.locator('[data-testid="retry-target"]').innerText();
   if (!retryTargetText.includes('Retry for S') && !retryTargetText.includes('Second clear ready')) {
     throw new Error(`Expected mobile context-aware Retry Target after first clear, got ${retryTargetText}`);

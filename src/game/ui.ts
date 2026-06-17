@@ -2,8 +2,9 @@ import { soundtrackOptions } from './audio';
 import { levelThumbnailSvg } from './assets';
 import type { AchievementProgress } from './achievements';
 import { heroOptions, type HeroId } from './heroes';
-import { buildMasterySummary, type EncorePick, type LevelMasteryProgress, type RetryTarget } from './mastery';
+import { buildMasterySummary, type EncorePick, type LevelMasteryProgress, type NextRunTarget, type RetryTarget } from './mastery';
 import { isLoadingPhase, isPlayingPhase } from './phase';
+import { runDeltaLabel } from './runStats';
 import type {
   GamePhase,
   GameSettings,
@@ -227,6 +228,7 @@ export class GameUi {
     achievements: readonly AchievementProgress[],
     mastery: readonly LevelMasteryProgress[],
     encorePick: EncorePick | null,
+    nextRunTarget: NextRunTarget | null,
     retryTarget: RetryTarget | null,
   ): void {
     this.overlay.classList.toggle('is-loading', isLoadingPhase(phase));
@@ -236,6 +238,7 @@ export class GameUi {
     if (isPlayingPhase(phase)) return;
 
     const isFinalLevel = levelIndex === levels.length - 1;
+    const currentMastery = mastery.find((progress) => progress.levelId === level.id);
 
     if (isLoadingPhase(phase)) {
       const percent = Math.round(loadingProgress.value * 100);
@@ -265,6 +268,7 @@ export class GameUi {
               <span>Start Run</span>
               <small>Choose operative</small>
             </button>
+            ${nextRunTarget ? nextRunCard(nextRunTarget) : ''}
             <div class="panel-actions title-secondary-actions">
               <button type="button" data-action="level-select">Levels</button>
               <button type="button" data-action="goals">Goals</button>
@@ -425,6 +429,12 @@ export class GameUi {
         <div class="panel">
           <h1>Detected</h1>
           <p>A guard traced your movement. Reset the room and use the shadows.</p>
+          ${currentMastery ? `
+            <p class="caught-target" data-testid="caught-target">
+              <strong>Still open</strong>
+              <span>${currentMastery.nextTarget}</span>
+            </p>
+          ` : ''}
           <div class="panel-actions">
             <button type="button" data-action="restart">Retry Level</button>
             <button type="button" data-action="settings">Settings</button>
@@ -461,6 +471,7 @@ export class GameUi {
               </dl>
             </div>
             <p class="record-note">${bestTimeLabel(runSummary)}</p>
+            <p class="run-delta" data-testid="run-delta">${runDeltaLabel(runSummary)}</p>
             ${retryTarget ? `
               <p class="retry-target" data-testid="retry-target">
                 <strong>${retryTarget.label}</strong>
@@ -582,6 +593,11 @@ export class GameUi {
         this.callbacks.onSelectLevel(Number((button as HTMLElement).dataset.encoreLevelIndex));
       });
     });
+    this.overlay.querySelectorAll('[data-next-run-level-index]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.callbacks.onSelectLevel(Number((button as HTMLElement).dataset.nextRunLevelIndex));
+      });
+    });
     this.overlay.querySelectorAll('[data-action="settings"]').forEach((button) =>
       button.addEventListener('click', this.callbacks.onSettings),
     );
@@ -634,6 +650,19 @@ function intelPulseStatus(state: IntelPulseUiState): string {
 
 function selectedTrack(soundtrackId: GameSettings['soundtrackId']): (typeof soundtrackOptions)[number] {
   return soundtrackOptions.find((track) => track.id === soundtrackId) ?? soundtrackOptions[0];
+}
+
+function nextRunCard(nextRunTarget: NextRunTarget): string {
+  return `
+    <section class="next-run" data-testid="next-run" aria-label="Next Run">
+      <span class="next-run-copy">
+        <strong>${nextRunTarget.title}</strong>
+        <span>${nextRunTarget.label}</span>
+        <small>${nextRunTarget.detail}</small>
+      </span>
+      <button type="button" data-next-run-level-index="${nextRunTarget.levelIndex}">${nextRunTarget.actionLabel}</button>
+    </section>
+  `;
 }
 
 function encorePickCard(encorePick: EncorePick, context: 'goals' | 'level-select'): string {

@@ -6,6 +6,24 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.4.0 - 2026-06-17
+
+- Added `Detected Retry Target`, a compact detected-screen reminder of the current level's open mastery target.
+- Kept the retry flow focused on `Retry Level` and `Settings` while making failed attempts point back to the next improvement.
+- Added smoke coverage for the caught-state target line and mobile button fit.
+
+## v2.3.0 - 2026-06-17
+
+- Added `Run Delta`, a completion-screen chip that compares the run time against saved best or par.
+- Added shared delta formatting for best-time wins, misses, exact matches, and first-run par comparisons.
+- Added unit and smoke coverage for the new completion feedback.
+
+## v2.2.0 - 2026-06-17
+
+- Added `Next Run`, a title-screen shortcut that recommends the next useful mastery or Encore target once progress exists.
+- Kept brand-new profiles on the clean `Start Run` flow while giving returning players a one-tap route back into replay.
+- Added unit and smoke coverage for partial-progress and mastered-profile title shortcuts.
+
 ## v2.1.0 - 2026-06-17
 
 - Added `Encore Pick`, a mastered-profile replay prompt that recommends the weakest personal-best target after all Mastery Circuit marks are complete.

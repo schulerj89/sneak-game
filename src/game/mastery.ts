@@ -45,6 +45,17 @@ export type EncorePick = Readonly<{
   marginMs: number | null;
 }>;
 
+export type NextRunTarget = Readonly<{
+  levelId: string;
+  levelIndex: number;
+  levelName: string;
+  title: string;
+  label: string;
+  detail: string;
+  actionLabel: string;
+  source: 'mastery' | 'encore';
+}>;
+
 const sRank: RunGrade = 'S';
 
 export function loadLevelMasteryProgress(
@@ -138,6 +149,55 @@ export function buildEncorePick(
     bestTimeMs: pick.progress.bestTimeMs,
     parTimeMs: pick.parTimeMs,
     marginMs: pick.marginMs,
+  };
+}
+
+export function buildNextRunTarget(
+  levels: readonly LevelDefinition[],
+  mastery: readonly LevelMasteryProgress[],
+  encorePick: EncorePick | null,
+): NextRunTarget | null {
+  if (levels.length === 0 || mastery.length < levels.length) return null;
+
+  const masteryById = new Map(mastery.map((level) => [level.levelId, level]));
+  const hasProgress = mastery.some((level) => level.clears > 0 || level.bestGrade !== null || level.bestTimeMs !== null || level.completedMarks > 0);
+  if (!hasProgress) return null;
+
+  const summary = buildMasterySummary(mastery);
+  if (summary.totalLevels > 0 && summary.masteredLevels >= summary.totalLevels) {
+    if (!encorePick) return null;
+
+    return {
+      levelId: encorePick.levelId,
+      levelIndex: encorePick.levelIndex,
+      levelName: encorePick.levelName,
+      title: 'Encore Pick',
+      label: `Encore: ${encorePick.levelName}`,
+      detail: encorePick.actionLabel,
+      actionLabel: 'Run',
+      source: 'encore',
+    };
+  }
+
+  const targetIndex = levels.findIndex((level) => {
+    const progress = masteryById.get(level.id);
+    return progress ? progress.completedMarks < progress.totalMarks : false;
+  });
+  if (targetIndex < 0) return null;
+
+  const level = levels[targetIndex];
+  const progress = masteryById.get(level.id);
+  if (!progress) return null;
+
+  return {
+    levelId: level.id,
+    levelIndex: targetIndex,
+    levelName: level.name,
+    title: 'Next Run',
+    label: `Next: ${level.name}`,
+    detail: progress.nextTarget,
+    actionLabel: 'Run',
+    source: 'mastery',
   };
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { recordLevelAchievementClear } from './achievements';
-import { buildEncorePick, buildLevelMasteryProgress, loadLevelMasteryProgress, retryTargetForCompletion } from './mastery';
+import { buildEncorePick, buildLevelMasteryProgress, buildNextRunTarget, loadLevelMasteryProgress, retryTargetForCompletion } from './mastery';
 import { createRunSummary, saveBestTime } from './runStats';
 import type { LevelDefinition } from './types';
 
@@ -195,5 +195,49 @@ describe('mastery progress', () => {
     ];
 
     expect(buildEncorePick(levels, mastery)?.levelId).toBe(baseLevel.id);
+  });
+
+  it('hides Next Run when no progress exists', () => {
+    const mastery = [
+      buildLevelMasteryProgress(baseLevel, 0, null, null),
+      buildLevelMasteryProgress(secondLevel, 0, null, null),
+    ];
+
+    expect(buildNextRunTarget(levels, mastery, null)).toBe(null);
+  });
+
+  it('chooses the first incomplete mastery level for Next Run', () => {
+    const mastery = [
+      buildLevelMasteryProgress(baseLevel, 2, 'S', 31_000),
+      buildLevelMasteryProgress(secondLevel, 1, 'A', null),
+    ];
+
+    expect(buildNextRunTarget(levels, mastery, null)).toMatchObject({
+      levelId: secondLevel.id,
+      levelIndex: 1,
+      title: 'Next Run',
+      label: 'Next: Archive Lanes',
+      detail: 'Replay for S',
+      actionLabel: 'Run',
+      source: 'mastery',
+    });
+  });
+
+  it('uses Encore Pick for Next Run after full mastery', () => {
+    const mastery = [
+      buildLevelMasteryProgress(baseLevel, 2, 'S', 31_000),
+      buildLevelMasteryProgress(secondLevel, 2, 'S', 39_500),
+    ];
+    const encorePick = buildEncorePick(levels, mastery);
+
+    expect(buildNextRunTarget(levels, mastery, encorePick)).toMatchObject({
+      levelId: secondLevel.id,
+      levelIndex: 1,
+      title: 'Encore Pick',
+      label: 'Encore: Archive Lanes',
+      detail: 'Beat best',
+      actionLabel: 'Run',
+      source: 'encore',
+    });
   });
 });
