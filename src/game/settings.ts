@@ -17,13 +17,17 @@ export function loadSettings(): GameSettings {
   try {
     const stored = window.localStorage.getItem(storageKey);
     if (!stored) return { ...defaultSettings };
-    const parsed = JSON.parse(stored) as Partial<GameSettings>;
+    const parsed = JSON.parse(stored) as unknown;
+    if (!isSettingsObject(parsed)) return { ...defaultSettings };
+
     return {
       quality: isQuality(parsed.quality) ? parsed.quality : defaultSettings.quality,
-      musicEnabled: parsed.musicEnabled ?? defaultSettings.musicEnabled,
-      debugEnabled: parsed.debugEnabled ?? defaultSettings.debugEnabled,
+      musicEnabled: typeof parsed.musicEnabled === 'boolean' ? parsed.musicEnabled : defaultSettings.musicEnabled,
+      debugEnabled: typeof parsed.debugEnabled === 'boolean' ? parsed.debugEnabled : defaultSettings.debugEnabled,
       masterVolume:
-        typeof parsed.masterVolume === 'number' ? Math.min(1, Math.max(0, parsed.masterVolume)) : defaultSettings.masterVolume,
+        typeof parsed.masterVolume === 'number' && Number.isFinite(parsed.masterVolume)
+          ? Math.min(1, Math.max(0, parsed.masterVolume))
+          : defaultSettings.masterVolume,
       soundtrackId: isSoundtrackId(parsed.soundtrackId) ? parsed.soundtrackId : defaultSettings.soundtrackId,
       detectionLeniency: isDetectionLeniency(parsed.detectionLeniency)
         ? parsed.detectionLeniency
@@ -59,6 +63,10 @@ export function qualityProfile(quality: RenderQuality): {
   }
 
   return { pixelRatio: 1, antialias: false, shadows: false, debugRayCount: 6, shadowMapSize: 512, memoryReserveMb: 0 };
+}
+
+function isSettingsObject(value: unknown): value is Partial<GameSettings> {
+  return value !== null && typeof value === 'object';
 }
 
 function isQuality(value: unknown): value is RenderQuality {

@@ -72,9 +72,19 @@ try {
   await assertMobileLevelSelectMastery(page);
   await assertCompactMobileSettings(page);
 
-  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
+  await page.evaluate(() => {
+    const startButton = document.querySelector('[data-action="start"]');
+    if (startButton instanceof HTMLButtonElement) {
+      startButton.click();
+      startButton.click();
+    }
+  });
   await expectVisible(page, '[data-testid="loading-panel"]');
   await expectVisible(page, '[data-testid="character-select-panel"]');
+  const characterSelectPanelCount = await page.locator('[data-testid="character-select-panel"]').count();
+  if (characterSelectPanelCount !== 1) {
+    throw new Error(`Expected one mobile character-select panel after rapid Start Run clicks, found ${characterSelectPanelCount}`);
+  }
   await expectVisible(page, '[data-testid="hero-picker"]');
   await assertCharacterPicker(page, 'shadow-operative');
   await assertActionButtonsFit(page, '[data-testid="character-select-panel"]');

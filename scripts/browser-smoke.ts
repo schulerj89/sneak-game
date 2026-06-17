@@ -72,9 +72,20 @@ try {
     throw new Error(`Expected title menu music, got ${initialTitleTrackId}`);
   }
   await assertTitleGoalsPanel();
-  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
+  await assertTitleQualitySettingsNoLevelScene();
+  await page.evaluate(() => {
+    const startButton = document.querySelector('[data-action="start"]');
+    if (startButton instanceof HTMLButtonElement) {
+      startButton.click();
+      startButton.click();
+    }
+  });
   await expectLoadingCover('loading hero roster');
   await expectVisible('[data-testid="character-select-panel"]');
+  const characterSelectPanelCount = await page.locator('[data-testid="character-select-panel"]').count();
+  if (characterSelectPanelCount !== 1) {
+    throw new Error(`Expected one character-select panel after rapid Start Run clicks, found ${characterSelectPanelCount}`);
+  }
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-character-select.png`, fullPage: true });
   const characterSelectState = await page.evaluate(() => {
     const debugWindow = window as Window & {
@@ -802,6 +813,39 @@ async function assertTitleGoalsPanel(): Promise<void> {
     throw new Error(`Expected Goals button to open goals phase, got ${goalsPhase}`);
   }
 
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
+  await expectVisible('text=Break the circuit before sentries close in.');
+}
+
+async function assertTitleQualitySettingsNoLevelScene(): Promise<void> {
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
+  await expectVisible('text=Render quality');
+  await page.selectOption('[data-setting="quality"]', 'memory');
+  await page.waitForFunction(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        runtimeQuality: () => string;
+        sceneObjectCounts: () => {
+          objectives: number;
+          enemies: number;
+          blockers: number;
+          goalInScene: boolean;
+          titlePreviewVisible: boolean;
+        };
+      };
+    };
+    const counts = debugWindow.__shadowCircuitDebug?.sceneObjectCounts();
+    return (
+      debugWindow.__shadowCircuitDebug?.runtimeQuality() === 'memory' &&
+      counts?.objectives === 0 &&
+      counts.enemies === 0 &&
+      counts.blockers === 0 &&
+      !counts.goalInScene &&
+      counts.titlePreviewVisible
+    );
+  }, undefined, { timeout: 8000 });
+  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-title-quality-settings.png`, fullPage: true });
+  await page.selectOption('[data-setting="quality"]', 'cinematic');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await expectVisible('text=Break the circuit before sentries close in.');
 }

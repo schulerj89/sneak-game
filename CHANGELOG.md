@@ -6,6 +6,21 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.4.6 - 2026-06-17
+
+- Sanitized stored boolean settings and invalid volume values so corrupted browser storage falls back to defaults instead of changing runtime behavior.
+- Added focused settings storage tests for malformed saved settings and blocked localStorage writes.
+
+## v2.4.5 - 2026-06-17
+
+- Scoped quality rebuilds so title/settings changes refresh the title hero preview without spawning level objectives, blockers, enemies, or exits.
+- Added smoke coverage and screenshot evidence for title-screen quality changes.
+
+## v2.4.4 - 2026-06-17
+
+- Guarded rapid `Start Run` taps by entering the hero-roster loading transition before any async menu audio work.
+- Added desktop and mobile smoke coverage for double-clicking/tapping `Start Run`.
+
 ## v2.4.3 - 2026-06-17
 
 - Cleared keyboard and virtual movement input on window blur or hidden-document transitions so controls cannot drift after focus loss.

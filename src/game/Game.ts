@@ -164,6 +164,13 @@ declare global {
       heroAssetQuality: () => RenderQuality;
       enemyAssetQuality: () => RenderQuality;
       rendererMemory: () => { geometries: number; textures: number };
+      sceneObjectCounts: () => {
+        objectives: number;
+        enemies: number;
+        blockers: number;
+        goalInScene: boolean;
+        titlePreviewVisible: boolean;
+      };
       achievements: () => readonly AchievementProgress[];
       mastery: () => readonly LevelMasteryProgress[];
       encorePick: () => EncorePick | null;
@@ -319,7 +326,6 @@ export class Game {
   private async start(): Promise<void> {
     if (this.isTransitioning()) return;
 
-    await this.music.playMenu(this.settings);
     await this.loadCharacterSelectWithTransition();
     if (this.disposed) return;
 
@@ -431,13 +437,19 @@ export class Game {
       previousEnemyQuality !== this.enemyAssetQuality() ||
       previousObjectiveQuality !== this.objectiveAssetQuality()
     ) {
-      if (this.objectiveAssetQuality() !== 'cinematic' || this.objectiveAssets.hasCinematicAssets()) {
-        this.rebuildObjectiveMeshes();
-      }
-      const canRebuildHero = this.heroAssetQuality() !== 'cinematic' || this.characterAssets.hasHeroCinematicAsset(this.selectedHeroId);
-      const canRebuildEnemy = this.enemyAssetQuality() !== 'cinematic' || this.characterAssets.hasCinematicAssets(this.selectedHeroId);
-      if (canRebuildHero && canRebuildEnemy) {
-        this.rebuildCharacterMeshes();
+      if (this.hasActiveLevelScene()) {
+        if (this.objectiveAssetQuality() !== 'cinematic' || this.objectiveAssets.hasCinematicAssets()) {
+          this.rebuildObjectiveMeshes();
+        }
+        const canRebuildHero = this.heroAssetQuality() !== 'cinematic' || this.characterAssets.hasHeroCinematicAsset(this.selectedHeroId);
+        const canRebuildEnemy = this.enemyAssetQuality() !== 'cinematic' || this.characterAssets.hasCinematicAssets(this.selectedHeroId);
+        if (canRebuildHero && canRebuildEnemy) {
+          this.rebuildCharacterMeshes();
+        }
+      } else if (this.hasTitlePreviewScene()) {
+        this.installTitleHeroPreview(this.selectedHeroId);
+        void this.prepareTitlePreview();
+        this.fitCameraToTitle();
       }
     }
     if (audioChanged) {
@@ -1505,6 +1517,16 @@ export class Game {
     return isLoadingPhase(this.phase);
   }
 
+  private hasActiveLevelScene(): boolean {
+    const effectivePhase = this.phase === 'settings' ? this.settingsReturnPhase : this.phase;
+    return effectivePhase === 'playing' || effectivePhase === 'caught' || effectivePhase === 'complete';
+  }
+
+  private hasTitlePreviewScene(): boolean {
+    const effectivePhase = this.phase === 'settings' ? this.settingsReturnPhase : this.phase;
+    return effectivePhase === 'menu' || effectivePhase === 'goals' || effectivePhase === 'character-select';
+  }
+
   private runtimeQuality(): RenderQuality {
     return this.rendererQuality();
   }
@@ -1767,6 +1789,13 @@ export class Game {
       heroAssetQuality: () => this.heroAssetQuality(),
       enemyAssetQuality: () => this.enemyAssetQuality(),
       rendererMemory: () => ({ ...this.renderer.info.memory }),
+      sceneObjectCounts: () => ({
+        objectives: this.objectives.length,
+        enemies: this.enemies.length,
+        blockers: this.blockers.length,
+        goalInScene: this.goalMesh.parent !== null,
+        titlePreviewVisible: this.titlePreview.visible,
+      }),
       selectedHero: () => this.selectedHeroId,
       heroRoster: () => heroOptions.map((hero) => hero.id),
       loadedHeroAssets: () => this.characterAssets.loadedHeroIds(),
