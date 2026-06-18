@@ -6,6 +6,13 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.9.5 - 2026-06-18
+
+- Made desktop browser-smoke screenshot output configurable with `SMOKE_SCREENSHOT_DIR` and `SMOKE_RELEASE_SCREENSHOT_DIR`.
+- Defaulted release smoke evidence to versioned `artifacts/browser-smoke/v<version>` folders so future smoke runs do not mutate stale release docs.
+- Let desktop browser smoke wait through level asset warmup, then capture first-run tutorial evidence with a debug shot timer that no longer races the auto-advance timer.
+- Hardened debug level selection in desktop browser smoke against one Vite navigation interruption during long local validation runs.
+
 ## v2.9.4 - 2026-06-18
 
 - Released cached cinematic GLB texture maps when clearing character and objective asset caches.

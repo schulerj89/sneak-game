@@ -323,6 +323,7 @@ export class Game {
   private tutorialShotStartedAt = 0;
   private tutorialShotDurationMs = 1;
   private tutorialAdvanceResolver: (() => void) | null = null;
+  private tutorialAdvanceTimeoutId: number | null = null;
   private tutorialSkipRequested = false;
   private readonly tutorialCameraFromPosition = new THREE.Vector3();
   private readonly tutorialCameraFromTarget = new THREE.Vector3();
@@ -792,25 +793,30 @@ export class Game {
   private waitForTutorialStep(durationMs: number): Promise<void> {
     return new Promise((resolve) => {
       let settled = false;
-      const timeoutId = window.setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        if (this.tutorialAdvanceResolver === finish) {
-          this.tutorialAdvanceResolver = null;
-        }
-        resolve();
-      }, durationMs);
       const finish = (): void => {
         if (settled) return;
         settled = true;
-        window.clearTimeout(timeoutId);
+        this.clearTutorialAdvanceTimeout();
         if (this.tutorialAdvanceResolver === finish) {
           this.tutorialAdvanceResolver = null;
         }
         resolve();
       };
       this.tutorialAdvanceResolver = finish;
+      this.scheduleTutorialAdvance(finish, durationMs);
     });
+  }
+
+  private scheduleTutorialAdvance(finish: () => void, durationMs: number): void {
+    this.clearTutorialAdvanceTimeout();
+    this.tutorialAdvanceTimeoutId = window.setTimeout(finish, durationMs);
+  }
+
+  private clearTutorialAdvanceTimeout(): void {
+    if (this.tutorialAdvanceTimeoutId === null) return;
+
+    window.clearTimeout(this.tutorialAdvanceTimeoutId);
+    this.tutorialAdvanceTimeoutId = null;
   }
 
   private advanceTutorial(): void {
@@ -828,6 +834,7 @@ export class Game {
 
   private finishFirstRunTutorial(): void {
     this.tutorialAdvanceResolver = null;
+    this.clearTutorialAdvanceTimeout();
     this.tutorialSkipRequested = false;
     this.tutorialShots = [];
     this.tutorialShot = null;
@@ -2203,6 +2210,9 @@ export class Game {
 
     this.tutorialShots = shots;
     this.startTutorialShot(shots[index], index, shots.length, true);
+    if (this.tutorialAdvanceResolver) {
+      this.scheduleTutorialAdvance(this.tutorialAdvanceResolver, 60000);
+    }
     return true;
   }
 

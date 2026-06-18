@@ -1,6 +1,6 @@
 {
   "name": "shadow-circuit",
-  "version": "2.9.4",
+  "version": "2.9.5",
   "private": true,
   "type": "module",
   "scripts": {

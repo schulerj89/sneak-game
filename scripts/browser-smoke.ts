@@ -6,8 +6,8 @@ import { levels } from '../src/game/levels';
 import { firstRunCinematicTutorialFeature } from '../src/game/versionFeatures';
 
 const baseUrl = process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
-const screenshotDir = 'artifacts';
-const releaseScreenshotDir = 'docs/2026-06-18-versioned-tutorial-settings/screenshots';
+const screenshotDir = process.env.SMOKE_SCREENSHOT_DIR ?? 'artifacts';
+const releaseScreenshotDir = process.env.SMOKE_RELEASE_SCREENSHOT_DIR ?? `${screenshotDir}/browser-smoke/v${packageInfo.version}`;
 const tutorialScreenshotDir = releaseScreenshotDir;
 const headless = process.env.SMOKE_HEADLESS === 'true';
 const playingTimeoutMs = parseTimeout(process.env.SMOKE_PLAYING_TIMEOUT_MS, 45000);
@@ -834,14 +834,24 @@ try {
   await browser.close();
 }
 
-async function expectVisible(selector: string): Promise<void> {
-  await page.locator(selector).waitFor({ state: 'visible', timeout: 8000 });
+async function expectVisible(selector: string, timeout = 8000): Promise<void> {
+  await page.locator(selector).waitFor({ state: 'visible', timeout });
 }
 
 type TutorialShotId = 'hero' | 'sentry' | 'keycard' | 'terminal' | 'goal' | 'good-luck';
+type TutorialCaptionLayout = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+  viewport: { width: number; height: number };
+  text: string;
+};
 
 async function assertFirstRunTutorial(): Promise<void> {
-  await expectVisible('[data-testid="tutorial-panel"]');
+  await expectVisible('[data-testid="tutorial-panel"]', playingTimeoutMs);
   await page.waitForFunction(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
@@ -932,29 +942,48 @@ async function captureTutorialShot(shotId: TutorialShotId, path: string, expecte
     return Boolean(state?.phase === 'tutorial' && state.active && state.step === id && state.targetVisible && state.targetScreen);
   }, shotId, { timeout: 8000 });
 
-  await expectVisible(`[data-testid="tutorial-panel"][data-step="${shotId}"]`);
-  const panelText = await page.locator('[data-testid="tutorial-panel"]').innerText();
-  if (!panelText.includes(expectedTitle)) {
-    throw new Error(`Expected tutorial shot ${shotId} title ${expectedTitle}, got ${panelText}`);
+  const layout = await waitForTutorialCaptionLayout(shotId);
+  if (!layout.text.includes(expectedTitle)) {
+    throw new Error(`Expected tutorial shot ${shotId} title ${expectedTitle}, got ${layout.text}`);
   }
-  await assertTutorialCaptionLayout();
+  assertTutorialCaptionLayout(layout);
   await page.screenshot({ path, fullPage: true });
 }
 
-async function assertTutorialCaptionLayout(): Promise<void> {
-  const layout = await page.locator('[data-testid="tutorial-panel"]').evaluate((panel) => {
-    const rect = panel.getBoundingClientRect();
-    return {
-      left: rect.left,
-      right: rect.right,
-      top: rect.top,
-      bottom: rect.bottom,
-      width: rect.width,
-      height: rect.height,
-      viewport: { width: window.innerWidth, height: window.innerHeight },
-      text: panel.textContent?.replace(/\s+/g, ' ').trim() ?? '',
-    };
-  });
+async function waitForTutorialCaptionLayout(shotId: TutorialShotId): Promise<TutorialCaptionLayout> {
+  const deadline = Date.now() + 12000;
+  let lastLayout: TutorialCaptionLayout | null = null;
+
+  while (Date.now() < deadline) {
+    const panel = page.locator(`[data-testid="tutorial-panel"][data-step="${shotId}"]`);
+    if ((await panel.count()) > 0) {
+      lastLayout = await panel.evaluate((element) => {
+        const panelElement = element as HTMLElement;
+        const style = window.getComputedStyle(panelElement);
+        const rect = panelElement.getBoundingClientRect();
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          width: style.display === 'none' || style.visibility === 'hidden' ? 0 : rect.width,
+          height: style.display === 'none' || style.visibility === 'hidden' ? 0 : rect.height,
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          text: panelElement.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+        };
+      });
+      if (lastLayout.width >= 420 && lastLayout.height > 40) {
+        return lastLayout;
+      }
+    }
+
+    await page.waitForTimeout(100);
+  }
+
+  throw new Error(`Timed out waiting for tutorial caption ${shotId} layout: ${JSON.stringify(lastLayout)}`);
+}
+
+function assertTutorialCaptionLayout(layout: TutorialCaptionLayout): void {
   if (
     layout.left < 0 ||
     layout.right > layout.viewport.width ||
@@ -1281,15 +1310,30 @@ async function assertEncorePickForMasteredProfile(): Promise<void> {
 }
 
 async function selectDebugLevel(levelIndex: number): Promise<void> {
-  await page.evaluate(async (targetLevelIndex) => {
-    const debugWindow = window as Window & {
-      __shadowCircuitDebug?: {
-        selectLevel: (levelIndex: number) => Promise<void>;
-      };
-    };
-    await debugWindow.__shadowCircuitDebug?.selectLevel(targetLevelIndex);
-  }, levelIndex);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await page.evaluate(async (targetLevelIndex) => {
+        const debugWindow = window as Window & {
+          __shadowCircuitDebug?: {
+            selectLevel: (levelIndex: number) => Promise<void>;
+          };
+        };
+        await debugWindow.__shadowCircuitDebug?.selectLevel(targetLevelIndex);
+      }, levelIndex);
+      break;
+    } catch (error) {
+      if (attempt > 0 || !isNavigationInterruption(error)) {
+        throw error;
+      }
+      await page.waitForLoadState('domcontentloaded', { timeout: 12000 }).catch(() => undefined);
+      await assertAppIdentity();
+    }
+  }
   await assertPlayingPhase(`after debug selecting level ${levelIndex}`);
+}
+
+function isNavigationInterruption(error: unknown): boolean {
+  return error instanceof Error && /Execution context was destroyed|navigation/i.test(error.message);
 }
 
 async function assertDesktopIntelPulse(): Promise<void> {
