@@ -6,6 +6,11 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.9.3 - 2026-06-18
+
+- Kept the first-run cinematic tutorial dismissed across later patch releases once players have already seen the v2.8.0 tutorial.
+- Added regression coverage for versioned feature flags so patch bumps do not replay already-seen onboarding.
+
 ## v2.9.2 - 2026-06-18
 
 - Brightened cinematic keycard and terminal pickups with stronger load-time emissive material treatment and a lightweight additive glow halo.

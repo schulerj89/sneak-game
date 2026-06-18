@@ -10,7 +10,7 @@ export type VersionedFeature = Readonly<{
 export const versionedFeaturesStorageKey = 'shadow-circuit-versioned-features-v1';
 export const firstRunCinematicTutorialFeature: VersionedFeature = {
   id: 'first-run-cinematic-tutorial',
-  introducedVersion: packageInfo.version,
+  introducedVersion: '2.8.0',
 };
 
 type VersionedFeatureRecords = Partial<Record<VersionedFeatureId, string>>;

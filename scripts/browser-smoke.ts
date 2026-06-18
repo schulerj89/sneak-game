@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { PNG } from 'pngjs';
 import packageInfo from '../package.json';
 import { levels } from '../src/game/levels';
+import { firstRunCinematicTutorialFeature } from '../src/game/versionFeatures';
 
 const baseUrl = process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
 const screenshotDir = 'artifacts';
@@ -11,6 +12,7 @@ const tutorialScreenshotDir = releaseScreenshotDir;
 const headless = process.env.SMOKE_HEADLESS === 'true';
 const playingTimeoutMs = parseTimeout(process.env.SMOKE_PLAYING_TIMEOUT_MS, 45000);
 const expectedVersionLabel = `v${packageInfo.version}`;
+const expectedFirstRunTutorialVersion = firstRunCinematicTutorialFeature.introducedVersion;
 const expectedLevelCount = levels.length;
 const expectedMasteryChipCount = expectedLevelCount * 4;
 const maxFrameMs = headless ? 1800 : 600;
@@ -870,8 +872,8 @@ async function assertFirstRunTutorial(): Promise<void> {
     const stored = window.localStorage.getItem('shadow-circuit-versioned-features-v1');
     return stored ? (JSON.parse(stored) as Record<string, string>) : {};
   });
-  if (featureFlag['first-run-cinematic-tutorial'] !== packageInfo.version) {
-    throw new Error(`Expected first-run tutorial feature flag for ${packageInfo.version}, got ${JSON.stringify(featureFlag)}`);
+  if (featureFlag['first-run-cinematic-tutorial'] !== expectedFirstRunTutorialVersion) {
+    throw new Error(`Expected first-run tutorial feature flag for ${expectedFirstRunTutorialVersion}, got ${JSON.stringify(featureFlag)}`);
   }
 
   await page.evaluate(() => {
@@ -1002,8 +1004,8 @@ async function assertIpadTutorialFlow(): Promise<void> {
       const stored = window.localStorage.getItem('shadow-circuit-versioned-features-v1');
       return stored ? (JSON.parse(stored) as Record<string, string>) : {};
     });
-    if (tabletFeatureFlag['first-run-cinematic-tutorial'] !== packageInfo.version) {
-      throw new Error(`Expected iPad tutorial feature flag for ${packageInfo.version}, got ${JSON.stringify(tabletFeatureFlag)}`);
+    if (tabletFeatureFlag['first-run-cinematic-tutorial'] !== expectedFirstRunTutorialVersion) {
+      throw new Error(`Expected iPad tutorial feature flag for ${expectedFirstRunTutorialVersion}, got ${JSON.stringify(tabletFeatureFlag)}`);
     }
 
     await tabletPage.screenshot({ path: `${releaseScreenshotDir}/ipad-tutorial-hero.png`, fullPage: true });

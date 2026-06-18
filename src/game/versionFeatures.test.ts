@@ -58,4 +58,11 @@ describe('versioned feature visibility', () => {
 
     expect(shouldShowVersionedFeature(firstRunCinematicTutorialFeature, storage, '0.0.0')).toBe(false);
   });
+
+  it('keeps the first-run tutorial dismissed after later patch versions', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(versionedFeaturesStorageKey, JSON.stringify({ 'first-run-cinematic-tutorial': '2.8.0' }));
+
+    expect(shouldShowVersionedFeature(firstRunCinematicTutorialFeature, storage, '2.9.3')).toBe(false);
+  });
 });
