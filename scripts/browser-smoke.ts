@@ -395,6 +395,8 @@ try {
         performance: () => null | {
           fps: number;
           frameMs: number;
+          drawCalls: number;
+          triangles: number;
         };
       };
     };
@@ -411,13 +413,58 @@ try {
           memoryCapMb: number;
           reservedMemoryMb: number;
           memoryPressure: 'unknown' | 'ok' | 'over-cap';
+          drawCalls: number;
+          triangles: number;
         };
       };
     };
     return debugWindow.__shadowCircuitDebug?.performance();
   });
-  if (!performanceSample || performanceSample.fps <= 0 || performanceSample.frameMs > maxFrameMs) {
+  if (
+    !performanceSample ||
+    performanceSample.fps <= 0 ||
+    performanceSample.frameMs > maxFrameMs ||
+    performanceSample.drawCalls <= 0 ||
+    performanceSample.triangles <= 0
+  ) {
     throw new Error(`Expected live frame pacing sample under ${maxFrameMs}ms, got ${JSON.stringify(performanceSample)}`);
+  }
+  const frameCountBefore = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { renderFrameCount: () => number } };
+    return debugWindow.__shadowCircuitDebug?.renderFrameCount() ?? 0;
+  });
+  await page.waitForTimeout(350);
+  const nextPerformanceSample = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        performance: () => null | {
+          fps: number;
+          frameMs: number;
+          drawCalls: number;
+          triangles: number;
+        };
+      };
+    };
+    return debugWindow.__shadowCircuitDebug?.performance();
+  });
+  const frameCountAfter = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { renderFrameCount: () => number } };
+    return debugWindow.__shadowCircuitDebug?.renderFrameCount() ?? 0;
+  });
+  if (
+    !nextPerformanceSample ||
+    nextPerformanceSample.fps <= 0 ||
+    nextPerformanceSample.frameMs > maxFrameMs ||
+    nextPerformanceSample.drawCalls <= 0 ||
+    nextPerformanceSample.triangles <= 0 ||
+    frameCountAfter <= frameCountBefore
+  ) {
+    throw new Error(
+      `Expected renderer-owned animation loop to keep advancing render stats: before=${JSON.stringify({
+        ...performanceSample,
+        frameCount: frameCountBefore,
+      })} after=${JSON.stringify({ ...nextPerformanceSample, frameCount: frameCountAfter })}`,
+    );
   }
   if (performanceSample.reservedMemoryMb < 60) {
     throw new Error(`Expected cinematic memory reserve, got ${JSON.stringify(performanceSample)}`);

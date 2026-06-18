@@ -6,6 +6,12 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.5.0 - 2026-06-18
+
+- Moved the game loop to Three.js renderer-owned animation scheduling with `setAnimationLoop`.
+- Added smoke coverage that verifies render frames, draw calls, and triangles continue advancing during play.
+- Added a repo-local Three.js rendering expert skill grounded in official Three.js rendering, Object3D, material, and instancing docs.
+
 ## v2.4.6 - 2026-06-17
 
 - Sanitized stored boolean settings and invalid volume values so corrupted browser storage falls back to defaults instead of changing runtime behavior.

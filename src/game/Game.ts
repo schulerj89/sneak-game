@@ -111,6 +111,7 @@ declare global {
       loadingProgress: () => LoadingProgress;
       pickupDebug: () => PickupDebugSample;
       performance: () => DebugSample | null;
+      renderFrameCount: () => number;
       levelId: () => string;
       goalVisible: () => boolean;
       playerVisible: () => boolean;
@@ -248,6 +249,7 @@ export class Game {
   private runSummary: RunSummary | null = null;
   private lastHudSecond = -1;
   private latestDebugSample: DebugSample | null = null;
+  private renderedFrameCount = 0;
   private pickupDebug: PickupDebugSample = emptyPickupDebugSample();
   private pickupFrameProbe: PickupFrameProbe | null = null;
   private qualityMemoryReserve: Float32Array | null = null;
@@ -257,7 +259,6 @@ export class Game {
   private heroDebugView = false;
   private enemyDebugView = false;
   private characterSelectRosterLoadToken = 0;
-  private animationId = 0;
   private disposed = false;
 
   constructor(mount: HTMLElement) {
@@ -304,12 +305,12 @@ export class Game {
 
   run(): void {
     this.clock.start();
-    this.animationId = requestAnimationFrame(this.tick);
+    this.renderer.setAnimationLoop(this.tick);
   }
 
   dispose(): void {
     this.disposed = true;
-    cancelAnimationFrame(this.animationId);
+    this.renderer.setAnimationLoop(null);
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('keydown', this.handleHotkeys);
     this.input.dispose();
@@ -1697,6 +1698,7 @@ export class Game {
     this.updateHeroDebugCamera();
     this.updateEnemyDebugCamera();
     this.renderer.render(this.scene, this.camera);
+    this.renderedFrameCount += 1;
 
     const sample = this.debugPanel.sample(now, this.renderer.info.render.calls, this.renderer.info.render.triangles, this.reservedMemoryMb);
     const pickupProbeResult = updatePickupFrameProbe(this.pickupDebug, this.pickupFrameProbe, sample.frameMs, now);
@@ -1716,8 +1718,6 @@ export class Game {
       this.music.currentTrack(),
     );
     this.renderer.info.reset();
-
-    this.animationId = requestAnimationFrame(this.tick);
   };
 
   private readonly resize = (): void => {
@@ -1766,6 +1766,7 @@ export class Game {
       loadingProgress: () => this.loadingProgress,
       pickupDebug: () => this.pickupDebug,
       performance: () => this.latestDebugSample,
+      renderFrameCount: () => this.renderedFrameCount,
       levelId: () => this.level.id,
       goalVisible: () => this.isGoalVisibleInCamera(),
       playerVisible: () => this.isPlayerVisibleInCamera(),

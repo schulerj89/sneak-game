@@ -1,0 +1,4 @@
+interface:
+  display_name: "Three.js Rendering Expert"
+  short_description: "Advanced Three.js scene/render reviewer"
+  default_prompt: "Use $threejs-rendering-expert to review a Three.js game scene for rendering, object graph, node/material, and performance improvements."
