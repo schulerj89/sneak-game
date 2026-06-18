@@ -1,6 +1,6 @@
 import type { RunGrade, RunSummary } from './types';
 
-const recordsKey = 'shadow-circuit-run-records-v1';
+export const runRecordsStorageKey = 'shadow-circuit-run-records-v1';
 
 type RunRecord = Readonly<{
   bestTimeMs: number;
@@ -72,7 +72,7 @@ export function saveBestTime(levelId: string, elapsedMs: number, storage: Storag
   const records = loadRecords(storage);
   records[levelId] = { bestTimeMs: Math.max(0, Math.round(elapsedMs)) };
   try {
-    storage.setItem(recordsKey, JSON.stringify(records));
+    storage.setItem(runRecordsStorageKey, JSON.stringify(records));
   } catch {
     // Safari can reject localStorage writes in private/quota-limited sessions.
   }
@@ -80,7 +80,7 @@ export function saveBestTime(levelId: string, elapsedMs: number, storage: Storag
 
 function loadRecords(storage: Storage): RunRecords {
   try {
-    const stored = storage.getItem(recordsKey);
+    const stored = storage.getItem(runRecordsStorageKey);
     if (!stored) return {};
     const parsed = JSON.parse(stored) as unknown;
     if (!parsed || typeof parsed !== 'object') return {};

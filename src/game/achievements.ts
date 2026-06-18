@@ -1,6 +1,6 @@
 import type { RunGrade } from './types';
 
-const achievementsKey = 'shadow-circuit-achievements-v1';
+export const achievementsStorageKey = 'shadow-circuit-achievements-v1';
 
 export type AchievementId = 'complete-all-levels' | 'clean-entry' | 's-rank-all-levels' | 'clear-all-levels-twice';
 
@@ -126,7 +126,7 @@ function bestGrade(previous: RunGrade | null, next: RunGrade): RunGrade {
 
 function loadRecords(storage: Storage, levelIds: readonly string[]): AchievementRecords {
   try {
-    const stored = storage.getItem(achievementsKey);
+    const stored = storage.getItem(achievementsStorageKey);
     if (!stored) return {};
     const parsed = JSON.parse(stored) as unknown;
     if (!parsed || typeof parsed !== 'object') return {};
@@ -150,7 +150,7 @@ function loadRecords(storage: Storage, levelIds: readonly string[]): Achievement
 
 function saveRecords(records: AchievementRecords, storage: Storage): void {
   try {
-    storage.setItem(achievementsKey, JSON.stringify(records));
+    storage.setItem(achievementsStorageKey, JSON.stringify(records));
   } catch {
     // Keep the current completion flow usable if browser storage is unavailable.
   }

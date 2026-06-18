@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { loadAchievementProgress, recordLevelAchievementClear, type AchievementProgress } from './achievements';
+import { achievementsStorageKey, loadAchievementProgress, recordLevelAchievementClear, type AchievementProgress } from './achievements';
 import { type ActiveTrackId, MusicDirector, soundtrackIdForLevel } from './audio';
 import { CharacterAssetLibrary, type CharacterAnimator } from './characterAssets';
 import { collidesWithEnemies, collidesWithObstacles, enemyRadius, playerRadius } from './collision';
@@ -34,7 +34,7 @@ import {
   type PickupDebugSample,
   type PickupFrameProbe,
 } from './pickupDiagnostics';
-import { createRunSummary, loadBestTime, saveBestTime } from './runStats';
+import { createRunSummary, loadBestTime, runRecordsStorageKey, saveBestTime } from './runStats';
 import { loadSettings, memoryCapMb, qualityProfile, saveSettings } from './settings';
 import { createContactShadowMaterial, createFloorShaderMaterial, createGoalBeaconMaterial, createVisionConeGeometry } from './shaders';
 import type {
@@ -56,6 +56,13 @@ import type {
   Vec2,
 } from './types';
 import { GameUi } from './ui';
+import {
+  clearVersionedFeatureRecords,
+  firstRunCinematicTutorialFeature,
+  markVersionedFeatureSeen,
+  shouldShowVersionedFeature,
+  versionedFeaturesStorageKey,
+} from './versionFeatures';
 
 type EnemyRuntime = {
   spec: EnemySpec;
@@ -127,8 +134,8 @@ const silentPickupWarmupVolume = 0.0001;
 const intelPulseMaxCharges = 3;
 const intelPulseDurationMs = 5200;
 const intelPulseCooldownMs = 8500;
-const firstRunTutorialStorageKey = 'shadow-circuit-first-run-tutorial-v1';
-const progressionStorageKeys = ['shadow-circuit-achievements-v1', 'shadow-circuit-run-records-v1'] as const;
+const legacyFirstRunTutorialStorageKey = 'shadow-circuit-first-run-tutorial-v1';
+const progressionStorageKeys = [achievementsStorageKey, runRecordsStorageKey] as const;
 const tutorialEaseDurationMs = 1100;
 const inactiveTutorialUiState: TutorialUiState = {
   active: false,
@@ -355,6 +362,7 @@ export class Game {
       onTouchMove: (movement) => this.input.setVirtualMovement(movement),
       onTouchEnd: () => this.input.clearVirtualMovement(),
       onSettingsChange: (settings) => void this.applySettings(settings),
+      onClearData: () => this.clearPlayerData(),
     });
     this.debugPanel = new DebugPanel(this.ui.debug);
     this.renderer = this.createRenderer();
@@ -414,12 +422,8 @@ export class Game {
     this.releaseCharacterSelectRoster();
     if (this.levelIndex === 0 && !this.firstLevelBriefingSeen) {
       const playFirstRunTutorial = this.shouldPlayFirstRunTutorial();
-      if (playFirstRunTutorial) {
-        this.firstLevelBriefingSeen = true;
-        await this.startPreparedRun(0, { playFirstRunTutorial });
-        return;
-      }
-      this.setPhase('briefing');
+      this.firstLevelBriefingSeen = true;
+      await this.startPreparedRun(0, { playFirstRunTutorial });
       return;
     }
 
@@ -460,7 +464,6 @@ export class Game {
 
     this.settingsReturnPhase = this.phase === 'settings' ? this.settingsReturnPhase : this.phase;
     this.setPhase('settings');
-    void this.music.sync(this.settings);
   }
 
   private openGoals(): void {
@@ -531,11 +534,7 @@ export class Game {
     }
     if (audioChanged) {
       await this.music.warmupEffects(settings);
-      if (this.phase === 'settings') {
-        await this.music.sync(settings);
-      } else {
-        await this.syncMusicForCurrentPhase();
-      }
+      await this.syncMusicForCurrentPhase();
     }
     this.renderUi();
     console.info(`[settings] quality=${settings.quality} music=${settings.musicEnabled} debug=${settings.debugEnabled}`);
@@ -543,6 +542,20 @@ export class Game {
 
   private async toggleMute(): Promise<void> {
     await this.applySettings({ ...this.settings, musicEnabled: !this.settings.musicEnabled });
+  }
+
+  private clearPlayerData(): void {
+    clearPlayerStorageData();
+    clearVersionedFeatureRecords();
+    this.firstLevelBriefingSeen = false;
+    this.firstRunTutorialSeenSession = false;
+    this.achievementNotice = '';
+    this.achievementNoticeUntil = 0;
+    this.achievementNoticeQueue.length = 0;
+    this.retryTarget = null;
+    this.refreshReplayProgress();
+    this.renderUi();
+    console.info('[settings] player data cleared');
   }
 
   private restartLevel(): void {
@@ -826,20 +839,21 @@ export class Game {
   private shouldPlayFirstRunTutorial(): boolean {
     return (
       this.levelIndex === 0 &&
-      this.isDesktopFirstRunTutorialEligible() &&
-      !this.hasSeenFirstRunTutorial() &&
-      !this.hasSavedGameProgress()
+      this.isFirstRunTutorialViewportEligible() &&
+      !this.hasSeenFirstRunTutorial()
     );
   }
 
-  private isDesktopFirstRunTutorialEligible(): boolean {
+  private isFirstRunTutorialViewportEligible(): boolean {
     const bounds = this.ui.root.getBoundingClientRect();
+    const width = Math.max(bounds.width, bounds.height);
+    const height = Math.min(bounds.width, bounds.height);
+    const aspect = width / Math.max(1, height);
     return (
-      !this.memorySafeAssets &&
-      !this.isMobileInterface() &&
-      window.matchMedia('(pointer: fine)').matches &&
-      bounds.width >= 980 &&
-      bounds.height >= 600
+      width >= 1000 &&
+      height >= 620 &&
+      aspect >= 1.2 &&
+      aspect <= 1.9
     );
   }
 
@@ -847,30 +861,29 @@ export class Game {
     if (this.firstRunTutorialSeenSession) return true;
 
     try {
-      return window.localStorage.getItem(firstRunTutorialStorageKey) === 'seen';
+      if (window.localStorage.getItem(legacyFirstRunTutorialStorageKey) === 'seen') {
+        return true;
+      }
     } catch {
       return true;
     }
+    return !shouldShowVersionedFeature(firstRunCinematicTutorialFeature);
   }
 
   private markFirstRunTutorialSeen(seen: boolean): void {
     this.firstRunTutorialSeenSession = seen;
+    if (seen) {
+      markVersionedFeatureSeen(firstRunCinematicTutorialFeature);
+    }
     try {
       if (seen) {
-        window.localStorage.setItem(firstRunTutorialStorageKey, 'seen');
+        window.localStorage.setItem(legacyFirstRunTutorialStorageKey, 'seen');
       } else {
-        window.localStorage.removeItem(firstRunTutorialStorageKey);
+        window.localStorage.removeItem(legacyFirstRunTutorialStorageKey);
+        clearVersionedFeatureRecords();
       }
     } catch {
       // Storage can be unavailable in private or quota-limited browser sessions.
-    }
-  }
-
-  private hasSavedGameProgress(): boolean {
-    try {
-      return progressionStorageKeys.some((key) => hasMeaningfulProgressValue(window.localStorage.getItem(key)));
-    } catch {
-      return true;
     }
   }
 
@@ -2177,7 +2190,7 @@ export class Game {
       targetVisible: this.tutorialFocusObject ? this.isObjectVisibleInCamera(this.tutorialFocusObject) : false,
       targetScreen: this.tutorialFocusObject ? this.projectObjectToScreen(this.tutorialFocusObject) : null,
       selectedHero: this.selectedHeroId,
-      desktopEligible: this.isDesktopFirstRunTutorialEligible(),
+      desktopEligible: this.isFirstRunTutorialViewportEligible(),
       seen: this.hasSeenFirstRunTutorial(),
     };
   }
@@ -2630,7 +2643,8 @@ function isLevelMusicPhase(phase: GamePhase, settingsReturnPhase: GamePhase): bo
     phase === 'playing' ||
     phase === 'caught' ||
     phase === 'complete' ||
-    (phase === 'level-select' && settingsReturnPhase !== 'menu' && settingsReturnPhase !== 'character-select')
+    (phase === 'level-select' && settingsReturnPhase !== 'menu' && settingsReturnPhase !== 'character-select') ||
+    (phase === 'settings' && settingsReturnPhase !== 'menu' && settingsReturnPhase !== 'goals' && settingsReturnPhase !== 'character-select')
   );
 }
 
@@ -2926,29 +2940,12 @@ function easeInOutCubic(value: number): number {
   return value < 0.5 ? 4 * value * value * value : 1 - Math.pow(-2 * value + 2, 3) / 2;
 }
 
-function hasMeaningfulProgressValue(value: string | null): boolean {
-  if (!value) return false;
-
+function clearPlayerStorageData(): void {
   try {
-    const parsed = JSON.parse(value) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.length > 0;
+    for (const key of [...progressionStorageKeys, legacyFirstRunTutorialStorageKey, versionedFeaturesStorageKey]) {
+      window.localStorage.removeItem(key);
     }
-    if (!parsed || typeof parsed !== 'object') {
-      return Boolean(parsed);
-    }
-
-    return Object.values(parsed).some((entry) => {
-      if (!entry || typeof entry !== 'object') {
-        return Boolean(entry);
-      }
-      return Object.values(entry).some((candidate) => {
-        if (typeof candidate === 'number') return candidate > 0;
-        if (typeof candidate === 'string') return candidate.length > 0 && candidate !== '-';
-        return Boolean(candidate);
-      });
-    });
   } catch {
-    return true;
+    // Storage can be unavailable in private or quota-limited browser sessions.
   }
 }

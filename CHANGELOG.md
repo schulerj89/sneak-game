@@ -6,6 +6,13 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.9.0 - 2026-06-18
+
+- Added versioned feature-seen tracking so the cinematic tutorial can show once per introduced app version and then stay dismissed.
+- Expanded the cinematic tutorial to tablet-sized iPad landscape viewports while keeping phone-sized mobile starts direct and briefing-free.
+- Added a Settings `Clear Data` action for progress, records, and feature-seen flags.
+- Kept title music playing while Settings is open from the title screen, even when changing soundtrack selection.
+
 ## v2.8.0 - 2026-06-18
 
 - Added a desktop-only first-run cinematic tutorial for fresh profiles after operative selection, with close-ups on the chosen hero, sentry, keycard, terminal, and exit.

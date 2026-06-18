@@ -1492,6 +1492,21 @@ button:hover {
   gap: 10px;
 }
 
+.settings-actions {
+  justify-content: space-between;
+}
+
+.settings-clear-button {
+  border-color: rgba(255, 89, 100, 0.52);
+  color: #ffb3b8;
+  background: rgba(38, 9, 16, 0.76);
+}
+
+.settings-clear-button:hover {
+  border-color: #ff5964;
+  background: rgba(56, 12, 21, 0.9);
+}
+
 .hero-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));

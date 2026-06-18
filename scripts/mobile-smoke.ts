@@ -98,7 +98,7 @@ try {
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-mobile-character-select.png`, fullPage: true });
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
-  await expectVisible(page, '[data-testid="briefing-panel"]');
+  await expectVisible(page, '[data-testid="loading-panel"]');
   const mobileTutorialState = await page.evaluate(() => {
     const debugWindow = window as Window & {
       __shadowCircuitDebug?: {
@@ -110,6 +110,8 @@ try {
       phase: debugWindow.__shadowCircuitDebug?.phase(),
       tutorial: debugWindow.__shadowCircuitDebug?.tutorialState(),
       tutorialPanels: document.querySelectorAll('[data-testid="tutorial-panel"]').length,
+      briefingPanels: document.querySelectorAll('[data-testid="briefing-panel"]').length,
+      featureFlags: window.localStorage.getItem('shadow-circuit-versioned-features-v1'),
     };
   });
   if (
@@ -117,14 +119,12 @@ try {
     mobileTutorialState.tutorial?.active ||
     mobileTutorialState.tutorial?.desktopEligible ||
     mobileTutorialState.tutorial?.seen ||
-    mobileTutorialState.tutorialPanels > 0
+    mobileTutorialState.tutorialPanels > 0 ||
+    mobileTutorialState.briefingPanels > 0 ||
+    mobileTutorialState.featureFlags !== null
   ) {
-    throw new Error(`Expected mobile to use static briefing instead of cinematic tutorial, got ${JSON.stringify(mobileTutorialState)}`);
+    throw new Error(`Expected phone to skip briefing and cinematic tutorial, got ${JSON.stringify(mobileTutorialState)}`);
   }
-  await assertMobileBriefingSimplified(page);
-  await assertActionButtonsFit(page, '[data-testid="briefing-panel"]');
-  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
-  await expectVisible(page, '[data-testid="loading-panel"]');
   await assertPlayingPhase(page);
 
   await expectVisible(page, '[data-testid="touch-controls"]');

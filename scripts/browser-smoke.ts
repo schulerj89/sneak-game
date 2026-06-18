@@ -6,7 +6,8 @@ import { levels } from '../src/game/levels';
 
 const baseUrl = process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
 const screenshotDir = 'artifacts';
-const tutorialScreenshotDir = 'docs/2026-06-18-first-run-cinematic-tutorial/screenshots';
+const releaseScreenshotDir = 'docs/2026-06-18-versioned-tutorial-settings/screenshots';
+const tutorialScreenshotDir = releaseScreenshotDir;
 const headless = process.env.SMOKE_HEADLESS === 'true';
 const playingTimeoutMs = parseTimeout(process.env.SMOKE_PLAYING_TIMEOUT_MS, 45000);
 const expectedVersionLabel = `v${packageInfo.version}`;
@@ -31,7 +32,7 @@ page.on('console', (message: ConsoleMessage) => {
 
 try {
   await mkdir(screenshotDir, { recursive: true });
-  await mkdir(tutorialScreenshotDir, { recursive: true });
+  await mkdir(releaseScreenshotDir, { recursive: true });
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await assertAppIdentity();
@@ -252,7 +253,7 @@ try {
     'ambient-horror',
   ] as const) {
     await page.selectOption('[data-setting="soundtrack"]', trackId);
-    await page.waitForFunction((expectedTrackId) => {
+    await page.waitForFunction(() => {
       const debugWindow = window as Window & {
         __shadowCircuitDebug?: {
           musicPlayback: () => {
@@ -266,13 +267,13 @@ try {
       };
       const state = debugWindow.__shadowCircuitDebug?.musicPlayback();
       return Boolean(
-        state?.activeTrackId === expectedTrackId &&
+        state?.activeTrackId === 'title-on-patrol' &&
           state.paused === false &&
           state.readyState >= 2 &&
           state.errorCode === null &&
           state.volume > 0.25,
       );
-    }, trackId, { timeout: 8000 });
+    }, undefined, { timeout: 8000 });
   }
   await page.selectOption('[data-setting="soundtrack"]', 'cyberpunk-moonlight');
   await expectVisible('text=Cyberpunk Moonlight Sonata v2');
@@ -819,10 +820,11 @@ try {
   await expectVisible('[data-testid="caught-target"]');
   await assertNextRunForPartialProfile();
   await assertEncorePickForMasteredProfile();
+  await assertIpadTutorialFlow();
 
   console.info(`[browser-smoke] ok url=${baseUrl}`);
   console.info(
-    `[browser-smoke] screenshots=${screenshotDir}/shadow-circuit-menu.png, ${screenshotDir}/shadow-circuit-playing.png, ${tutorialScreenshotDir}/01-tutorial-hero-closeup-desktop.png`,
+    `[browser-smoke] screenshots=${screenshotDir}/shadow-circuit-menu.png, ${screenshotDir}/shadow-circuit-playing.png, ${tutorialScreenshotDir}/01-tutorial-hero-closeup-desktop.png, ${releaseScreenshotDir}/ipad-tutorial-hero.png`,
   );
   console.info(`[browser-smoke] performance=${JSON.stringify(performanceSample)}`);
   console.info(`[browser-smoke] console-log-count=${logs.length}`);
@@ -864,6 +866,13 @@ async function assertFirstRunTutorial(): Promise<void> {
   await captureTutorialShot('terminal', `${tutorialScreenshotDir}/03b-tutorial-terminal-closeup-desktop.png`, 'Terminals');
   await captureTutorialShot('goal', `${tutorialScreenshotDir}/04-tutorial-goal-closeup-desktop.png`, 'Exit Pad');
   await captureTutorialShot('good-luck', `${tutorialScreenshotDir}/05-tutorial-good-luck-desktop.png`, 'Good luck, cadet.');
+  const featureFlag = await page.evaluate(() => {
+    const stored = window.localStorage.getItem('shadow-circuit-versioned-features-v1');
+    return stored ? (JSON.parse(stored) as Record<string, string>) : {};
+  });
+  if (featureFlag['first-run-cinematic-tutorial'] !== packageInfo.version) {
+    throw new Error(`Expected first-run tutorial feature flag for ${packageInfo.version}, got ${JSON.stringify(featureFlag)}`);
+  }
 
   await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { skipTutorial: () => void } };
@@ -956,6 +965,61 @@ async function assertTutorialCaptionLayout(): Promise<void> {
   }
 }
 
+async function assertIpadTutorialFlow(): Promise<void> {
+  const context = await browser.newContext({
+    viewport: { width: 1024, height: 768 },
+    deviceScaleFactor: 2,
+    hasTouch: true,
+    isMobile: true,
+    userAgent:
+      'Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+  });
+  const tabletPage = await context.newPage();
+  try {
+    await tabletPage.addInitScript(() => window.localStorage.clear());
+    await tabletPage.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+    await tabletPage.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Run' }).click();
+    await tabletPage.locator('[data-testid="loading-panel"]').waitFor({ state: 'visible', timeout: 12000 });
+    await tabletPage.locator('[data-testid="character-select-panel"]').waitFor({ state: 'visible', timeout: 20000 });
+    await tabletPage.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
+    await tabletPage.locator('[data-testid="loading-panel"]').waitFor({ state: 'visible', timeout: 12000 });
+    await tabletPage.locator('[data-testid="tutorial-panel"]').waitFor({ state: 'visible', timeout: 30000 });
+    await tabletPage.evaluate(() => {
+      const debugWindow = window as Window & { __shadowCircuitDebug?: { setTutorialShot: (shotId: string) => boolean } };
+      debugWindow.__shadowCircuitDebug?.setTutorialShot('hero');
+    });
+    await tabletPage.waitForFunction(() => {
+      const debugWindow = window as Window & {
+        __shadowCircuitDebug?: {
+          tutorialState: () => { active: boolean; step: string; desktopEligible: boolean; seen: boolean; targetVisible: boolean };
+        };
+      };
+      const state = debugWindow.__shadowCircuitDebug?.tutorialState();
+      return Boolean(state?.active && state.step === 'hero' && state.desktopEligible && state.seen && state.targetVisible);
+    }, undefined, { timeout: 12000 });
+
+    const tabletFeatureFlag = await tabletPage.evaluate(() => {
+      const stored = window.localStorage.getItem('shadow-circuit-versioned-features-v1');
+      return stored ? (JSON.parse(stored) as Record<string, string>) : {};
+    });
+    if (tabletFeatureFlag['first-run-cinematic-tutorial'] !== packageInfo.version) {
+      throw new Error(`Expected iPad tutorial feature flag for ${packageInfo.version}, got ${JSON.stringify(tabletFeatureFlag)}`);
+    }
+
+    await tabletPage.screenshot({ path: `${releaseScreenshotDir}/ipad-tutorial-hero.png`, fullPage: true });
+    await tabletPage.evaluate(() => {
+      const debugWindow = window as Window & { __shadowCircuitDebug?: { skipTutorial: () => void } };
+      debugWindow.__shadowCircuitDebug?.skipTutorial();
+    });
+    await tabletPage.waitForFunction(() => {
+      const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
+      return debugWindow.__shadowCircuitDebug?.phase() === 'playing';
+    }, undefined, { timeout: playingTimeoutMs });
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertVersionBadge(): Promise<void> {
   await expectVisible('[data-testid="app-version"]');
   const versionText = await page.locator('[data-testid="app-version"]').innerText();
@@ -1017,6 +1081,14 @@ async function assertTitleGoalsPanel(): Promise<void> {
 async function assertTitleQualitySettingsNoLevelScene(): Promise<void> {
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Settings' }).click();
   await expectVisible('text=Render quality');
+  await expectVisible('text=Clear Data');
+  const settingsTrackId = await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { activeTrackId: () => string | null } };
+    return debugWindow.__shadowCircuitDebug?.activeTrackId();
+  });
+  if (settingsTrackId !== 'title-on-patrol') {
+    throw new Error(`Expected settings opened from title to keep title music, got ${settingsTrackId}`);
+  }
   await page.selectOption('[data-setting="quality"]', 'memory');
   await page.waitForFunction(() => {
     const debugWindow = window as Window & {
@@ -1042,6 +1114,16 @@ async function assertTitleQualitySettingsNoLevelScene(): Promise<void> {
     );
   }, undefined, { timeout: 8000 });
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-title-quality-settings.png`, fullPage: true });
+  await page.screenshot({ path: `${releaseScreenshotDir}/settings-clear-data-desktop.png`, fullPage: true });
+  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Clear Data' }).click();
+  const clearedState = await page.evaluate(() => ({
+    achievements: window.localStorage.getItem('shadow-circuit-achievements-v1'),
+    records: window.localStorage.getItem('shadow-circuit-run-records-v1'),
+    versionFlags: window.localStorage.getItem('shadow-circuit-versioned-features-v1'),
+  }));
+  if (clearedState.achievements !== null || clearedState.records !== null || clearedState.versionFlags !== null) {
+    throw new Error(`Expected Clear Data to remove progress and version flags, got ${JSON.stringify(clearedState)}`);
+  }
   await page.selectOption('[data-setting="quality"]', 'cinematic');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Back' }).click();
   await expectVisible('text=Break the circuit before sentries close in.');

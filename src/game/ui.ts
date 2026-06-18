@@ -46,6 +46,7 @@ type UiCallbacks = {
   onTouchMove: (movement: Vec2) => void;
   onTouchEnd: () => void;
   onSettingsChange: (settings: GameSettings) => void;
+  onClearData: () => void;
 };
 
 export class GameUi {
@@ -450,8 +451,9 @@ export class GameUi {
           <label>Volume
             <input type="range" min="0" max="1" step="0.01" value="${this.settings.masterVolume}" data-setting="volume"/>
           </label>
-          <div class="panel-actions">
+          <div class="panel-actions settings-actions">
             <button type="button" data-action="resume">Back</button>
+            <button type="button" class="settings-clear-button" data-action="clear-data">Clear Data</button>
           </div>
         </div>
       `;
@@ -643,6 +645,7 @@ export class GameUi {
     this.overlay.querySelector('[data-action="restart"]')?.addEventListener('click', this.callbacks.onRestart);
     this.overlay.querySelector('[data-action="next"]')?.addEventListener('click', this.callbacks.onNextLevel);
     this.overlay.querySelector('[data-action="start-over"]')?.addEventListener('click', this.callbacks.onStartOver);
+    this.overlay.querySelector('[data-action="clear-data"]')?.addEventListener('click', this.callbacks.onClearData);
     this.overlay.querySelector('[data-setting="quality"]')?.addEventListener('change', (event) => {
       this.callbacks.onSettingsChange({ ...this.settings, quality: (event.target as HTMLSelectElement).value as GameSettings['quality'] });
     });
