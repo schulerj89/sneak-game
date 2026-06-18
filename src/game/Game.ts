@@ -692,7 +692,7 @@ export class Game {
     }
 
     if (keycard) {
-      const target = new THREE.Vector3(keycard.spec.position.x, 0.58, keycard.spec.position.z);
+      const target = new THREE.Vector3(keycard.spec.position.x, 0.34, keycard.spec.position.z);
       shots.push({
         id: 'keycard',
         title: 'Access Cards',
@@ -705,7 +705,7 @@ export class Game {
     }
 
     if (terminal && terminal !== keycard) {
-      const target = new THREE.Vector3(terminal.spec.position.x, 0.62, terminal.spec.position.z);
+      const target = new THREE.Vector3(terminal.spec.position.x, 0.42, terminal.spec.position.z);
       shots.push({
         id: 'terminal',
         title: 'Terminals',
@@ -1895,7 +1895,7 @@ export class Game {
   }
 
   private objectiveAssetQuality(): RenderQuality {
-    return this.settings.quality;
+    return this.memorySafeAssets ? 'memory' : this.settings.quality;
   }
 
   private usesMenuMusic(): boolean {

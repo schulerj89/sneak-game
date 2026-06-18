@@ -1,0 +1,12 @@
+{
+  "id": "keycard",
+  "generatedAt": "2026-06-18T04:26:09.764Z",
+  "pipeline": "image-to-3d-texture-integrated-remesh",
+  "referencePath": "src\\assets\\objectives\\reference\\ultra-keycard-reference.png",
+  "outputPath": "src\\assets\\objectives\\keycard-cinematic.glb",
+  "outputBytes": 9613396,
+  "targetPolycount": 12000,
+  "imageTo3dTaskId": "019ed8f8-bbf5-7bb2-8946-491ca9577b19",
+  "imageTo3dCredits": 30,
+  "texturePrompt": "Preserve the black graphite access card, gold beveled rim, raised contact chip, screws, seams, and glowing yellow circuit traces. No letters, no logo, no symbols that read as text. Keep it compact and game-ready."
+}

@@ -1,0 +1,12 @@
+{
+  "id": "terminal",
+  "generatedAt": "2026-06-18T04:29:27.876Z",
+  "pipeline": "image-to-3d-texture-integrated-remesh",
+  "referencePath": "src\\assets\\objectives\\reference\\ultra-terminal-reference.png",
+  "outputPath": "src\\assets\\objectives\\terminal-cinematic.glb",
+  "outputBytes": 11608808,
+  "targetPolycount": 16000,
+  "imageTo3dTaskId": "019ed8fa-b640-7c6f-a029-ef4c2572b2d0",
+  "imageTo3dCredits": 30,
+  "texturePrompt": "Preserve the compact graphite terminal body, raised cyan glass screen, side brackets, bottom keypad, screws, seams, vents, and glowing blue trim. No letters, no logo. Keep it readable from an isometric stealth game camera."
+}

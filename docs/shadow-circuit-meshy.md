@@ -16,11 +16,13 @@ npm run assets:meshy-objectives
 npm run assets:meshy-characters
 ```
 
-The objective script uses Meshy's Text to 3D v2 two-step workflow:
+The objective script uses Meshy's Image to 3D workflow with committed reference PNGs:
 
-- Create preview tasks with `mode: "preview"`, `should_remesh: true`, `topology: "triangle"`, low `target_polycount`, and `target_formats: ["glb"]`.
-- Optionally pass `--refine` to create textured refine tasks with `mode: "refine"` and `target_formats: ["glb"]`.
+- Generate or refresh the source plates with `npm run assets:objective-references`.
+- Create Image to 3D tasks from `src/assets/objectives/reference/ultra-keycard-reference.png` and `src/assets/objectives/reference/ultra-terminal-reference.png`.
+- Request `meshy-6`, PBR texturing, `remove_lighting`, integrated `should_remesh`, triangle topology, and GLB output.
 - Download the GLB only after the task succeeds and reject the output if it exceeds the configured size budget.
+- Store non-secret task metadata in `tools/meshy/generated/objectives` and accepted preview renders in `docs/2026-06-18-meshy-objective-upgrade/previews`.
 
 Default runtime assets:
 

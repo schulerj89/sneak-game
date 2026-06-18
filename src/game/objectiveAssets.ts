@@ -76,12 +76,13 @@ export class ObjectiveAssetLibrary {
     const gltf = await loader.loadAsync(objectiveAssetUrls[type]);
     const group = new THREE.Group();
     group.name = `objective-asset:${type}`;
+    normalizeObjectiveScene(gltf.scene, type);
     group.add(gltf.scene);
-    group.scale.setScalar(type === 'keycard' ? 0.78 : 0.68);
     group.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         child.castShadow = true;
         child.receiveShadow = true;
+        prepareObjectiveMaterial(child.material, type);
       }
     });
     this.cinematicAssets.set(type, group);
@@ -91,6 +92,40 @@ export class ObjectiveAssetLibrary {
   private loader(): Promise<RuntimeGltfLoader> {
     this.loaderPromise ??= import('three/examples/jsm/loaders/GLTFLoader.js').then(({ GLTFLoader }) => new GLTFLoader());
     return this.loaderPromise;
+  }
+}
+
+function normalizeObjectiveScene(scene: THREE.Object3D, type: ObjectiveType): void {
+  scene.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(scene);
+  const size = box.getSize(new THREE.Vector3());
+  const longestSide = Math.max(size.x, size.y, size.z);
+  if (longestSide > 0) {
+    scene.scale.multiplyScalar((type === 'keycard' ? 0.82 : 0.96) / longestSide);
+  }
+
+  scene.updateMatrixWorld(true);
+  const normalizedBox = new THREE.Box3().setFromObject(scene);
+  const center = normalizedBox.getCenter(new THREE.Vector3());
+  scene.position.x -= center.x;
+  scene.position.y -= normalizedBox.min.y;
+  scene.position.z -= center.z;
+}
+
+function prepareObjectiveMaterial(material: THREE.Material | THREE.Material[], type: ObjectiveType): void {
+  const materials = Array.isArray(material) ? material : [material];
+  const emissive = new THREE.Color(type === 'keycard' ? '#4f3605' : '#063f58');
+  for (const item of materials) {
+    item.side = THREE.DoubleSide;
+
+    if (item instanceof THREE.MeshStandardMaterial) {
+      item.roughness = Math.min(item.roughness, 0.48);
+      item.metalness = Math.max(item.metalness, 0.12);
+      item.emissive.lerp(emissive, 0.5);
+      item.emissiveIntensity = Math.max(item.emissiveIntensity, type === 'keycard' ? 0.34 : 0.24);
+    }
+
+    item.needsUpdate = true;
   }
 }
 

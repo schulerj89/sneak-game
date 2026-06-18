@@ -6,6 +6,12 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.9.1 - 2026-06-18
+
+- Replaced cinematic keycard and terminal pickups with new Meshy image-to-3D textured/remeshed GLBs generated from committed reference PNGs.
+- Preserved lightweight primitive objective fallbacks for memory-safe mobile/iPad quality.
+- Added Meshy metadata, accepted previews, and updated objective asset validation for the new detailed GLB budget.
+
 ## v2.9.0 - 2026-06-18
 
 - Added versioned feature-seen tracking so the cinematic tutorial can show once per introduced app version and then stay dismissed.
