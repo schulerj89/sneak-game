@@ -363,6 +363,7 @@ async function assertMobileIntelPulse(page: Page): Promise<void> {
     throw new Error(`Expected compact mobile intel pulse dock away from joystick, got ${JSON.stringify({ ...layout, overlapsTouch })}`);
   }
 
+  const beforePulseMemory = await mobileRendererMemory(page);
   await page.locator('[data-testid="intel-pulse-dock"]').getByRole('button', { name: 'Mission Intel Pulse' }).click();
   await page.waitForFunction(() => {
     const debugWindow = window as Window & {
@@ -376,9 +377,16 @@ async function assertMobileIntelPulse(page: Page): Promise<void> {
           patrolRoutes: number;
           waypointTargets: number;
         };
+        intelPulseVisualStats: () => {
+          meshes: number;
+          instancedMeshes: number;
+          lines: number;
+          instances: number;
+        };
       };
     };
     const state = debugWindow.__shadowCircuitDebug?.intelPulse();
+    const stats = debugWindow.__shadowCircuitDebug?.intelPulseVisualStats();
     return Boolean(
       state?.active &&
         state.charges === 2 &&
@@ -386,9 +394,52 @@ async function assertMobileIntelPulse(page: Page): Promise<void> {
         state.objectiveTargets > 0 &&
         state.exitTargets === 1 &&
         state.patrolRoutes === 0 &&
-        state.waypointTargets === 0,
+        state.waypointTargets === 0 &&
+        stats &&
+        stats.instancedMeshes > 0 &&
+        stats.instances >= (state.objectiveTargets + state.exitTargets) * 3,
     );
   }, undefined, { timeout: 8000 });
+  const afterPulseState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        intelPulse: () => {
+          objectiveTargets: number;
+          exitTargets: number;
+          patrolRoutes: number;
+          waypointTargets: number;
+        };
+        intelPulseVisualStats: () => {
+          meshes: number;
+          instancedMeshes: number;
+          lines: number;
+          instances: number;
+        };
+      };
+    };
+    return {
+      intel: debugWindow.__shadowCircuitDebug?.intelPulse(),
+      stats: debugWindow.__shadowCircuitDebug?.intelPulseVisualStats(),
+    };
+  });
+  const afterPulseMemory = await mobileRendererMemory(page);
+  if (
+    !afterPulseState.stats ||
+    afterPulseState.stats.meshes !== 0 ||
+    afterPulseState.stats.lines !== 0 ||
+    afterPulseState.stats.instancedMeshes < 3 ||
+    afterPulseState.stats.instances < ((afterPulseState.intel?.objectiveTargets ?? 0) + (afterPulseState.intel?.exitTargets ?? 0)) * 3 ||
+    afterPulseMemory.geometries > beforePulseMemory.geometries + 24 ||
+    afterPulseMemory.textures > beforePulseMemory.textures + 4
+  ) {
+    throw new Error(
+      `Expected mobile Intel Pulse to use compact instanced marker resources, got ${JSON.stringify({
+        beforePulseMemory,
+        afterPulseMemory,
+        afterPulseState,
+      })}`,
+    );
+  }
 }
 
 async function assertActionButtonsFit(page: Page, containerSelector: string): Promise<void> {
@@ -1019,5 +1070,16 @@ async function mobileReloadState(page: Page): Promise<{
       playerVisible: debugWindow.__shadowCircuitDebug?.playerVisible(),
       rendererMemory: debugWindow.__shadowCircuitDebug?.rendererMemory() ?? { geometries: 0, textures: 0 },
     };
+  });
+}
+
+async function mobileRendererMemory(page: Page): Promise<{ geometries: number; textures: number }> {
+  return page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        rendererMemory: () => { geometries: number; textures: number };
+      };
+    };
+    return debugWindow.__shadowCircuitDebug?.rendererMemory() ?? { geometries: 0, textures: 0 };
   });
 }

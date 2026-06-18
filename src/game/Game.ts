@@ -184,6 +184,13 @@ declare global {
         nextRunTarget: NextRunTarget | null;
       };
       intelPulse: () => IntelPulseUiState;
+      intelPulseVisualStats: () => {
+        objects: number;
+        meshes: number;
+        instancedMeshes: number;
+        lines: number;
+        instances: number;
+      };
       triggerIntelPulse: () => void;
     };
   }
@@ -1812,6 +1819,7 @@ export class Game {
       nextRunTarget: () => this.nextRunTarget,
       refreshReplayProgress: () => this.refreshReplayProgress(),
       intelPulse: () => this.intelPulseUiState(),
+      intelPulseVisualStats: () => this.intelPulseVisuals.stats(),
       triggerIntelPulse: () => this.triggerIntelPulse(),
     };
   }

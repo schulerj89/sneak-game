@@ -6,6 +6,11 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.7.0 - 2026-06-18
+
+- Instanced Intel Pulse markers, beacons, and waypoints to reduce transient overlay meshes and draw-call growth.
+- Added unit and desktop/mobile smoke coverage for the instanced Intel Pulse visual budget.
+
 ## v2.6.0 - 2026-06-18
 
 - Precompiled level and Intel Pulse materials asynchronously during loading with Three.js `compileAsync`.

@@ -1091,6 +1091,14 @@ async function selectDebugLevel(levelIndex: number): Promise<void> {
 }
 
 async function assertDesktopIntelPulse(): Promise<void> {
+  const beforePulsePerformance = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        performance: () => null | { drawCalls: number; triangles: number };
+      };
+    };
+    return debugWindow.__shadowCircuitDebug?.performance();
+  });
   await page.locator('[data-testid="intel-pulse-dock"]').getByRole('button', { name: 'Mission Intel Pulse' }).click();
   await page.waitForFunction(() => {
     const debugWindow = window as Window & {
@@ -1102,11 +1110,19 @@ async function assertDesktopIntelPulse(): Promise<void> {
           objectiveTargets: number;
           exitTargets: number;
           patrolRoutes: number;
-          waypointTargets: number;
+        waypointTargets: number;
+      };
+        intelPulseVisualStats: () => {
+          objects: number;
+          meshes: number;
+          instancedMeshes: number;
+          lines: number;
+          instances: number;
         };
       };
     };
     const state = debugWindow.__shadowCircuitDebug?.intelPulse();
+    const stats = debugWindow.__shadowCircuitDebug?.intelPulseVisualStats();
     return Boolean(
       state?.active &&
         state.charges === 2 &&
@@ -1114,9 +1130,61 @@ async function assertDesktopIntelPulse(): Promise<void> {
         state.objectiveTargets > 0 &&
         state.exitTargets === 1 &&
         state.patrolRoutes > 0 &&
-        state.waypointTargets >= state.patrolRoutes * 2,
+        state.waypointTargets >= state.patrolRoutes * 2 &&
+        stats &&
+        stats.instancedMeshes > 0 &&
+        stats.instances >= (state.objectiveTargets + state.exitTargets) * 3 + state.waypointTargets,
     );
   }, undefined, { timeout: 8000 });
+  await page.waitForTimeout(250);
+  const pulseVisualState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        intelPulse: () => {
+          objectiveTargets: number;
+          exitTargets: number;
+          patrolRoutes: number;
+          waypointTargets: number;
+        };
+        intelPulseVisualStats: () => {
+          objects: number;
+          meshes: number;
+          instancedMeshes: number;
+          lines: number;
+          instances: number;
+        };
+        performance: () => null | { drawCalls: number; triangles: number };
+      };
+    };
+    return {
+      intel: debugWindow.__shadowCircuitDebug?.intelPulse(),
+      stats: debugWindow.__shadowCircuitDebug?.intelPulseVisualStats(),
+      performance: debugWindow.__shadowCircuitDebug?.performance(),
+    };
+  });
+  const expectedMinimumInstances =
+    ((pulseVisualState.intel?.objectiveTargets ?? 0) + (pulseVisualState.intel?.exitTargets ?? 0)) * 3 +
+    (pulseVisualState.intel?.waypointTargets ?? 0);
+  const drawCallGrowth = beforePulsePerformance && pulseVisualState.performance
+    ? pulseVisualState.performance.drawCalls - beforePulsePerformance.drawCalls
+    : 0;
+  if (
+    !pulseVisualState.stats ||
+    pulseVisualState.stats.meshes !== 0 ||
+    pulseVisualState.stats.instancedMeshes < 4 ||
+    pulseVisualState.stats.lines !== pulseVisualState.intel?.patrolRoutes ||
+    pulseVisualState.stats.instances < expectedMinimumInstances ||
+    drawCallGrowth > 24
+  ) {
+    throw new Error(
+      `Expected instanced Intel Pulse visuals with bounded draw-call growth, got ${JSON.stringify({
+        beforePulsePerformance,
+        pulseVisualState,
+        expectedMinimumInstances,
+        drawCallGrowth,
+      })}`,
+    );
+  }
 
   const dockLayout = await page.locator('[data-testid="intel-pulse-dock"]').evaluate((dock) => {
     const rect = dock.getBoundingClientRect();
