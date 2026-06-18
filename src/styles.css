@@ -305,6 +305,95 @@ button:hover {
   mix-blend-mode: screen;
 }
 
+.overlay.is-tutorial {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 28px 28px max(34px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.18) 42%, rgba(0, 0, 0, 0.82) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.58) 0%, transparent 24%, transparent 76%, rgba(0, 0, 0, 0.48) 100%);
+}
+
+.tutorial-caption {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  width: min(760px, calc(100vw - 56px));
+  border: 1px solid rgba(127, 160, 190, 0.34);
+  border-radius: 8px;
+  padding: 16px 18px 14px;
+  background: rgba(4, 7, 12, 0.84);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.42), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+}
+
+.tutorial-caption.is-final {
+  border-color: rgba(125, 252, 198, 0.56);
+  background: rgba(3, 15, 14, 0.86);
+}
+
+.tutorial-progress {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(127, 160, 190, 0.22);
+}
+
+.tutorial-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7dfcc6, #5ad7ff, #ffd45a);
+  transition: width 180ms ease;
+}
+
+.tutorial-kicker {
+  margin-top: 2px;
+  color: #7dfcc6;
+  font-size: 11px;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.tutorial-caption h1 {
+  margin: 0;
+  color: #eff8ff;
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.tutorial-caption p {
+  max-width: 660px;
+  margin: 0;
+  color: #bdcbd6;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.tutorial-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: #7f9bad;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tutorial-controls button {
+  min-height: 32px;
+  border-color: rgba(127, 160, 190, 0.36);
+  color: #d9e7f1;
+  background: rgba(10, 19, 29, 0.76);
+}
+
 .overlay[hidden],
 .debug[hidden],
 .achievement-toast[hidden],

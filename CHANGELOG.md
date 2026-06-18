@@ -6,6 +6,12 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.8.0 - 2026-06-18
+
+- Added a desktop-only first-run cinematic tutorial for fresh profiles after operative selection, with close-ups on the chosen hero, sentry, keycard, terminal, and exit.
+- Kept mobile, returning-player, level-select, retry, and storage-fallback flows on the existing lightweight briefing or direct run paths.
+- Added debug hooks and smoke screenshot coverage for deterministic tutorial shot verification.
+
 ## v2.7.0 - 2026-06-18
 
 - Instanced Intel Pulse markers, beacons, and waypoints to reduce transient overlay meshes and draw-call growth.

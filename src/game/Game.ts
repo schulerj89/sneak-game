@@ -52,6 +52,7 @@ import type {
   LoadingProgress,
   RunSummary,
   SuspicionState,
+  TutorialUiState,
   Vec2,
 } from './types';
 import { GameUi } from './ui';
@@ -84,6 +85,32 @@ type CollectObjectiveOptions = Readonly<{
   logAudio?: boolean;
 }>;
 
+type StartRunOptions = Readonly<{
+  playFirstRunTutorial?: boolean;
+}>;
+
+type TutorialShotId = 'hero' | 'sentry' | 'keycard' | 'terminal' | 'goal' | 'good-luck';
+
+type TutorialShot = Readonly<{
+  id: TutorialShotId;
+  title: string;
+  body: string;
+  target: THREE.Vector3;
+  camera: THREE.Vector3;
+  focus: THREE.Object3D | null;
+  durationMs: number;
+  final?: boolean;
+}>;
+
+type TutorialDebugState = TutorialUiState & Readonly<{
+  phase: GamePhase;
+  targetVisible: boolean;
+  targetScreen: { x: number; y: number } | null;
+  selectedHero: HeroId;
+  desktopEligible: boolean;
+  seen: boolean;
+}>;
+
 const enemyHoverBaseY = 0.72;
 const enemyHoverAmplitude = 0.12;
 const enemyHoverSpeed = 1.45;
@@ -100,6 +127,17 @@ const silentPickupWarmupVolume = 0.0001;
 const intelPulseMaxCharges = 3;
 const intelPulseDurationMs = 5200;
 const intelPulseCooldownMs = 8500;
+const firstRunTutorialStorageKey = 'shadow-circuit-first-run-tutorial-v1';
+const progressionStorageKeys = ['shadow-circuit-achievements-v1', 'shadow-circuit-run-records-v1'] as const;
+const tutorialEaseDurationMs = 1100;
+const inactiveTutorialUiState: TutorialUiState = {
+  active: false,
+  step: '',
+  title: '',
+  body: '',
+  progress: 0,
+  final: false,
+};
 
 declare global {
   interface Window {
@@ -192,6 +230,11 @@ declare global {
         instances: number;
       };
       triggerIntelPulse: () => void;
+      tutorialState: () => TutorialDebugState;
+      setTutorialShot: (shotId: TutorialShotId) => boolean;
+      advanceTutorial: () => void;
+      skipTutorial: () => void;
+      setTutorialSeen: (seen: boolean) => void;
     };
   }
 }
@@ -265,6 +308,22 @@ export class Game {
   private reservedMemoryMb = 0;
   private memoryPressureWarned = false;
   private firstLevelBriefingSeen = false;
+  private firstRunTutorialSeenSession = false;
+  private tutorialUiState: TutorialUiState = inactiveTutorialUiState;
+  private tutorialShots: readonly TutorialShot[] = [];
+  private tutorialShot: TutorialShot | null = null;
+  private tutorialFocusObject: THREE.Object3D | null = null;
+  private tutorialShotStartedAt = 0;
+  private tutorialShotDurationMs = 1;
+  private tutorialAdvanceResolver: (() => void) | null = null;
+  private tutorialSkipRequested = false;
+  private readonly tutorialCameraFromPosition = new THREE.Vector3();
+  private readonly tutorialCameraFromTarget = new THREE.Vector3();
+  private readonly tutorialCameraToPosition = new THREE.Vector3();
+  private readonly tutorialCameraToTarget = new THREE.Vector3();
+  private readonly tutorialCameraCurrentTarget = new THREE.Vector3();
+  private readonly tutorialCameraScratchPosition = new THREE.Vector3();
+  private readonly tutorialCameraScratchTarget = new THREE.Vector3();
   private heroDebugView = false;
   private enemyDebugView = false;
   private characterSelectRosterLoadToken = 0;
@@ -274,6 +333,8 @@ export class Game {
     this.ui = new GameUi(mount, this.settings, {
       onStart: () => void this.start(),
       onBeginBriefing: () => void this.beginBriefedRun(),
+      onAdvanceTutorial: () => this.advanceTutorial(),
+      onSkipTutorial: () => this.skipTutorial(),
       onSelectHero: (heroId) => this.selectHero(heroId),
       onPreviousHero: () => this.selectAdjacentHero(-1),
       onNextHero: () => this.selectAdjacentHero(1),
@@ -352,6 +413,12 @@ export class Game {
   private async confirmHeroSelection(): Promise<void> {
     this.releaseCharacterSelectRoster();
     if (this.levelIndex === 0 && !this.firstLevelBriefingSeen) {
+      const playFirstRunTutorial = this.shouldPlayFirstRunTutorial();
+      if (playFirstRunTutorial) {
+        this.firstLevelBriefingSeen = true;
+        await this.startPreparedRun(0, { playFirstRunTutorial });
+        return;
+      }
       this.setPhase('briefing');
       return;
     }
@@ -537,16 +604,274 @@ export class Game {
     await this.startPreparedRun(levelIndex);
   }
 
-  private async startPreparedRun(levelIndex: number): Promise<void> {
+  private async startPreparedRun(levelIndex: number, options: StartRunOptions = {}): Promise<void> {
     if (this.isTransitioning()) return;
 
     await this.loadLevelWithTransition(levelIndex);
     if (this.disposed) return;
 
+    if (options.playFirstRunTutorial) {
+      await this.playFirstRunTutorial();
+      if (this.disposed) return;
+    }
+
     this.beginRun();
     this.setPhase('playing');
     await this.music.warmupEffects(this.settings);
     await this.music.sync(this.settings, soundtrackIdForLevel(this.levelIndex));
+  }
+
+  private async playFirstRunTutorial(): Promise<void> {
+    this.markFirstRunTutorialSeen(true);
+    this.tutorialSkipRequested = false;
+    this.heroDebugView = false;
+    this.enemyDebugView = false;
+    this.tutorialShots = this.buildFirstRunTutorialShots();
+    this.tutorialCameraCurrentTarget.set(0, 0, 0);
+    void this.music.sync(this.settings, soundtrackIdForLevel(this.levelIndex));
+
+    this.setPhase('tutorial');
+
+    for (let index = 0; index < this.tutorialShots.length; index += 1) {
+      if (this.disposed || this.tutorialSkipRequested) break;
+
+      const shot = this.tutorialShots[index];
+      this.startTutorialShot(shot, index, this.tutorialShots.length);
+      await this.waitForTutorialStep(shot.durationMs);
+    }
+
+    this.finishFirstRunTutorial();
+  }
+
+  private buildFirstRunTutorialShots(): readonly TutorialShot[] {
+    const shots: TutorialShot[] = [];
+    const keycard = this.objectives.find((objective) => objective.spec.type === 'keycard') ?? this.objectives[0] ?? null;
+    const terminal =
+      this.objectives.find((objective) => objective.spec.type === 'terminal') ??
+      this.objectives.find((objective) => objective !== keycard) ??
+      null;
+    const enemy = this.enemies[0] ?? null;
+    const heroTarget = new THREE.Vector3(this.playerPosition.x, 0.86, this.playerPosition.z);
+
+    shots.push({
+      id: 'hero',
+      title: heroOptions.find((hero) => hero.id === this.selectedHeroId)?.name ?? 'Operative',
+      body: 'This is your operative. Move quietly, use cover, and wait for clean patrol windows before crossing open space.',
+      target: heroTarget,
+      camera: heroTarget.clone().add(new THREE.Vector3(1.25, 1.14, 0.78)),
+      focus: this.playerMesh,
+      durationMs: 4600,
+    });
+
+    if (enemy) {
+      const target = new THREE.Vector3(enemy.position.x, enemy.mesh.position.y + 0.48, enemy.position.z);
+      const side = new THREE.Vector3(enemy.facing.z, 0, -enemy.facing.x);
+      const facing = new THREE.Vector3(enemy.facing.x, 0, enemy.facing.z);
+      shots.push({
+        id: 'sentry',
+        title: 'Sentries',
+        body: 'Sentries sweep fixed routes. Their front lens projects the warning cone, and getting caught in it raises suspicion fast.',
+        target,
+        camera: target.clone().add(facing.multiplyScalar(2.05)).add(side.multiplyScalar(2.15)).add(new THREE.Vector3(0, 1.45, 0)),
+        focus: enemy.mesh,
+        durationMs: 5000,
+      });
+    }
+
+    if (keycard) {
+      const target = new THREE.Vector3(keycard.spec.position.x, 0.58, keycard.spec.position.z);
+      shots.push({
+        id: 'keycard',
+        title: 'Access Cards',
+        body: 'Yellow keycards are required pickups. Collect every required card before you commit to the exit route.',
+        target,
+        camera: target.clone().add(new THREE.Vector3(0.78, 1.22, 2.05)),
+        focus: keycard.mesh,
+        durationMs: 4400,
+      });
+    }
+
+    if (terminal && terminal !== keycard) {
+      const target = new THREE.Vector3(terminal.spec.position.x, 0.62, terminal.spec.position.z);
+      shots.push({
+        id: 'terminal',
+        title: 'Terminals',
+        body: 'Blue terminals complete the access chain. Once the required cards and terminals are secured, the exit unlocks.',
+        target,
+        camera: target.clone().add(new THREE.Vector3(-0.86, 1.26, 2.1)),
+        focus: terminal.mesh,
+        durationMs: 4400,
+      });
+    }
+
+    const goalTarget = new THREE.Vector3(this.level.goal.x, 0.38, this.level.goal.z);
+    shots.push(
+      {
+        id: 'goal',
+        title: 'Exit Pad',
+        body: 'The exit pad turns green after the required objectives are complete. Reach it to finish the level.',
+        target: goalTarget,
+        camera: goalTarget.clone().add(new THREE.Vector3(0.72, 1.55, 2.25)),
+        focus: this.goalMesh,
+        durationMs: 4400,
+      },
+      {
+        id: 'good-luck',
+        title: 'Good luck, cadet.',
+        body: 'The route is live. Stay low, think ahead, and move when the sentries turn away.',
+        target: new THREE.Vector3(0, 0, 0),
+        camera: this.standardLevelCameraPosition(),
+        focus: this.playerMesh,
+        durationMs: 3600,
+        final: true,
+      },
+    );
+
+    return shots;
+  }
+
+  private startTutorialShot(shot: TutorialShot, index: number, total: number, immediate = false): void {
+    const now = performance.now();
+    this.tutorialShot = shot;
+    this.tutorialFocusObject = shot.focus;
+    this.tutorialShotStartedAt = now;
+    this.tutorialShotDurationMs = Math.max(1, shot.durationMs);
+    this.tutorialCameraFromPosition.copy(immediate ? shot.camera : this.camera.position);
+    this.tutorialCameraFromTarget.copy(immediate ? shot.target : this.tutorialCameraCurrentTarget);
+    this.tutorialCameraToPosition.copy(shot.camera);
+    this.tutorialCameraToTarget.copy(shot.target);
+    this.tutorialUiState = {
+      active: true,
+      step: shot.id,
+      title: shot.title,
+      body: shot.body,
+      progress: total <= 0 ? 1 : (index + 1) / total,
+      final: Boolean(shot.final),
+    };
+    this.updateTutorialCamera(now, immediate);
+    this.renderUi();
+  }
+
+  private updateTutorialCamera(now: number, immediate = false): void {
+    if (this.phase !== 'tutorial' || !this.tutorialShot) return;
+
+    const progress = immediate
+      ? 1
+      : easeInOutCubic(clamp01((now - this.tutorialShotStartedAt) / Math.min(tutorialEaseDurationMs, this.tutorialShotDurationMs)));
+    this.tutorialCameraScratchPosition.lerpVectors(this.tutorialCameraFromPosition, this.tutorialCameraToPosition, progress);
+    this.tutorialCameraScratchTarget.lerpVectors(this.tutorialCameraFromTarget, this.tutorialCameraToTarget, progress);
+    this.camera.position.copy(this.tutorialCameraScratchPosition);
+    this.camera.lookAt(this.tutorialCameraScratchTarget);
+    this.tutorialCameraCurrentTarget.copy(this.tutorialCameraScratchTarget);
+
+    if (this.scene.fog instanceof THREE.Fog) {
+      if (this.tutorialShot.final) {
+        const scale = this.levelCameraScale();
+        this.scene.fog.near = 8 * scale;
+        this.scene.fog.far = 22 * scale;
+      } else {
+        this.scene.fog.near = 2.4;
+        this.scene.fog.far = 12;
+      }
+    }
+  }
+
+  private waitForTutorialStep(durationMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const timeoutId = window.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        if (this.tutorialAdvanceResolver === finish) {
+          this.tutorialAdvanceResolver = null;
+        }
+        resolve();
+      }, durationMs);
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        if (this.tutorialAdvanceResolver === finish) {
+          this.tutorialAdvanceResolver = null;
+        }
+        resolve();
+      };
+      this.tutorialAdvanceResolver = finish;
+    });
+  }
+
+  private advanceTutorial(): void {
+    if (this.phase !== 'tutorial') return;
+
+    this.tutorialAdvanceResolver?.();
+  }
+
+  private skipTutorial(): void {
+    if (this.phase !== 'tutorial') return;
+
+    this.tutorialSkipRequested = true;
+    this.tutorialAdvanceResolver?.();
+  }
+
+  private finishFirstRunTutorial(): void {
+    this.tutorialAdvanceResolver = null;
+    this.tutorialSkipRequested = false;
+    this.tutorialShots = [];
+    this.tutorialShot = null;
+    this.tutorialFocusObject = null;
+    this.tutorialUiState = inactiveTutorialUiState;
+    this.fitCameraToLevel();
+  }
+
+  private shouldPlayFirstRunTutorial(): boolean {
+    return (
+      this.levelIndex === 0 &&
+      this.isDesktopFirstRunTutorialEligible() &&
+      !this.hasSeenFirstRunTutorial() &&
+      !this.hasSavedGameProgress()
+    );
+  }
+
+  private isDesktopFirstRunTutorialEligible(): boolean {
+    const bounds = this.ui.root.getBoundingClientRect();
+    return (
+      !this.memorySafeAssets &&
+      !this.isMobileInterface() &&
+      window.matchMedia('(pointer: fine)').matches &&
+      bounds.width >= 980 &&
+      bounds.height >= 600
+    );
+  }
+
+  private hasSeenFirstRunTutorial(): boolean {
+    if (this.firstRunTutorialSeenSession) return true;
+
+    try {
+      return window.localStorage.getItem(firstRunTutorialStorageKey) === 'seen';
+    } catch {
+      return true;
+    }
+  }
+
+  private markFirstRunTutorialSeen(seen: boolean): void {
+    this.firstRunTutorialSeenSession = seen;
+    try {
+      if (seen) {
+        window.localStorage.setItem(firstRunTutorialStorageKey, 'seen');
+      } else {
+        window.localStorage.removeItem(firstRunTutorialStorageKey);
+      }
+    } catch {
+      // Storage can be unavailable in private or quota-limited browser sessions.
+    }
+  }
+
+  private hasSavedGameProgress(): boolean {
+    try {
+      return progressionStorageKeys.some((key) => hasMeaningfulProgressValue(window.localStorage.getItem(key)));
+    } catch {
+      return true;
+    }
   }
 
   private async loadCharacterSelectWithTransition(): Promise<void> {
@@ -1707,6 +2032,7 @@ export class Game {
       }
     }
     this.goalMesh.rotation.y += delta * 0.9;
+    this.updateTutorialCamera(now);
     this.updateHeroDebugCamera();
     this.updateEnemyDebugCamera();
     this.renderer.render(this.scene, this.camera);
@@ -1738,12 +2064,27 @@ export class Game {
     const height = Math.max(320, bounds.height);
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
-    this.fitCameraToLevel();
+    if (this.phase === 'tutorial') {
+      this.updateTutorialCamera(performance.now(), true);
+    } else {
+      this.fitCameraToLevel();
+    }
     this.camera.updateProjectionMatrix();
   };
 
   private readonly handleHotkeys = (event: KeyboardEvent): void => {
     if (this.isTransitioning()) return;
+
+    if (this.phase === 'tutorial') {
+      if (event.code === 'Enter' || event.code === 'Space') {
+        event.preventDefault();
+        this.advanceTutorial();
+      } else if (event.code === 'Escape') {
+        event.preventDefault();
+        this.skipTutorial();
+      }
+      return;
+    }
 
     if (event.code === 'Escape') {
       event.preventDefault();
@@ -1821,7 +2162,36 @@ export class Game {
       intelPulse: () => this.intelPulseUiState(),
       intelPulseVisualStats: () => this.intelPulseVisuals.stats(),
       triggerIntelPulse: () => this.triggerIntelPulse(),
+      tutorialState: () => this.tutorialDebugState(),
+      setTutorialShot: (shotId: TutorialShotId) => this.setTutorialShotForDebug(shotId),
+      advanceTutorial: () => this.advanceTutorial(),
+      skipTutorial: () => this.skipTutorial(),
+      setTutorialSeen: (seen: boolean) => this.markFirstRunTutorialSeen(seen),
     };
+  }
+
+  private tutorialDebugState(): TutorialDebugState {
+    return {
+      ...this.tutorialUiState,
+      phase: this.phase,
+      targetVisible: this.tutorialFocusObject ? this.isObjectVisibleInCamera(this.tutorialFocusObject) : false,
+      targetScreen: this.tutorialFocusObject ? this.projectObjectToScreen(this.tutorialFocusObject) : null,
+      selectedHero: this.selectedHeroId,
+      desktopEligible: this.isDesktopFirstRunTutorialEligible(),
+      seen: this.hasSeenFirstRunTutorial(),
+    };
+  }
+
+  private setTutorialShotForDebug(shotId: TutorialShotId): boolean {
+    if (this.phase !== 'tutorial') return false;
+
+    const shots = this.tutorialShots.length > 0 ? this.tutorialShots : this.buildFirstRunTutorialShots();
+    const index = shots.findIndex((shot) => shot.id === shotId);
+    if (index < 0) return false;
+
+    this.tutorialShots = shots;
+    this.startTutorialShot(shots[index], index, shots.length, true);
+    return true;
   }
 
   private forceEnemyCollision(): void {
@@ -2006,6 +2376,10 @@ export class Game {
       this.fitCameraToTitle();
       return;
     }
+    if (this.phase === 'tutorial' && this.tutorialShot) {
+      this.updateTutorialCamera(performance.now(), true);
+      return;
+    }
     if (this.heroDebugView) {
       this.updateHeroDebugCamera();
       return;
@@ -2016,13 +2390,17 @@ export class Game {
     }
 
     const scale = this.levelCameraScale();
-    this.camera.position.set(0, 10.2 * scale, 10.4 * scale);
+    this.camera.position.copy(this.standardLevelCameraPosition(scale));
     this.camera.lookAt(0, 0, 0);
 
     if (this.scene.fog instanceof THREE.Fog) {
       this.scene.fog.near = 8 * scale;
       this.scene.fog.far = 22 * scale;
     }
+  }
+
+  private standardLevelCameraPosition(scale = this.levelCameraScale()): THREE.Vector3 {
+    return new THREE.Vector3(0, 10.2 * scale, 10.4 * scale);
   }
 
   private levelCameraScale(): number {
@@ -2104,6 +2482,7 @@ export class Game {
       this.encorePick,
       this.nextRunTarget,
       this.retryTarget,
+      this.tutorialUiState,
     );
     this.ui.renderAchievementNotice(this.achievementNotice);
     this.ui.setTouchControlsVisible(this.canUpdateRun());
@@ -2541,4 +2920,35 @@ function dampAngle(current: number, target: number, factor: number): number {
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
+}
+
+function easeInOutCubic(value: number): number {
+  return value < 0.5 ? 4 * value * value * value : 1 - Math.pow(-2 * value + 2, 3) / 2;
+}
+
+function hasMeaningfulProgressValue(value: string | null): boolean {
+  if (!value) return false;
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.length > 0;
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      return Boolean(parsed);
+    }
+
+    return Object.values(parsed).some((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return Boolean(entry);
+      }
+      return Object.values(entry).some((candidate) => {
+        if (typeof candidate === 'number') return candidate > 0;
+        if (typeof candidate === 'string') return candidate.length > 0 && candidate !== '-';
+        return Boolean(candidate);
+      });
+    });
+  } catch {
+    return true;
+  }
 }

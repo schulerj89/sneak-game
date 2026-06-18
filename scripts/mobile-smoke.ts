@@ -99,6 +99,28 @@ try {
 
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
   await expectVisible(page, '[data-testid="briefing-panel"]');
+  const mobileTutorialState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        phase: () => string;
+        tutorialState: () => { active: boolean; desktopEligible: boolean; seen: boolean };
+      };
+    };
+    return {
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+      tutorial: debugWindow.__shadowCircuitDebug?.tutorialState(),
+      tutorialPanels: document.querySelectorAll('[data-testid="tutorial-panel"]').length,
+    };
+  });
+  if (
+    mobileTutorialState.phase === 'tutorial' ||
+    mobileTutorialState.tutorial?.active ||
+    mobileTutorialState.tutorial?.desktopEligible ||
+    mobileTutorialState.tutorial?.seen ||
+    mobileTutorialState.tutorialPanels > 0
+  ) {
+    throw new Error(`Expected mobile to use static briefing instead of cinematic tutorial, got ${JSON.stringify(mobileTutorialState)}`);
+  }
   await assertMobileBriefingSimplified(page);
   await assertActionButtonsFit(page, '[data-testid="briefing-panel"]');
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();

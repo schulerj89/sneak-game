@@ -14,6 +14,7 @@ import type {
   ObjectiveProgress,
   RunSummary,
   SuspicionState,
+  TutorialUiState,
   Vec2,
 } from './types';
 import packageInfo from '../../package.json';
@@ -23,6 +24,8 @@ const appVersion = packageInfo.version;
 type UiCallbacks = {
   onStart: () => void;
   onBeginBriefing: () => void;
+  onAdvanceTutorial: () => void;
+  onSkipTutorial: () => void;
   onSelectHero: (heroId: HeroId) => void;
   onPreviousHero: () => void;
   onNextHero: () => void;
@@ -241,10 +244,12 @@ export class GameUi {
     encorePick: EncorePick | null,
     nextRunTarget: NextRunTarget | null,
     retryTarget: RetryTarget | null,
+    tutorial: TutorialUiState,
   ): void {
     this.overlay.classList.toggle('is-loading', isLoadingPhase(phase));
     this.overlay.classList.toggle('is-title', phase === 'menu' || phase === 'character-select');
     this.overlay.classList.toggle('is-character-select', phase === 'character-select');
+    this.overlay.classList.toggle('is-tutorial', phase === 'tutorial');
     this.overlay.hidden = isPlayingPhase(phase);
     if (isPlayingPhase(phase)) return;
 
@@ -260,6 +265,21 @@ export class GameUi {
             <span style="width: ${percent}%"></span>
           </div>
           <p>${loadingProgress.label}</p>
+        </div>
+      `;
+    } else if (phase === 'tutorial') {
+      this.overlay.innerHTML = `
+        <div class="tutorial-caption ${tutorial.final ? 'is-final' : ''}" data-testid="tutorial-panel" data-step="${tutorial.step}">
+          <div class="tutorial-progress" aria-hidden="true">
+            <span style="width: ${Math.round(tutorial.progress * 100)}%"></span>
+          </div>
+          <span class="tutorial-kicker">Field Briefing</span>
+          <h1>${tutorial.title}</h1>
+          <p>${tutorial.body}</p>
+          <div class="tutorial-controls">
+            <span>Click or press Enter to advance</span>
+            <button type="button" data-action="skip-tutorial">Skip</button>
+          </div>
         </div>
       `;
     } else if (phase === 'menu') {
@@ -582,6 +602,11 @@ export class GameUi {
     this.overlay.querySelector('[data-action="start"]')?.addEventListener('click', this.callbacks.onStart);
     this.overlay.querySelector('[data-action="begin-briefing"]')?.addEventListener('click', this.callbacks.onBeginBriefing);
     this.overlay.querySelector('[data-action="confirm-hero"]')?.addEventListener('click', this.callbacks.onConfirmHero);
+    this.overlay.querySelector('[data-testid="tutorial-panel"]')?.addEventListener('click', this.callbacks.onAdvanceTutorial);
+    this.overlay.querySelector('[data-action="skip-tutorial"]')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.callbacks.onSkipTutorial();
+    });
     this.overlay.querySelector('[data-action="previous-hero"]')?.addEventListener('click', this.callbacks.onPreviousHero);
     this.overlay.querySelector('[data-action="next-hero"]')?.addEventListener('click', this.callbacks.onNextHero);
     this.overlay.querySelectorAll('[data-hero-id]').forEach((button) => {

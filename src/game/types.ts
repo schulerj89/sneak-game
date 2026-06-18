@@ -88,6 +88,7 @@ export type GamePhase =
   | 'menu'
   | 'character-select'
   | 'briefing'
+  | 'tutorial'
   | 'playing'
   | 'paused'
   | 'caught'
@@ -99,6 +100,15 @@ export type GamePhase =
 export type LoadingProgress = Readonly<{
   value: number;
   label: string;
+}>;
+
+export type TutorialUiState = Readonly<{
+  active: boolean;
+  step: string;
+  title: string;
+  body: string;
+  progress: number;
+  final: boolean;
 }>;
 
 export type DetectionState = Readonly<{

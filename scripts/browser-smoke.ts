@@ -6,6 +6,7 @@ import { levels } from '../src/game/levels';
 
 const baseUrl = process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
 const screenshotDir = 'artifacts';
+const tutorialScreenshotDir = 'docs/2026-06-18-first-run-cinematic-tutorial/screenshots';
 const headless = process.env.SMOKE_HEADLESS === 'true';
 const playingTimeoutMs = parseTimeout(process.env.SMOKE_PLAYING_TIMEOUT_MS, 45000);
 const expectedVersionLabel = `v${packageInfo.version}`;
@@ -30,6 +31,7 @@ page.on('console', (message: ConsoleMessage) => {
 
 try {
   await mkdir(screenshotDir, { recursive: true });
+  await mkdir(tutorialScreenshotDir, { recursive: true });
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await assertAppIdentity();
@@ -131,18 +133,10 @@ try {
     throw new Error(`Expected Echo Vanguard selection, got ${selectedHero}`);
   }
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Start Level' }).click();
-  await expectVisible('[data-testid="briefing-panel"]');
-  await page.getByText('Sentries', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
-  await expectVisible('text=Yellow access cards');
-  const briefingPhase = await page.evaluate(() => {
-    const debugWindow = window as Window & { __shadowCircuitDebug?: { phase: () => string } };
-    return debugWindow.__shadowCircuitDebug?.phase();
-  });
-  if (briefingPhase !== 'briefing') {
-    throw new Error(`Expected first-level briefing phase, got ${briefingPhase}`);
-  }
-  await page.screenshot({ path: `${screenshotDir}/shadow-circuit-briefing.png`, fullPage: true });
-  await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Title' }).click();
+  await expectLoadingCover('starting first-run cinematic tutorial');
+  await assertFirstRunTutorial();
+  await page.locator('[data-testid="hud"]').getByRole('button', { name: 'Menu' }).click();
+  await expectVisible('[data-testid="title-panel"]');
   await page.screenshot({ path: `${screenshotDir}/shadow-circuit-menu.png`, fullPage: true });
   await page.locator('[data-testid="overlay"]').getByRole('button', { name: 'Levels' }).click();
   await expectVisible('text=Signal Vault');
@@ -827,7 +821,9 @@ try {
   await assertEncorePickForMasteredProfile();
 
   console.info(`[browser-smoke] ok url=${baseUrl}`);
-  console.info(`[browser-smoke] screenshots=${screenshotDir}/shadow-circuit-menu.png, ${screenshotDir}/shadow-circuit-playing.png`);
+  console.info(
+    `[browser-smoke] screenshots=${screenshotDir}/shadow-circuit-menu.png, ${screenshotDir}/shadow-circuit-playing.png, ${tutorialScreenshotDir}/01-tutorial-hero-closeup-desktop.png`,
+  );
   console.info(`[browser-smoke] performance=${JSON.stringify(performanceSample)}`);
   console.info(`[browser-smoke] console-log-count=${logs.length}`);
 } finally {
@@ -836,6 +832,128 @@ try {
 
 async function expectVisible(selector: string): Promise<void> {
   await page.locator(selector).waitFor({ state: 'visible', timeout: 8000 });
+}
+
+type TutorialShotId = 'hero' | 'sentry' | 'keycard' | 'terminal' | 'goal' | 'good-luck';
+
+async function assertFirstRunTutorial(): Promise<void> {
+  await expectVisible('[data-testid="tutorial-panel"]');
+  await page.waitForFunction(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        phase: () => string;
+        tutorialState: () => { active: boolean; step: string; targetVisible: boolean; selectedHero: string; desktopEligible: boolean; seen: boolean };
+      };
+    };
+    const debug = debugWindow.__shadowCircuitDebug;
+    const state = debug?.tutorialState();
+    return Boolean(
+      debug?.phase() === 'tutorial' &&
+        state?.active &&
+        state.step === 'hero' &&
+        state.targetVisible &&
+        state.selectedHero === 'echo-vanguard' &&
+        state.desktopEligible &&
+        state.seen,
+    );
+  }, undefined, { timeout: 12000 });
+
+  await captureTutorialShot('hero', `${tutorialScreenshotDir}/01-tutorial-hero-closeup-desktop.png`, 'Echo Vanguard');
+  await captureTutorialShot('sentry', `${tutorialScreenshotDir}/02-tutorial-sentry-closeup-desktop.png`, 'Sentries');
+  await captureTutorialShot('keycard', `${tutorialScreenshotDir}/03-tutorial-keycard-terminal-closeup-desktop.png`, 'Access Cards');
+  await captureTutorialShot('terminal', `${tutorialScreenshotDir}/03b-tutorial-terminal-closeup-desktop.png`, 'Terminals');
+  await captureTutorialShot('goal', `${tutorialScreenshotDir}/04-tutorial-goal-closeup-desktop.png`, 'Exit Pad');
+  await captureTutorialShot('good-luck', `${tutorialScreenshotDir}/05-tutorial-good-luck-desktop.png`, 'Good luck, cadet.');
+
+  await page.evaluate(() => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { skipTutorial: () => void } };
+    debugWindow.__shadowCircuitDebug?.skipTutorial();
+  });
+  await assertPlayingPhase('after first-run tutorial');
+  await page.locator('[data-testid="tutorial-panel"]').waitFor({ state: 'hidden', timeout: 8000 });
+  const playableState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        phase: () => string;
+        objectives: () => { collectedRequired: number; totalRequired: number; exitUnlocked: boolean };
+        playerVisible: () => boolean;
+      };
+    };
+    return {
+      phase: debugWindow.__shadowCircuitDebug?.phase(),
+      objectives: debugWindow.__shadowCircuitDebug?.objectives(),
+      playerVisible: debugWindow.__shadowCircuitDebug?.playerVisible(),
+    };
+  });
+  if (
+    playableState.phase !== 'playing' ||
+    playableState.objectives?.collectedRequired !== 0 ||
+    playableState.objectives.totalRequired !== 2 ||
+    playableState.objectives.exitUnlocked ||
+    !playableState.playerVisible
+  ) {
+    throw new Error(`Expected clean playable state after tutorial, got ${JSON.stringify(playableState)}`);
+  }
+}
+
+async function captureTutorialShot(shotId: TutorialShotId, path: string, expectedTitle: string): Promise<void> {
+  const changed = await page.evaluate((id) => {
+    const debugWindow = window as Window & { __shadowCircuitDebug?: { setTutorialShot: (shotId: string) => boolean } };
+    return debugWindow.__shadowCircuitDebug?.setTutorialShot(id) ?? false;
+  }, shotId);
+  if (!changed) {
+    throw new Error(`Could not switch tutorial to ${shotId}`);
+  }
+
+  await page.waitForFunction((id) => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        tutorialState: () => {
+          active: boolean;
+          step: string;
+          targetVisible: boolean;
+          targetScreen: { x: number; y: number } | null;
+          phase: string;
+        };
+      };
+    };
+    const state = debugWindow.__shadowCircuitDebug?.tutorialState();
+    return Boolean(state?.phase === 'tutorial' && state.active && state.step === id && state.targetVisible && state.targetScreen);
+  }, shotId, { timeout: 8000 });
+
+  await expectVisible(`[data-testid="tutorial-panel"][data-step="${shotId}"]`);
+  const panelText = await page.locator('[data-testid="tutorial-panel"]').innerText();
+  if (!panelText.includes(expectedTitle)) {
+    throw new Error(`Expected tutorial shot ${shotId} title ${expectedTitle}, got ${panelText}`);
+  }
+  await assertTutorialCaptionLayout();
+  await page.screenshot({ path, fullPage: true });
+}
+
+async function assertTutorialCaptionLayout(): Promise<void> {
+  const layout = await page.locator('[data-testid="tutorial-panel"]').evaluate((panel) => {
+    const rect = panel.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      text: panel.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    };
+  });
+  if (
+    layout.left < 0 ||
+    layout.right > layout.viewport.width ||
+    layout.bottom > layout.viewport.height ||
+    layout.top < layout.viewport.height * 0.48 ||
+    layout.width < 420 ||
+    !layout.text.includes('Field Briefing')
+  ) {
+    throw new Error(`Unexpected tutorial caption layout: ${JSON.stringify(layout)}`);
+  }
 }
 
 async function assertVersionBadge(): Promise<void> {
