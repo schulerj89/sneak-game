@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { ObjectiveDefinition, ObjectiveType, RenderQuality } from './types';
+import type { ObjectiveDefinition, ObjectiveType, RenderQuality, Vec2 } from './types';
 import keycardUrl from '../assets/objectives/keycard-cinematic.glb?url';
 import terminalUrl from '../assets/objectives/terminal-cinematic.glb?url';
 
@@ -10,6 +10,29 @@ type RuntimeGltfLoader = {
 const objectiveAssetUrls: Record<ObjectiveType, string> = {
   keycard: keycardUrl,
   terminal: terminalUrl,
+};
+const objectiveHaloTexture = createObjectiveHaloTexture();
+
+export const objectiveGlowColor: Record<ObjectiveType, string> = {
+  keycard: '#ffd45a',
+  terminal: '#5ad7ff',
+};
+
+export const objectiveGlowEmissive: Record<ObjectiveType, string> = {
+  keycard: '#f0a51b',
+  terminal: '#2bcfff',
+};
+
+export const objectiveGlowLightIntensity: Record<ObjectiveType, number> = {
+  keycard: 32,
+  terminal: 30,
+};
+
+export const objectiveGlowLightDistance = 3;
+export const objectiveGlowLightDecay = 1.4;
+export const objectiveGlowSpriteOpacity: Record<ObjectiveType, number> = {
+  keycard: 0.38,
+  terminal: 0.32,
 };
 
 export class ObjectiveAssetLibrary {
@@ -95,6 +118,61 @@ export class ObjectiveAssetLibrary {
   }
 }
 
+export function createObjectiveGlow(type: ObjectiveType, position: Vec2): THREE.Object3D {
+  const group = new THREE.Group();
+  group.name = `objective-glow:${type}`;
+
+  const light = new THREE.PointLight(objectiveGlowColor[type], objectiveGlowLightIntensity[type], objectiveGlowLightDistance, objectiveGlowLightDecay);
+  light.castShadow = false;
+  light.position.set(0, type === 'keycard' ? 0.44 : 0.62, 0);
+  light.name = `objective-glow-light:${type}`;
+
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      color: objectiveGlowColor[type],
+      map: objectiveHaloTexture,
+      transparent: true,
+      opacity: objectiveGlowSpriteOpacity[type],
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  sprite.name = `objective-glow-halo:${type}`;
+  sprite.position.set(0, type === 'keycard' ? 0.3 : 0.44, 0);
+  sprite.scale.setScalar(type === 'keycard' ? 1.22 : 1.42);
+
+  group.position.set(position.x, 0, position.z);
+  group.add(light, sprite);
+  return group;
+}
+
+function createObjectiveHaloTexture(): THREE.DataTexture {
+  const size = 64;
+  const center = (size - 1) / 2;
+  const data = new Uint8Array(size * size * 4);
+
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const dx = (x - center) / center;
+      const dy = (y - center) / center;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const alpha = Math.max(0, 1 - distance);
+      const easedAlpha = Math.round(Math.pow(alpha, 2.6) * 255);
+      const offset = (y * size + x) * 4;
+      data[offset] = 255;
+      data[offset + 1] = 255;
+      data[offset + 2] = 255;
+      data[offset + 3] = easedAlpha;
+    }
+  }
+
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 function normalizeObjectiveScene(scene: THREE.Object3D, type: ObjectiveType): void {
   scene.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(scene);
@@ -114,15 +192,18 @@ function normalizeObjectiveScene(scene: THREE.Object3D, type: ObjectiveType): vo
 
 function prepareObjectiveMaterial(material: THREE.Material | THREE.Material[], type: ObjectiveType): void {
   const materials = Array.isArray(material) ? material : [material];
-  const emissive = new THREE.Color(type === 'keycard' ? '#4f3605' : '#063f58');
+  const emissive = new THREE.Color(objectiveGlowEmissive[type]);
+  const lift = new THREE.Color(type === 'keycard' ? '#fff0b3' : '#d8fbff');
   for (const item of materials) {
     item.side = THREE.DoubleSide;
 
     if (item instanceof THREE.MeshStandardMaterial) {
+      item.color.lerp(lift, type === 'keycard' ? 0.08 : 0.06);
       item.roughness = Math.min(item.roughness, 0.48);
       item.metalness = Math.max(item.metalness, 0.12);
-      item.emissive.lerp(emissive, 0.5);
-      item.emissiveIntensity = Math.max(item.emissiveIntensity, type === 'keycard' ? 0.34 : 0.24);
+      item.emissive.lerp(emissive, 0.72);
+      item.emissiveMap ??= item.map;
+      item.emissiveIntensity = Math.max(item.emissiveIntensity, type === 'keycard' ? 0.92 : 0.78);
     }
 
     item.needsUpdate = true;

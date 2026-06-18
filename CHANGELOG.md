@@ -6,6 +6,11 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.9.2 - 2026-06-18
+
+- Brightened cinematic keycard and terminal pickups with stronger load-time emissive material treatment and a lightweight additive glow halo.
+- Kept the glow path cheap by avoiding bloom/postprocessing and disabling objective glow shadows.
+
 ## v2.9.1 - 2026-06-18
 
 - Replaced cinematic keycard and terminal pickups with new Meshy image-to-3D textured/remeshed GLBs generated from committed reference PNGs.

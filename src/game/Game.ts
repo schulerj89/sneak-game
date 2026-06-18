@@ -23,7 +23,7 @@ import {
   type RetryTarget,
 } from './mastery';
 import { collectNearbyObjectives, getObjectiveProgress } from './objectives';
-import { ObjectiveAssetLibrary } from './objectiveAssets';
+import { createObjectiveGlow, ObjectiveAssetLibrary } from './objectiveAssets';
 import { isLoadingPhase, isPlayingPhase } from './phase';
 import { shouldUseMobileMemorySafeAssets } from './platform';
 import {
@@ -81,7 +81,7 @@ type EnemyRuntime = {
 type ObjectiveRuntime = {
   spec: ObjectiveDefinition;
   mesh: THREE.Object3D;
-  glow: THREE.PointLight;
+  glow: THREE.Object3D;
 };
 
 type CollectObjectiveOptions = Readonly<{
@@ -1614,11 +1614,8 @@ export class Game {
   }
 
   private createObjective(spec: ObjectiveDefinition): ObjectiveRuntime {
-    const isKeycard = spec.type === 'keycard';
     const mesh = this.objectiveAssets.create(spec, this.objectiveAssetQuality());
-
-    const glow = new THREE.PointLight(isKeycard ? '#ffd45a' : '#5ad7ff', 18, 2.1);
-    glow.position.set(spec.position.x, 0.68, spec.position.z);
+    const glow = createObjectiveGlow(spec.type, spec.position);
     glow.name = `objective-glow:${spec.id}`;
 
     return { spec, mesh, glow };
@@ -1630,6 +1627,7 @@ export class Game {
     this.objectives.forEach((objective) => {
       this.scene.remove(objective.mesh, objective.glow);
       disposeTransientObjectResources(objective.mesh, disposal);
+      disposeTransientObjectResources(objective.glow, disposal);
     });
     this.objectives = specs.map((objective) => this.createObjective(objective));
     this.objectives.forEach((objective) => {
@@ -2882,7 +2880,7 @@ function disposeTransientObjectResources(object: THREE.Object3D, disposal = crea
   object.traverse((child) => {
     const insideSharedCachedAsset = isInsideSharedCachedAsset(child, object);
 
-    if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Line) {
+    if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Line || child instanceof THREE.Sprite) {
       if (!insideSharedCachedAsset) {
         disposeGeometry(child.geometry, disposal);
       }
