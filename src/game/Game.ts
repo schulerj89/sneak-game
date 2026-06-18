@@ -112,6 +112,7 @@ declare global {
       pickupDebug: () => PickupDebugSample;
       performance: () => DebugSample | null;
       renderFrameCount: () => number;
+      shaderWarmupPasses: () => number;
       levelId: () => string;
       goalVisible: () => boolean;
       playerVisible: () => boolean;
@@ -250,6 +251,7 @@ export class Game {
   private lastHudSecond = -1;
   private latestDebugSample: DebugSample | null = null;
   private renderedFrameCount = 0;
+  private shaderWarmupPasses = 0;
   private pickupDebug: PickupDebugSample = emptyPickupDebugSample();
   private pickupFrameProbe: PickupFrameProbe | null = null;
   private qualityMemoryReserve: Float32Array | null = null;
@@ -979,7 +981,7 @@ export class Game {
     this.renderUi();
   }
 
-  private warmupRenderStates(): void {
+  private async warmupRenderStates(): Promise<void> {
     const previousGoalBeaconVisible = this.goalBeaconMesh.visible;
     const previousObjectiveVisibility = this.objectives.map((objective) => ({
       mesh: objective.mesh.visible,
@@ -991,7 +993,8 @@ export class Game {
       objective.mesh.visible = true;
       objective.glow.visible = true;
     }
-    this.renderer.compile(this.scene, this.camera);
+    await this.renderer.compileAsync(this.scene, this.camera);
+    this.shaderWarmupPasses += 1;
     this.renderer.render(this.scene, this.camera);
 
     this.goalBeaconMesh.visible = previousGoalBeaconVisible;
@@ -999,12 +1002,14 @@ export class Game {
       objective.mesh.visible = previousObjectiveVisibility[index]?.mesh ?? objective.mesh.visible;
       objective.glow.visible = previousObjectiveVisibility[index]?.glow ?? objective.glow.visible;
     });
-    this.renderer.compile(this.scene, this.camera);
+    await this.renderer.compileAsync(this.scene, this.camera);
+    this.shaderWarmupPasses += 1;
   }
 
-  private warmupIntelPulse(): void {
+  private async warmupIntelPulse(): Promise<void> {
     this.rebuildIntelPulseVisuals(true);
-    this.renderer.compile(this.scene, this.camera);
+    await this.renderer.compileAsync(this.scene, this.camera);
+    this.shaderWarmupPasses += 1;
     this.renderer.render(this.scene, this.camera);
     this.clearIntelPulseVisuals();
   }
@@ -1767,6 +1772,7 @@ export class Game {
       pickupDebug: () => this.pickupDebug,
       performance: () => this.latestDebugSample,
       renderFrameCount: () => this.renderedFrameCount,
+      shaderWarmupPasses: () => this.shaderWarmupPasses,
       levelId: () => this.level.id,
       goalVisible: () => this.isGoalVisibleInCamera(),
       playerVisible: () => this.isPlayerVisibleInCamera(),

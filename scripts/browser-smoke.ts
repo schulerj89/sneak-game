@@ -297,6 +297,38 @@ try {
   }
   await expectLoadingCover('starting run');
   await assertPlayingPhase('after start run');
+  await page.waitForFunction(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        performance: () => null | { frameMs: number };
+        shaderWarmupPasses: () => number;
+      };
+    };
+    const debug = debugWindow.__shadowCircuitDebug;
+    const sample = debug?.performance();
+    return Boolean(sample && (debug?.shaderWarmupPasses() ?? 0) >= 3);
+  }, undefined, { timeout: 12000 });
+  const postLoadWarmupState = await page.evaluate(() => {
+    const debugWindow = window as Window & {
+      __shadowCircuitDebug?: {
+        performance: () => null | { frameMs: number; drawCalls: number; triangles: number };
+        shaderWarmupPasses: () => number;
+      };
+    };
+    return {
+      shaderWarmupPasses: debugWindow.__shadowCircuitDebug?.shaderWarmupPasses() ?? 0,
+      performance: debugWindow.__shadowCircuitDebug?.performance(),
+    };
+  });
+  if (
+    postLoadWarmupState.shaderWarmupPasses < 3 ||
+    !postLoadWarmupState.performance ||
+    postLoadWarmupState.performance.frameMs > maxFrameMs ||
+    postLoadWarmupState.performance.drawCalls <= 0 ||
+    postLoadWarmupState.performance.triangles <= 0
+  ) {
+    throw new Error(`Expected async shader warmup before first playable frame, got ${JSON.stringify(postLoadWarmupState)}`);
+  }
   const beforeKeyboardMove = await page.evaluate(() => {
     const debugWindow = window as Window & { __shadowCircuitDebug?: { playerPosition: () => { x: number; z: number } } };
     return debugWindow.__shadowCircuitDebug?.playerPosition();

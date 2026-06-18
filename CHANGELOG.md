@@ -6,6 +6,11 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.6.0 - 2026-06-18
+
+- Precompiled level and Intel Pulse materials asynchronously during loading with Three.js `compileAsync`.
+- Added smoke coverage that verifies shader warmup passes complete before the first playable frame sample.
+
 ## v2.5.0 - 2026-06-18
 
 - Moved the game loop to Three.js renderer-owned animation scheduling with `setAnimationLoop`.
