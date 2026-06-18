@@ -970,7 +970,10 @@ export class Game {
           console.warn(`[assets] background hero preload skipped ${heroId}: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        if (!this.shouldContinueCharacterSelectRosterLoad(token)) return;
+        if (!this.shouldContinueCharacterSelectRosterLoad(token)) {
+          this.characterAssets.releaseUnselectedHeroes(this.selectedHeroId);
+          return;
+        }
         if (heroId === this.selectedHeroId) {
           void this.prepareTitlePreview();
         }
@@ -984,9 +987,7 @@ export class Game {
 
   private releaseCharacterSelectRoster(): void {
     this.characterSelectRosterLoadToken += 1;
-    if (this.memorySafeAssets) {
-      this.characterAssets.releaseUnselectedHeroes(this.selectedHeroId);
-    }
+    this.characterAssets.releaseUnselectedHeroes(this.selectedHeroId);
   }
 
   private async preloadCharacterAssets(): Promise<void> {

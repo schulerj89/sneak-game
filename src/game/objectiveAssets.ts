@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { ObjectiveDefinition, ObjectiveType, RenderQuality, Vec2 } from './types';
+import { disposeObjectResources } from './threeDisposal';
 import keycardUrl from '../assets/objectives/keycard-cinematic.glb?url';
 import terminalUrl from '../assets/objectives/terminal-cinematic.glb?url';
 
@@ -76,12 +77,7 @@ export class ObjectiveAssetLibrary {
 
   dispose(): void {
     for (const asset of this.cinematicAssets.values()) {
-      asset.traverse((child) => {
-        if (!(child instanceof THREE.Mesh)) return;
-        child.geometry.dispose();
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        materials.forEach((material) => material.dispose());
-      });
+      disposeObjectResources(asset);
     }
     this.cinematicAssets.clear();
     this.loaderPromise = null;

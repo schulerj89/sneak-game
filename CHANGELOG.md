@@ -6,6 +6,12 @@ All notable player-facing changes should be recorded here whenever the app versi
 
 - Add upcoming changes here before the next version bump.
 
+## v2.9.4 - 2026-06-18
+
+- Released cached cinematic GLB texture maps when clearing character and objective asset caches.
+- Released unselected cinematic heroes after character select even when late background roster loads finish after the level transition.
+- Added shared Three.js disposal coverage so shared materials, geometries, and shader texture uniforms are disposed once.
+
 ## v2.9.3 - 2026-06-18
 
 - Kept the first-run cinematic tutorial dismissed across later patch releases once players have already seen the v2.8.0 tutorial.

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { RenderQuality } from './types';
 import { defaultHeroId, heroOptionById, heroOptions, type HeroId } from './heroes';
+import { disposeObjectResources } from './threeDisposal';
 import sentryUrl from '../assets/characters/sentry/enemy_sentry.glb?url';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
@@ -287,21 +288,7 @@ export class CharacterAssetLibrary {
   }
 
   private disposeAsset(asset: CinematicCharacterAsset): void {
-    const disposedMaterials = new Set<THREE.Material>();
-    const disposedGeometries = new Set<THREE.BufferGeometry>();
-    asset.scene.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return;
-      if (!disposedGeometries.has(child.geometry)) {
-        child.geometry.dispose();
-        disposedGeometries.add(child.geometry);
-      }
-      const materials = Array.isArray(child.material) ? child.material : [child.material];
-      materials.forEach((material) => {
-        if (disposedMaterials.has(material)) return;
-        material.dispose();
-        disposedMaterials.add(material);
-      });
-    });
+    disposeObjectResources(asset.scene);
   }
 }
 
